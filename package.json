@@ -23,8 +23,8 @@
     "db:generate": "mercato db generate",
     "db:migrate": "mercato db migrate",
     "db:greenfield": "mercato db greenfield",
-    "initialize": "mercato init",
-    "reinstall": "mercato init --reinstall",
+    "initialize": "node ./scripts/bust-bootstrap-cache.mjs && mercato init",
+    "reinstall": "node ./scripts/bust-bootstrap-cache.mjs && mercato init --reinstall",
     "preinstall": "node -e \"const v = process.versions.node.split('.').map(Number); if (v[0] < 24) { console.error('Node >= 24 required'); process.exit(1); }\""
   },
   "dependencies": {
