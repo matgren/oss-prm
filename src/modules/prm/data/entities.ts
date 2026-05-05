@@ -203,6 +203,19 @@ export class ProspectCandidateIndex {
   @PrimaryKey({ name: 'prospect_id', type: 'uuid' })
   prospectId!: string
 
+  /**
+   * Synthetic mirror of `prospect_id`. NOT the PK — frozen cross-spec contract still
+   * names `prospect_id` as PK (T1 spec §11; T2 Golden Rule picker reads it directly).
+   *
+   * Exists ONLY to satisfy `@open-mercato/core` query_index reindexer, which hardcodes
+   * `b.id` as the partition / pagination column (`reindexer.ts:179,332,336`). Without
+   * this column, `yarn mercato init --reinstall` fails on the reindex pass with
+   * `column b.id does not exist`. Maintained server-side by the
+   * `GENERATED ALWAYS AS (prospect_id) STORED` clause — zero application code.
+   */
+  @Property({ name: 'id', type: 'uuid', generated: '(prospect_id) stored' })
+  id!: string
+
   @Index()
   @Property({ name: 'organization_id', type: 'uuid' })
   organizationId!: string
