@@ -1,6 +1,8 @@
 # SPEC-2026-04-23 — PRM Case Studies & Marketing Library (WF2-partial + WF6 · Phase 6)
 
-> **Cross-spec drift fixed 2026-05-05.** When this spec is implemented, routes MUST live under `/api/prm/case-study/...`, `/api/prm/marketing-material/...`, `/api/prm/portal/case-study/...`, `/api/prm/portal/library/...` (singular resources, no `/backend/` segment) per the shipped T0/T1/T2 namespace convention — NOT `/api/backend/prm/case-studies/...` and `/api/portal/case-studies/...` as currently drafted. Tables must use the `prm_` prefix (`prm_case_studies`, `prm_marketing_materials`). All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+> **Cross-spec drift fixed 2026-05-05.** Routes live under `/api/prm/case-study/...`, `/api/prm/marketing-material/...`, `/api/prm/portal/case-study/...`, `/api/prm/portal/library/...` per the shipped T0/T1/T2 namespace convention (singular resources, no `/backend/` segment, OM auto-discovers from `src/modules/<module>/api/...`). Tables use the `prm_` prefix (`prm_case_studies`, `prm_marketing_materials`). All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+>
+> **2026-05-05 follow-up:** body paths replaced inline — legacy `/api/{backend,portal}/...` and plural `case-studies` / `marketing-materials` mentions corrected to canonical singular `/api/prm/case-study/...` / `/api/prm/marketing-material/...` / `/api/prm/portal/case-study/...` / `/api/prm/portal/library/...` throughout. Header now consistent with body.
 >
 > **Spec #7 of 7** · Author: Piotr (om-cto Spec Orchestrator) · Date: 2026-04-23
 **Persona:** Martin Fowler (architectural-purity lens)
@@ -92,18 +94,18 @@ Phase 6 completes the marketing flywheel. Agencies self-manage CaseStudies throu
 
 All backend routes require `om.backend.session` + the feature flags enumerated in §6. Portal routes require `customer.session` and tenant-scoped `/{slug}/api/portal/...` routing per SPEC-060.
 
-### 3.1 Portal — `/api/portal/case-studies`
+### 3.1 Portal — `/api/prm/portal/case-study`
 
 Plural URL; singular entity. All responses scoped to caller's Agency via `req.auth.organization_id → agency_id`.
 
 | Method | Path | Body | Returns | Notes |
 |---|---|---|---|---|
-| `GET` | `/api/portal/case-studies` | — (query: `q`, `published`, `limit`, `offset`) | paged `CaseStudyDTO[]` | P7 list; excludes `deleted_at IS NOT NULL` by default |
-| `POST` | `/api/portal/case-studies` | `CreateCaseStudyInput` (Zod) | `CaseStudyDTO` | P8 create; PartnerAdmin only |
-| `GET` | `/api/portal/case-studies/:id` | — | `CaseStudyDTO` | P8 detail; 404 if `deleted_at` set or cross-Agency |
-| `PUT` | `/api/portal/case-studies/:id` | `UpdateCaseStudyInput` (Zod) | `CaseStudyDTO` | P8 edit; Marketing-only fields rejected |
-| `POST` | `/api/portal/case-studies/:id/delete` | `{ confirm: true }` | `204` or `409 ExternalCouplingGuard` | Soft-delete; 409 when `may_publish_on_om_website = true` AND `published_url IS NOT NULL` |
-| `POST` | `/api/portal/case-studies/:id/restore` | — | `CaseStudyDTO` | Undelete (compensation); PartnerAdmin only; 409 if not in `deleted` state |
+| `GET` | `/api/prm/portal/case-study` | — (query: `q`, `published`, `limit`, `offset`) | paged `CaseStudyDTO[]` | P7 list; excludes `deleted_at IS NOT NULL` by default |
+| `POST` | `/api/prm/portal/case-study` | `CreateCaseStudyInput` (Zod) | `CaseStudyDTO` | P8 create; PartnerAdmin only |
+| `GET` | `/api/prm/portal/case-study/:id` | — | `CaseStudyDTO` | P8 detail; 404 if `deleted_at` set or cross-Agency |
+| `PUT` | `/api/prm/portal/case-study/:id` | `UpdateCaseStudyInput` (Zod) | `CaseStudyDTO` | P8 edit; Marketing-only fields rejected |
+| `POST` | `/api/prm/portal/case-study/:id/delete` | `{ confirm: true }` | `204` or `409 ExternalCouplingGuard` | Soft-delete; 409 when `may_publish_on_om_website = true` AND `published_url IS NOT NULL` |
+| `POST` | `/api/prm/portal/case-study/:id/restore` | — | `CaseStudyDTO` | Undelete (compensation); PartnerAdmin only; 409 if not in `deleted` state |
 
 **Zod shapes:**
 
@@ -129,15 +131,15 @@ const UpdateCaseStudyInput = CaseStudyWriteBase.partial();
 
 **Portal write guard (invariant #6):** any payload key matching `may_publish_on_om_website` or `published_url` is rejected with `422 ForbiddenField` *before* Zod parsing runs. Emits diagnostic event `prm.agency.admin_field_access_rejected` for OM-staff visibility. Pattern identical to Spec #1's Agency admin-field guard.
 
-### 3.2 Backend — `/api/backend/prm/case-studies`
+### 3.2 Backend — `/api/prm/case-study`
 
 B8 CaseStudies list + publish-flag control. All rows visible (cross-Agency), including soft-deleted (OM Marketing needs reconciliation visibility per WF2 edge case 2).
 
 | Method | Path | Body | Returns | Notes |
 |---|---|---|---|---|
-| `GET` | `/api/backend/prm/case-studies` | — (query: `agency_id`, `may_publish`, `is_published`, `include_deleted`) | paged list | B8 list — default `include_deleted = true` for Marketing workflow |
-| `GET` | `/api/backend/prm/case-studies/:id` | — | full DTO | |
-| `PUT` | `/api/backend/prm/case-studies/:id/publication-flag` | `SetPublicationFlagInput` | `CaseStudyDTO` | Inline B8 toggle — **only** writes `may_publish_on_om_website` + `published_url`; narrative fields untouched |
+| `GET` | `/api/prm/case-study` | — (query: `agency_id`, `may_publish`, `is_published`, `include_deleted`) | paged list | B8 list — default `include_deleted = true` for Marketing workflow |
+| `GET` | `/api/prm/case-study/:id` | — | full DTO | |
+| `PUT` | `/api/prm/case-study/:id/publication-flag` | `SetPublicationFlagInput` | `CaseStudyDTO` | Inline B8 toggle — **only** writes `may_publish_on_om_website` + `published_url`; narrative fields untouched |
 
 ```ts
 const SetPublicationFlagInput = z.object({
@@ -153,19 +155,19 @@ const SetPublicationFlagInput = z.object({
 
 **RBAC (§6):** requires `prm.case_study.toggle_publish` — OM Marketing + OM Admin only. OM PartnerOps explicitly lacks this feature.
 
-### 3.3 Backend — `/api/backend/prm/marketing-materials`
+### 3.3 Backend — `/api/prm/marketing-material`
 
 B9 MarketingMaterial CRUD + publish/unpublish.
 
 | Method | Path | Body | Returns | Notes |
 |---|---|---|---|---|
-| `GET` | `/api/backend/prm/marketing-materials` | — (query: `material_type`, `visibility`, `is_published`, `q`) | paged list | B9 list |
-| `POST` | `/api/backend/prm/marketing-materials` | `CreateMarketingMaterialInput` | `MarketingMaterialDTO` | Creates unpublished |
-| `GET` | `/api/backend/prm/marketing-materials/:id` | — | DTO | |
-| `PUT` | `/api/backend/prm/marketing-materials/:id` | `UpdateMarketingMaterialInput` | DTO | Rejects `published_at` / `unpublished_at` direct writes — use publish/unpublish actions |
-| `POST` | `/api/backend/prm/marketing-materials/:id/publish` | — | DTO | Sets `published_at = NOW()`, clears `unpublished_at`; emits event + cache invalidation |
-| `POST` | `/api/backend/prm/marketing-materials/:id/unpublish` | `{ reason?: string }` | DTO | Sets `unpublished_at = NOW()`; emits event + cache invalidation |
-| `DELETE` | `/api/backend/prm/marketing-materials/:id` | — | `204` | Hard delete allowed while never-published; otherwise unpublish + soft-delete-retain |
+| `GET` | `/api/prm/marketing-material` | — (query: `material_type`, `visibility`, `is_published`, `q`) | paged list | B9 list |
+| `POST` | `/api/prm/marketing-material` | `CreateMarketingMaterialInput` | `MarketingMaterialDTO` | Creates unpublished |
+| `GET` | `/api/prm/marketing-material/:id` | — | DTO | |
+| `PUT` | `/api/prm/marketing-material/:id` | `UpdateMarketingMaterialInput` | DTO | Rejects `published_at` / `unpublished_at` direct writes — use publish/unpublish actions |
+| `POST` | `/api/prm/marketing-material/:id/publish` | — | DTO | Sets `published_at = NOW()`, clears `unpublished_at`; emits event + cache invalidation |
+| `POST` | `/api/prm/marketing-material/:id/unpublish` | `{ reason?: string }` | DTO | Sets `unpublished_at = NOW()`; emits event + cache invalidation |
+| `DELETE` | `/api/prm/marketing-material/:id` | — | `204` | Hard delete allowed while never-published; otherwise unpublish + soft-delete-retain |
 
 ```ts
 const MaterialWriteBase = z.object({
@@ -183,14 +185,14 @@ const MaterialWriteBase = z.object({
 );
 ```
 
-### 3.4 Portal — `/api/portal/library`
+### 3.4 Portal — `/api/prm/portal/library`
 
 Read-only faceted list for P11. Server applies tier-gate filter from session.
 
 | Method | Path | Query | Returns |
 |---|---|---|---|
-| `GET` | `/api/portal/library` | `material_type?`, `topics[]?`, `audiences[]?`, `limit?`, `offset?` | `{ items: MarketingMaterialPublicDTO[], facets: { material_types, topics, audiences }, total }` |
-| `GET` | `/api/portal/library/:id/download` | — | `302` redirect to `buildAttachmentImageUrl(primary_attachment_id)` with route-ACL re-check |
+| `GET` | `/api/prm/portal/library` | `material_type?`, `topics[]?`, `audiences[]?`, `limit?`, `offset?` | `{ items: MarketingMaterialPublicDTO[], facets: { material_types, topics, audiences }, total }` |
+| `GET` | `/api/prm/portal/library/:id/download` | — | `302` redirect to `buildAttachmentImageUrl(primary_attachment_id)` with route-ACL re-check |
 
 **Server filter (concatenated with any user-supplied facet filter):**
 
@@ -219,12 +221,12 @@ All commands are undoable per the root Undoability law.
 
 | Command | Trigger | Undoable? | Compensation |
 |---|---|---|---|
-| `CreateCaseStudyCommand` | `POST /api/portal/case-studies` | Yes | `SoftDeleteCaseStudyCommand` |
-| `UpdateCaseStudyCommand` | `PUT /api/portal/case-studies/:id` | Yes | Replay prior snapshot (standard aggregate undo) |
-| `SoftDeleteCaseStudyCommand` | `POST /api/portal/case-studies/:id/delete` | **Yes** (via `RestoreCaseStudyCommand`) | Restore — clears `deleted_at` |
-| `RestoreCaseStudyCommand` | `POST /api/portal/case-studies/:id/restore` | Yes (by re-soft-deleting) | Re-apply `deleted_at` |
-| `SetCaseStudyPublicationFlagCommand` | `PUT /api/backend/prm/case-studies/:id/publication-flag` | Yes (by setting flag back) | Flag toggle is its own inverse |
-| `UploadMarketingMaterialCommand` | `POST /api/backend/prm/marketing-materials` | Yes (via DELETE while unpublished; soft-retain once published) | Delete / soft-retain |
+| `CreateCaseStudyCommand` | `POST /api/prm/portal/case-study` | Yes | `SoftDeleteCaseStudyCommand` |
+| `UpdateCaseStudyCommand` | `PUT /api/prm/portal/case-study/:id` | Yes | Replay prior snapshot (standard aggregate undo) |
+| `SoftDeleteCaseStudyCommand` | `POST /api/prm/portal/case-study/:id/delete` | **Yes** (via `RestoreCaseStudyCommand`) | Restore — clears `deleted_at` |
+| `RestoreCaseStudyCommand` | `POST /api/prm/portal/case-study/:id/restore` | Yes (by re-soft-deleting) | Re-apply `deleted_at` |
+| `SetCaseStudyPublicationFlagCommand` | `PUT /api/prm/case-study/:id/publication-flag` | Yes (by setting flag back) | Flag toggle is its own inverse |
+| `UploadMarketingMaterialCommand` | `POST /api/prm/marketing-material` | Yes (via DELETE while unpublished; soft-retain once published) | Delete / soft-retain |
 | `PublishMarketingMaterialCommand` | `POST /:id/publish` | **Yes** (via `UnpublishMarketingMaterialCommand`) | Unpublish |
 | `UnpublishMarketingMaterialCommand` | `POST /:id/unpublish` | Yes (by republishing) | Republish |
 
@@ -409,12 +411,12 @@ OM PartnerOps explicitly **does not** have `toggle_publish` or `marketing_materi
 | PartnerMember | Read (own Agency) | Read (own Agency) | No | Never | Read (tier-gated) |
 | Other Agency | 403 | 403 | 403 | N/A | Read (own-tier only) |
 
-**Portal-API route-level write guard (same pattern as Spec #1):** POST/PUT on `/api/portal/case-studies` strips and rejects any `may_publish_on_om_website` / `published_url` key *before* the handler runs. Emits diagnostic event `prm.agency.admin_field_access_rejected` per invariant #6. No CustomerUser role grants these fields.
+**Portal-API route-level write guard (same pattern as Spec #1):** POST/PUT on `/api/prm/portal/case-study` strips and rejects any `may_publish_on_om_website` / `published_url` key *before* the handler runs. Emits diagnostic event `prm.agency.admin_field_access_rejected` per invariant #6. No CustomerUser role grants these fields.
 
 ### 6.3 Attachment access
 
 - CaseStudy hero / gallery: `buildAttachmentImageUrl` returns a URL like `/api/attachments/{partition}/org_{org_id}/tenant_{tenant_id}/{file}`. Route ACL checks `req.auth.organization_id` matches the URL segment + the caller's Agency owns the CaseStudy (for portal) OR the caller has `prm.case_study.read_all` (for backend). No signed short-TTL URL.
-- MarketingMaterial primary attachment: the portal `GET /api/portal/library/:id/download` redirect **re-checks** the tier-gate + publish state before issuing the redirect, closing the window where an old URL could grant post-unpublish access.
+- MarketingMaterial primary attachment: the portal `GET /api/prm/portal/library/:id/download` redirect **re-checks** the tier-gate + publish state before issuing the redirect, closing the window where an old URL could grant post-unpublish access.
 
 ---
 
@@ -525,7 +527,7 @@ Mitigation: soft-delete retains the FKs. Any future hard-delete (v2) must delete
 - Seed: Agency A with 3 CaseStudies (1 soft-deleted), Agency B with 1 CaseStudy.
 - Spec #5 test (linked by shared fixture `.ai/test-fixtures/spec5-spec7-casestudy-picker.json`) navigates Agency A's P10 picker.
 - Assert: picker shows 2 rows (excludes soft-deleted + other-Agency).
-- This spec's test: direct GET `/api/portal/case-studies?limit=10` from Agency A → asserts same 2 rows.
+- This spec's test: direct GET `/api/prm/portal/case-study?limit=10` from Agency A → asserts same 2 rows.
 
 ### 9.7 MarketingMaterial publish → P11 library refresh within TTL
 - Seed: Agency A at `tier = ai_native`. Baseline P11 fetch → empty list, cached under `['prm:library', 'prm:agency:A:tier:ai_native']`.
@@ -550,7 +552,7 @@ Mitigation: soft-delete retains the FKs. Any future hard-delete (v2) must delete
 - OM Marketing unpublishes M.
 - Assert `prm.marketing_material.unpublished` → `MarketingLibraryUnpublishedInvalidator` fires.
 - Agency A re-fetches P11 → M gone.
-- Agency A attempts `GET /api/portal/library/M/download` → 404 (route re-checks publish state on redirect; closed window per §6.3).
+- Agency A attempts `GET /api/prm/portal/library/M/download` → 404 (route re-checks publish state on redirect; closed window per §6.3).
 
 ### 9.11 Draft MarketingMaterial edit does not invalidate cache
 - Seed: Draft MarketingMaterial D (not published yet). Cached library fetch for Agency A populates tag set.
@@ -588,5 +590,5 @@ Mitigation: soft-delete retains the FKs. Any future hard-delete (v2) must delete
 1. `case_study` entity + migration + portal P7 list + P8 rich form + portal-API CRUD + soft-delete/restore actions + route guard for Marketing-only fields. **(US2.2 + US2.3)**
 2. B8 backend CaseStudies DataTable + `/publication-flag` action + `prm.case_study.toggle_publish` feature flag + RBAC wiring. **(US2.4)**
 3. `marketing_material` entity + migration + B9 CrudForm + `/publish` + `/unpublish` + `topics` dictionary `setup.ts` seed. **(US7.1 + OQ-012)**
-4. P11 Marketing Library portal custom list + `/api/portal/library` GET + `/download` redirect + tier-gate filter + cache tags. **(US7.2 — portal-side)**
+4. P11 Marketing Library portal custom list + `/api/prm/portal/library` GET + `/download` redirect + tier-gate filter + cache tags. **(US7.2 — portal-side)**
 5. Four per-feature cache invalidator subscribers + Spec #5 read-contract integration test scaffolding + cross-spec fixture. **(OQ-019 + US7.2 reactive + cross-spec with Spec #5)**

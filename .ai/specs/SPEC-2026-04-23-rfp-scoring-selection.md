@@ -1,6 +1,8 @@
 # SPEC-2026-04-23 — RFP Scoring, Selection, Lifecycle (WF4 · Phase 5b)
 
-> **Cross-spec drift fixed 2026-05-05.** When this spec is implemented, backend routes MUST live under `/api/prm/rfp/...` (NOT `/api/backend/prm/rfps/...` as currently drafted) — singular module, drops the `/backend/` segment per the shipped T0/T1/T2 convention. The `is_path_b_locked` lock signal arrives via `RfpPathBLockSubscriber` (owned by Spec #3) on the column owned by Spec #5; see Spec #3 §8.4. All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+> **Cross-spec drift fixed 2026-05-05.** Backend routes live under `/api/prm/rfp/...` per the shipped T0/T1/T2 namespace convention (singular resource, no `/backend/` segment, OM auto-discovers from `src/modules/<module>/api/...`). The `is_path_b_locked` lock signal arrives via `RfpPathBLockSubscriber` (owned by Spec #3) on the column owned by Spec #5; see Spec #3 §8.4. All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+>
+> **2026-05-05 follow-up:** body paths replaced inline — legacy `/api/backend/prm/rfps/...` and `/api/portal/rfps/...` corrected to canonical singular `/api/prm/rfp/...` / `/api/prm/portal/rfp/...` throughout. Filesystem path references in §10 (`packages/prm/src/modules/prm/api/backend/rfps/...`) still use the old layout — left for the T5 implementer to correct against shipped `src/modules/prm/api/...` layout. Header now consistent with body URL paths.
 >
 > **Persona:** Martin Fowler (architectural purity, domain-driven, append-only audit trail as first-class design).
 > **Author:** Piotr (om-cto Spec Orchestrator), 2026-04-23.
@@ -108,11 +110,11 @@ Three architectural notes the embedded brief leaves implicit:
 
 ## 3. API Contracts
 
-All routes live under `/api/backend/prm/rfps/...` and require an authenticated `User` (OM PartnerOps) with the feature flag indicated in §6. Requests and responses are JSON. Zod schemas live at `packages/prm/src/modules/prm/api/schemas/` alongside the existing Spec #5 schemas.
+All routes live under `/api/prm/rfp/...` and require an authenticated `User` (OM PartnerOps) with the feature flag indicated in §6. Requests and responses are JSON. Zod schemas live at `packages/prm/src/modules/prm/api/schemas/` alongside the existing Spec #5 schemas.
 
 ### 3.1 Record a score (manual or LLM-assisted commit)
 
-- **Method + path:** `POST /api/backend/prm/rfps/{rfp_id}/responses/{response_id}/score`
+- **Method + path:** `POST /api/prm/rfp/{rfp_id}/responses/{response_id}/score`
 - **Auth:** User, feature `prm.rfp.score`.
 - **Request body (Zod):**
 
@@ -152,7 +154,7 @@ All routes live under `/api/backend/prm/rfps/...` and require an authenticated `
 
 ### 3.2 LLM draft (no save)
 
-- **Method + path:** `POST /api/backend/prm/rfps/{rfp_id}/responses/{response_id}/score/draft-llm`
+- **Method + path:** `POST /api/prm/rfp/{rfp_id}/responses/{response_id}/score/draft-llm`
 - **Auth:** User, feature `prm.rfp.score`.
 - **Request body:** `{}` (empty; server composes the prompt from the RFP + RFPResponse).
 - **Response 200:**
@@ -175,7 +177,7 @@ All routes live under `/api/backend/prm/rfps/...` and require an authenticated `
 
 ### 3.3 Commit selection
 
-- **Method + path:** `POST /api/backend/prm/rfps/{rfp_id}/select`
+- **Method + path:** `POST /api/prm/rfp/{rfp_id}/select`
 - **Auth:** User, feature `prm.rfp.select`.
 - **Request body:**
 
@@ -206,7 +208,7 @@ All routes live under `/api/backend/prm/rfps/...` and require an authenticated `
 
 ### 3.4 Close RFP
 
-- **Method + path:** `POST /api/backend/prm/rfps/{rfp_id}/close`
+- **Method + path:** `POST /api/prm/rfp/{rfp_id}/close`
 - **Auth:** User, feature `prm.rfp.close`.
 - **Request body:**
 
@@ -223,7 +225,7 @@ All routes live under `/api/backend/prm/rfps/...` and require an authenticated `
 
 ### 3.5 Re-open RFP (client-driven)
 
-- **Method + path:** `POST /api/backend/prm/rfps/{rfp_id}/reopen`
+- **Method + path:** `POST /api/prm/rfp/{rfp_id}/reopen`
 - **Auth:** User, feature `prm.rfp.reopen`.
 - **Request body:**
 
@@ -242,7 +244,7 @@ All routes live under `/api/backend/prm/rfps/...` and require an authenticated `
 
 ### 3.6 RFP Broadcasts audit (B11)
 
-- **Method + path:** `GET /api/backend/prm/rfps/{rfp_id}/broadcasts`
+- **Method + path:** `GET /api/prm/rfp/{rfp_id}/broadcasts`
 - **Auth:** User, feature `prm.rfp.read` (existing, owned by Spec #5).
 - **Query params:** `?page=1&pageSize=50&sort=broadcast_at.desc`.
 - **Response 200:**
@@ -385,7 +387,7 @@ A SQL view `vw_rfp_response_latest_scores` exposes `(rfp_response_id, latest_ver
 
 ### 6.2 Reads by PartnerAdmin / PartnerMember (agency-side)
 
-- **RFPResponseScore:** PartnerAdmin of the owning agency can READ their own agency's score rows **once** `RFP.status ∈ {selected, closed, reopened}` — routed through Spec #5's existing `GET /api/portal/rfps/{id}/response` endpoint (which this spec extends the response-enricher for, not a new route).
+- **RFPResponseScore:** PartnerAdmin of the owning agency can READ their own agency's score rows **once** `RFP.status ∈ {selected, closed, reopened}` — routed through Spec #5's existing `GET /api/prm/portal/rfp/{id}/response` endpoint (which this spec extends the response-enricher for, not a new route).
 - **B11 audit:** OM staff only. PartnerAdmins do NOT see other agencies' broadcast rows ever (invariant #15).
 
 ### 6.3 Cross-agency visibility rule
@@ -401,8 +403,8 @@ Enforced at ACL layer; tests in §9.4.
 - **New table `rfp_response_scores`** — no existing code reads from it; additive.
 - **New column `rfps.reopened_deadline_at`** — nullable, default NULL; existing Spec #5 code paths don't touch it; additive. **Cross-spec coordination: confirmed with Spec #5 authors that the `RFP` MikroORM entity gains the new `@Property({ nullable: true })` declaration in this spec's PR, not in Spec #5's.**
 - **New events** (`prm.rfp_response_score.recorded`, `prm.rfp.selection_made`, `prm.rfp.selection_changed`, `prm.rfp.closed`, `prm.rfp.reopened_for_scoring`, `prm.rfp_response.available_for_revision`) — no prior subscribers; additive.
-- **New API routes** — all under `/api/backend/prm/rfps/...` new sub-paths; no existing route changes.
-- **Read-enricher extension** on Spec #5's `GET /api/portal/rfps/{id}/response` — adds a `scores: Array<{ version, total_score, source, ... }>` field to the response payload when `RFP.status ∈ {selected, closed, reopened}` and `userFeatures` includes `prm.rfp.read_own_score`. Adding a new nullable field to a JSON response is additive per our BC rules.
+- **New API routes** — all under `/api/prm/rfp/...` new sub-paths; no existing route changes.
+- **Read-enricher extension** on Spec #5's `GET /api/prm/portal/rfp/{id}/response` — adds a `scores: Array<{ version, total_score, source, ... }>` field to the response payload when `RFP.status ∈ {selected, closed, reopened}` and `userFeatures` includes `prm.rfp.read_own_score`. Adding a new nullable field to a JSON response is additive per our BC rules.
 
 ### 7.2 BC risks
 

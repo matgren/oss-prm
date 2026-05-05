@@ -1,6 +1,8 @@
 # SPEC-2026-04-23: RFP Broadcast & Response (Portal-side cluster)
 
-> **Cross-spec drift fixed 2026-05-05.** When this spec is implemented, routes MUST live under `/api/prm/rfp/...` (backend) and `/api/prm/portal/rfp/...` (portal) to match the shipped T0/T1/T2 namespace convention — NOT `/api/backend/prm/rfp/...` and `/api/portal/rfp/...` as currently drafted. Tables must use the `prm_` table-prefix convention (e.g. `prm_rfps`, `prm_rfp_responses`). The cross-spec `prm_rfps.is_path_b_locked` column called out in Spec #3 §8.4 is owned here. All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+> **Cross-spec drift fixed 2026-05-05.** Routes live under `/api/prm/rfp/...` (backend) and `/api/prm/portal/rfp/...` (portal) per the shipped T0/T1/T2 namespace convention (OM auto-discovers from `src/modules/<module>/api/...`). Tables use the `prm_` prefix (`prm_rfps`, `prm_rfp_responses`). The cross-spec `prm_rfps.is_path_b_locked` column called out in Spec #3 §8.4 is owned here. All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+>
+> **2026-05-05 follow-up:** body paths replaced inline — legacy `/api/{backend,portal}/...` and plural `rfps` mentions corrected to canonical singular `/api/prm/rfp/...` / `/api/prm/portal/rfp/...` throughout. Header now consistent with body.
 >
 > **Spec #5 of 7** decomposing `app-spec/app-spec.md` (Piotr, om-cto Spec Orchestrator, 2026-04-23).
 > **Workflow:** WF4 (RFP) — portal-side story cluster.
@@ -78,7 +80,7 @@ Measurable targets (derived from §7 Phase 5 acceptance criteria):
 - **US5.4 Draft/submit RFPResponse (P10 — LARGEST portal page):**
   - Custom React form. Three markdown editors: `approach_markdown`, `team_markdown`, `timeline_markdown` (reuse `packages/ui` markdown editor if it ships, else a thin wrapper). Size estimate: ~3 commits worth of UI assembly alone.
   - CaseStudy picker: select own-Agency CaseStudies (from Spec #7) — checkbox list, filtered to Agency.
-  - Auto-save draft (debounced POST to `/api/portal/rfps/{id}/response/draft`).
+  - Auto-save draft (debounced POST to `/api/prm/portal/rfp/{id}/response/draft`).
   - Submit button: only enabled if required fields populated; transitions RFPResponse `draft → submitted`; sets `submitted_at`; emits `prm.rfp_response.submitted`.
   - Status-aware CTAs: after submit, form becomes read-only unless RFP `status = 'reopened'` (challenge round — Spec #6).
   - View own score once RFP `status = 'selected'` (reads `RFPResponseScore` from Spec #6 via read-only projection).
@@ -108,16 +110,16 @@ The Technical Approach above is the authoritative plan. Two minor reconciliation
 
 > **Convention:** singular module + singular entity in URL path (`prm/rfp/...`) per the Singularity Law. All request/response bodies validated by Zod on both sides.
 
-### 3.1 Backend (`/api/backend/prm/rfp/*`) — User / OM PartnerOps
+### 3.1 Backend (`/api/prm/rfp/*`) — User / OM PartnerOps
 
 | Method | Path | Purpose | Body / Params | Response |
 |---|---|---|---|---|
-| `GET` | `/api/backend/prm/rfp` | List RFPs (B6) | Query: `status?`, `q?`, `page`, `pageSize` | `{ items: RFP[], total }` |
-| `GET` | `/api/backend/prm/rfp/{id}` | Detail (B7) | — | `RFP` (incl. broadcast counts) |
-| `POST` | `/api/backend/prm/rfp` | Create draft (US5.1) | `CreateRFPDraftCommand` | `{ id }` + `prm.rfp.created` |
-| `PATCH` | `/api/backend/prm/rfp/{id}` | Update draft | `UpdateRFPDraftCommand` | `{ id }` + `prm.rfp.updated` |
-| `POST` | `/api/backend/prm/rfp/{id}/publish` | Publish + broadcast (US5.2) | `{ confirmedAgencyIds?: string[] }` (optional idempotency guard — UI pre-shows the list) | `{ id, status: 'published', broadcastAgencyIds: string[] }` + `prm.rfp.published` + N × `prm.rfp_broadcast.created` |
-| `POST` | `/api/backend/prm/rfp/{id}/unpublish` | Undo publish (undoability — §7 invariant) | `{ reason: string }` | `{ id, status: 'draft' }` + `prm.rfp.unpublished` |
+| `GET` | `/api/prm/rfp` | List RFPs (B6) | Query: `status?`, `q?`, `page`, `pageSize` | `{ items: RFP[], total }` |
+| `GET` | `/api/prm/rfp/{id}` | Detail (B7) | — | `RFP` (incl. broadcast counts) |
+| `POST` | `/api/prm/rfp` | Create draft (US5.1) | `CreateRFPDraftCommand` | `{ id }` + `prm.rfp.created` |
+| `PATCH` | `/api/prm/rfp/{id}` | Update draft | `UpdateRFPDraftCommand` | `{ id }` + `prm.rfp.updated` |
+| `POST` | `/api/prm/rfp/{id}/publish` | Publish + broadcast (US5.2) | `{ confirmedAgencyIds?: string[] }` (optional idempotency guard — UI pre-shows the list) | `{ id, status: 'published', broadcastAgencyIds: string[] }` + `prm.rfp.published` + N × `prm.rfp_broadcast.created` |
+| `POST` | `/api/prm/rfp/{id}/unpublish` | Undo publish (undoability — §7 invariant) | `{ reason: string }` | `{ id, status: 'draft' }` + `prm.rfp.unpublished` |
 
 **ACL:** all routes require `prm.rfp.create` or `prm.rfp.publish` features (see §6).
 
@@ -145,19 +147,19 @@ z.object({
 });
 ```
 
-### 3.2 Portal (`/api/portal/rfp/*`) — CustomerUser (AgencyAdmin / AgencyMember)
+### 3.2 Portal (`/api/prm/portal/rfp/*`) — CustomerUser (AgencyAdmin / AgencyMember)
 
 All portal routes resolve `current_agency_id` from the session's CustomerUser → AgencyMember → Agency and apply the **visibility gate** (invariant #15) before any other logic: a JOIN on `RFPBroadcast (rfp_id, agency_id)` must return a row, **AND** `RFP.status IN ('published', 'scoring', 'selection_made')`. Missing row → **404** (never 403, never 200-empty).
 
 | Method | Path | Purpose | Body / Params | Response |
 |---|---|---|---|---|
-| `GET` | `/api/portal/rfp` | Inbox list (P9 / US5.3) | Query: `tab?: 'unread' \| 'responded' \| 'declined' \| 'all'`, `page`, `pageSize` | `{ items: InboxRow[], total }` |
-| `GET` | `/api/portal/rfp/{id}` | RFP detail + own broadcast/response (P10) | — | `{ rfp, broadcast, response? }` — stamps `first_opened_at` side-effect on first call |
-| `POST` | `/api/portal/rfp/{id}/response/draft` | Save/auto-save draft (US5.4) | `DraftRFPResponseCommand` | `{ id, updated_at }` + `prm.rfp_response.draft_saved` |
-| `POST` | `/api/portal/rfp/{id}/response/submit` | Submit (US5.4) | `{}` (idempotent) | `{ id, status: 'submitted', submitted_at }` + `prm.rfp_response.submitted` |
-| `POST` | `/api/portal/rfp/{id}/response/unsubmit` | Undo submit (undoability; only before `deadline_to_respond`) | `{ reason?: string }` | `{ id, status: 'draft' }` + `prm.rfp_response.unsubmitted` |
-| `POST` | `/api/portal/rfp/{id}/decline` | Decline broadcast (US5.5) | `{ decline_reason?: string }` | `{ declined_at }` + `prm.rfp_broadcast.declined` |
-| `POST` | `/api/portal/rfp/{id}/undecline` | Reverse decline (pre-deadline) | `{}` | `{ declined_at: null }` + `prm.rfp_broadcast.undeclined` |
+| `GET` | `/api/prm/portal/rfp` | Inbox list (P9 / US5.3) | Query: `tab?: 'unread' \| 'responded' \| 'declined' \| 'all'`, `page`, `pageSize` | `{ items: InboxRow[], total }` |
+| `GET` | `/api/prm/portal/rfp/{id}` | RFP detail + own broadcast/response (P10) | — | `{ rfp, broadcast, response? }` — stamps `first_opened_at` side-effect on first call |
+| `POST` | `/api/prm/portal/rfp/{id}/response/draft` | Save/auto-save draft (US5.4) | `DraftRFPResponseCommand` | `{ id, updated_at }` + `prm.rfp_response.draft_saved` |
+| `POST` | `/api/prm/portal/rfp/{id}/response/submit` | Submit (US5.4) | `{}` (idempotent) | `{ id, status: 'submitted', submitted_at }` + `prm.rfp_response.submitted` |
+| `POST` | `/api/prm/portal/rfp/{id}/response/unsubmit` | Undo submit (undoability; only before `deadline_to_respond`) | `{ reason?: string }` | `{ id, status: 'draft' }` + `prm.rfp_response.unsubmitted` |
+| `POST` | `/api/prm/portal/rfp/{id}/decline` | Decline broadcast (US5.5) | `{ decline_reason?: string }` | `{ declined_at }` + `prm.rfp_broadcast.declined` |
+| `POST` | `/api/prm/portal/rfp/{id}/undecline` | Reverse decline (pre-deadline) | `{}` | `{ declined_at: null }` + `prm.rfp_broadcast.undeclined` |
 
 **Inbox row shape (derived view):**
 ```ts
@@ -411,7 +413,7 @@ The portal API interceptor (Spec #1) already rejects writes to `RFP.*` from port
 
 - New tables: `rfp`, `rfp_broadcast`, `rfp_response`. No changes to existing tables.
 - New events: all in `prm.rfp.*` / `prm.rfp_broadcast.*` / `prm.rfp_response.*` namespaces — never before used.
-- New routes: all under `/api/backend/prm/rfp/*` and `/api/portal/rfp/*` — never before served.
+- New routes: all under `/api/prm/rfp/*` and `/api/prm/portal/rfp/*` — never before served.
 - `RFP.is_path_b_locked` column is added by **this spec** (so Spec #6's re-open guard has a place to read from). Spec #3 writes to it later; the column defaults to `false`, so the read-model is safe even before Spec #3 ships.
 
 **Migration ordering:** this spec's migration must land **before** Spec #3's subscriber migration (which writes `is_path_b_locked`) and **before** Spec #6's migration (which adds `rfp_response_score` and reads the column). Captured in §8 Integration Test Coverage.
@@ -456,10 +458,10 @@ The portal API interceptor (Spec #1) already rejects writes to `RFP.*` from port
 
 ### 9.2 Visibility gate (US5.3, invariant #15)
 
-7. **Non-eligible 404 on direct GET.** Agency C (not broadcasted) hits `GET /api/portal/rfp/{id}`. Expect **404**, response body byte-identical to `GET /api/portal/rfp/{fakeUUID}`.
+7. **Non-eligible 404 on direct GET.** Agency C (not broadcasted) hits `GET /api/prm/portal/rfp/{id}`. Expect **404**, response body byte-identical to `GET /api/prm/portal/rfp/{fakeUUID}`.
 8. **Status-gate 404 on draft.** While RFP is still `draft`, Agency A (will-be-broadcast, but not yet) hits GET → 404.
 9. **Inbox filter tabs.** Seed: 5 broadcasts in mixed states (2 unread, 1 responded, 1 declined, 1 outcome-selected). Assert each tab filter returns the correct subset.
-10. **First-open stamp.** Agency A hits `GET /api/portal/rfp/{id}` twice; assert `first_opened_at` set on first call, unchanged on second, and `prm.rfp_broadcast.first_opened` emitted exactly once.
+10. **First-open stamp.** Agency A hits `GET /api/prm/portal/rfp/{id}` twice; assert `first_opened_at` set on first call, unchanged on second, and `prm.rfp_broadcast.first_opened` emitted exactly once.
 
 ### 9.3 Draft + Submit + Unsubmit (US5.4)
 
@@ -499,14 +501,14 @@ The portal API interceptor (Spec #1) already rejects writes to `RFP.*` from port
 ### Commit 1 — Entities + backend B7 + publish handler + notification seed (US5.1 + US5.2)
 - Migration: `rfp`, `rfp_broadcast`, `rfp_response` tables per §5.
 - Commands: `CreateRFPDraftCommand`, `UpdateRFPDraftCommand`, `PublishRFPCommand`, `UnpublishRFPCommand` + handlers.
-- Routes: `/api/backend/prm/rfp` (CRUD + publish + unpublish).
+- Routes: `/api/prm/rfp` (CRUD + publish + unpublish).
 - Eligibility evaluator (pure function) + unit tests.
 - Seeded `NotificationTypeDefinition` `prm.rfp.broadcast_invitation` + `BroadcastInvitationNotifier` subscriber on `prm.rfp.published`.
 - Features: `prm.rfp.create`, `prm.rfp.publish` + RBAC seed.
 - Integration tests §9.1.
 
 ### Commit 2 — P9 portal inbox (US5.3)
-- Route: `/api/portal/rfp` (list).
+- Route: `/api/prm/portal/rfp` (list).
 - Visibility helper `assertBroadcastedOrNotFound()`.
 - Custom React list (no DataTable) at `/{slug}/portal/rfp/page.tsx` with filter tabs + empty states.
 - First-open stamp on P10-detail GET (even though P10 itself ships in commit 3; the route exists).

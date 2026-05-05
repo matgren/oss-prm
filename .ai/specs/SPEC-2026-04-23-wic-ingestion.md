@@ -1,6 +1,8 @@
 # SPEC-2026-04-23 WIC Ingestion & Display
 
-> **Cross-spec drift fixed 2026-05-05.** When this spec is implemented, backend routes MUST live under `/api/prm/wic/...` (not `/api/backend/prm/wic/...`) and service routes under `/api/prm/service/wic/...` (not `/api/service/prm/wic/...`) to match the shipped T0/T1/T2 namespace convention. The current spec body uses the older drafting paths; treat the path prefix as authoritative-by-convention from the T0/T1/T2 reconciliation, not from this spec's literal text. All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+> **Cross-spec drift fixed 2026-05-05.** Backend routes live under `/api/prm/wic/...` and service routes under `/api/prm/service/wic/...` per the shipped T0/T1/T2 namespace convention (OM auto-discovers from `src/modules/<module>/api/...`). All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+>
+> **2026-05-05 follow-up:** body paths replaced inline — legacy `/api/{service,backend}/prm/wic/...` mentions corrected throughout. Header is now consistent with the spec body.
 >
 **Spec:** #4 of 7 (PRM decomposition)
 **Workflow:** WF5 — WIC Ingestion & Display
@@ -18,13 +20,13 @@
 
 ### 1.1 TLDR
 
-Introduce a pair of service-to-service routes under `/api/service/prm/wic/*` that let the n8n WIC classifier pull the authoritative GitHub-profile roster and push monthly contribution batches into PRM. Incoming batches pass through an Anti-Corruption Layer that rejects malformed or unresolvable rows into an auditable issue queue (B10) instead of corrupting the domain. Supersession is idempotent at the `(agency_member_id, contribution_month)` grain (invariant #3); attribution is snapshotted at import time (invariant #13). Auth follows the SPEC-053b header pattern (OQ-018).
+Introduce a pair of service-to-service routes under `/api/prm/service/wic/*` that let the n8n WIC classifier pull the authoritative GitHub-profile roster and push monthly contribution batches into PRM. Incoming batches pass through an Anti-Corruption Layer that rejects malformed or unresolvable rows into an auditable issue queue (B10) instead of corrupting the domain. Supersession is idempotent at the `(agency_member_id, contribution_month)` grain (invariant #3); attribution is snapshotted at import time (invariant #13). Auth follows the SPEC-053b header pattern (OQ-018).
 
 ### 1.2 Scope
 
 **In scope:**
 
-- Two service-identity HTTP endpoints: `GET /api/service/prm/wic/profiles`, `POST /api/service/prm/wic/imports/{batch_id}`.
+- Two service-identity HTTP endpoints: `GET /api/prm/service/wic/profiles`, `POST /api/prm/service/wic/imports/{batch_id}`.
 - Two new entities under the PRM module: `WICContribution`, `WICImportAuditLog`.
 - One `ServiceAuthMiddleware` enforcing the SPEC-053b header contract.
 - The Anti-Corruption Layer (resolution + validation + supersession + snapshot) per §1.4.6.
@@ -60,14 +62,14 @@ Introduce a pair of service-to-service routes under `/api/service/prm/wic/*` tha
   - `WICContribution` (FK `agency_member_id`, FK `agency_id` (snapshot — invariant #13: attribution frozen at import), `github_profile` (also snapshotted — survives future GH-profile reassignment), `contribution_month` date (YYYY-MM-01 first-of-month normalization), `wic_level` enum `L1` / `L2` / `L3` / `L4` — informational/display only per L-002 — NO PRM logic branches on it; `contribution_count` integer, `computed_score` decimal, `import_batch_id` UUID, `imported_at` timestamp, `superseded_by_id` nullable FK to same table — for invariant #3 supersession).
   - `WICImportAuditLog` (`import_batch_id` UUID, `row_index` integer, `raw_payload` JSONB, `rejection_reason` enum + text, `resolved_at` nullable, `resolved_by_user_id` nullable, `resolution_action` enum `accepted_after_fix` / `rolled_back` / `ignored`).
 - **Service-identity auth (OQ-018 — SPEC-053b pattern, DIY):**
-  - Header contract on `/api/service/prm/wic/*`:
+  - Header contract on `/api/prm/service/wic/*`:
     - `X-Om-Import-Secret: <shared secret>` (env var `OM_PRM_WIC_IMPORT_SECRET`).
     - `X-Om-Request-Timestamp: <ISO-8601>` — reject if outside ±5 minute window (replay protection).
     - `X-Om-Idempotency-Key: <UUID>` — **required on POST only** (per SPEC-053b distinction). GET requests do NOT require it.
   - Enforced by a shared `ServiceAuthMiddleware` in this spec's route handlers.
   - NOT a session token. NOT a user. No `CustomerUser` / `User` row.
-- **US6.1 GET `/api/service/prm/wic/profiles`:** returns JSON list of `{ agency_member_id, github_profile, agency_slug, is_active }` for all currently-active `AgencyMember` rows across all agencies. Used by n8n to know who to classify. Shared auth headers only (no idempotency on GET).
-- **US6.2 POST `/api/service/prm/wic/imports/{batch_id}`:** receives a batch payload (list of per-member WIC records). Validates each row through the **Anti-Corruption Layer (§1.4.6)**:
+- **US6.1 GET `/api/prm/service/wic/profiles`:** returns JSON list of `{ agency_member_id, github_profile, agency_slug, is_active }` for all currently-active `AgencyMember` rows across all agencies. Used by n8n to know who to classify. Shared auth headers only (no idempotency on GET).
+- **US6.2 POST `/api/prm/service/wic/imports/{batch_id}`:** receives a batch payload (list of per-member WIC records). Validates each row through the **Anti-Corruption Layer (§1.4.6)**:
   - Required fields present + typed correctly.
   - `github_profile` resolves to an active `AgencyMember` → if not, log to `WICImportAuditLog` with `rejection_reason='profile_not_found'`.
   - `contribution_month` is a valid first-of-month date → else `rejection_reason='malformed_month'`.
@@ -89,11 +91,11 @@ Introduce a pair of service-to-service routes under `/api/service/prm/wic/*` tha
 
 ## 3. API Contracts
 
-All endpoints live in the PRM module. Service endpoints sit under `/api/service/prm/wic/*` and share one `ServiceAuthMiddleware`; the backend endpoint sits under `/api/backend/prm/wic/*` and uses the standard backend session + ACL feature check.
+All endpoints live in the PRM module. Service endpoints sit under `/api/prm/service/wic/*` and share one `ServiceAuthMiddleware`; the backend endpoint sits under `/api/prm/wic/*` and uses the standard backend session + ACL feature check.
 
 ### 3.1 Header Contract (service endpoints)
 
-Applied by `ServiceAuthMiddleware` on every request under `/api/service/prm/wic/*`. Decisions follow SPEC-053b verbatim — we adopt, we do not invent.
+Applied by `ServiceAuthMiddleware` on every request under `/api/prm/service/wic/*`. Decisions follow SPEC-053b verbatim — we adopt, we do not invent.
 
 | Header | Required on | Value | Rejection |
 |---|---|---|---|
@@ -105,14 +107,14 @@ Applied by `ServiceAuthMiddleware` on every request under `/api/service/prm/wic/
 
 **Observability:** every request emits a structured log line with `service_identity`, `endpoint`, `status`, `batch_id?`, `duration_ms`, `idempotency_replay?`. No PII.
 
-### 3.2 `GET /api/service/prm/wic/profiles` (US6.1)
+### 3.2 `GET /api/prm/service/wic/profiles` (US6.1)
 
 Returns the authoritative roster n8n should classify.
 
 **Request**
 
 ```
-GET /api/service/prm/wic/profiles?month=YYYY-MM
+GET /api/prm/service/wic/profiles?month=YYYY-MM
 X-Om-Import-Secret: <secret>
 X-Om-Request-Timestamp: 2026-04-23T10:00:00Z
 ```
@@ -152,14 +154,14 @@ appear. A zero-length `profiles` array is a legal quiet month (US6.1 failure pat
 | 401 | Missing/invalid `X-Om-Import-Secret`. |
 | 408 | Timestamp outside ±5-minute window. |
 
-### 3.3 `POST /api/service/prm/wic/imports/{batch_id}` (US6.2)
+### 3.3 `POST /api/prm/service/wic/imports/{batch_id}` (US6.2)
 
 Accepts a batch of WIC rows for a month. `batch_id` is a URL-path UUID, n8n-generated, and is the canonical `import_batch_id` persisted on every row (accepted and rejected). It is coupled with `X-Om-Idempotency-Key` per §1.4.6: two different retry semantics on the same batch are therefore structurally impossible.
 
 **Request**
 
 ```
-POST /api/service/prm/wic/imports/6b4f0cd8-9b7a-4a40-87f6-6c1e2a9d4e10
+POST /api/prm/service/wic/imports/6b4f0cd8-9b7a-4a40-87f6-6c1e2a9d4e10
 X-Om-Import-Secret: <secret>
 X-Om-Request-Timestamp: 2026-04-23T10:00:00Z
 X-Om-Idempotency-Key: 7e2c1c88-21d9-4f2b-87b1-02a0ff7b2dd8
@@ -219,7 +221,7 @@ Zod schema enforces required fields + types. `contribution_month` must normalize
 
 The handler is wrapped in a batch-level transaction that commits per-row. If the process crashes mid-batch before `prm.wic_import.batch_completed` fires, retry with the same `batch_id` + `X-Om-Idempotency-Key` replays from the first un-committed row; the `(import_batch_id, row_index)` unique key on both `wic_contributions` and `wic_import_audit_log` makes replays side-effect-free.
 
-### 3.4 `GET /api/backend/prm/wic/audit-log` (B10)
+### 3.4 `GET /api/prm/wic/audit-log` (B10)
 
 Backend-only. Standard OM backend route — session cookie + `prm.wic.resolve` ACL feature check. This is the server side of the B10 DataTable.
 
@@ -235,7 +237,7 @@ Backend-only. Standard OM backend route — session cookie + `prm.wic.resolve` A
 
 **Response 200** — paginated rows: `{ id, import_batch_id, row_index, raw_payload, rejection_reason, rejection_detail, agency_id?, created_at, resolved_at?, resolution_action? }`.
 
-**Mutations for B10 row actions** go through the standard command route `POST /api/backend/prm/wic/audit-log/{id}/resolve` with body `{ action: 'accepted_after_fix' | 'rolled_back' | 'ignored', note?: string }`. The handler invokes `ResolveWICImportAuditLogCommand`.
+**Mutations for B10 row actions** go through the standard command route `POST /api/prm/wic/audit-log/{id}/resolve` with body `{ action: 'accepted_after_fix' | 'rolled_back' | 'ignored', note?: string }`. The handler invokes `ResolveWICImportAuditLogCommand`.
 
 ---
 
@@ -378,13 +380,13 @@ Retention: 30 days (superset of any reasonable n8n retry window). A nightly job 
 
 ## 6. Access Control
 
-### 6.1 Service endpoints (`/api/service/prm/wic/*`)
+### 6.1 Service endpoints (`/api/prm/service/wic/*`)
 
 - Auth surface: `ServiceAuthMiddleware` (this spec). No ACL feature check — the shared secret IS the authorization.
 - No `CustomerUser` / `User` context. No `organization_id` in the request; the middleware resolves the singleton PRM tenant context from config (the WIC integration is a global OM-level integration; there is only one tenant scope for PRM contributions).
 - Rate limit: 60 requests/minute per secret (standard middleware posture).
 
-### 6.2 Backend endpoint (`/api/backend/prm/wic/audit-log`)
+### 6.2 Backend endpoint (`/api/prm/wic/audit-log`)
 
 - Standard backend session cookie.
 - ACL feature: **`prm.wic.resolve`** (new feature ID, seeded alongside this spec's migrations). Granted to OM PartnerOps and Admin roles by seed.
@@ -401,7 +403,7 @@ Out of scope — handled by Spec #2 (US6.3). Noted here for completeness: the po
 This spec is **additive only**.
 
 - **New entities:** `WICContribution`, `WICImportAuditLog`, `ServiceIdempotencyKey`. No existing entities are touched.
-- **New API surface:** `/api/service/prm/wic/*`, `/api/backend/prm/wic/audit-log`. No existing route is modified.
+- **New API surface:** `/api/prm/service/wic/*`, `/api/prm/wic/audit-log`. No existing route is modified.
 - **New ACL feature:** `prm.wic.resolve`. Seed migration adds it to OM PartnerOps + Admin roles. No feature is renamed or removed.
 - **New events:** all under `prm.wic.*` and `prm.wic_import.*` — new namespaces; no existing event contract changes.
 - **New env var:** `OM_PRM_WIC_IMPORT_SECRET`. **Convention:** `OM_` prefix per Piotr PR #938. Absence at boot fails fast with a clear log line; the service routes return `503` until configured so that dev and staging environments can boot without the secret.
@@ -444,7 +446,7 @@ All tests live under `tests/integration/prm/wic/` — Playwright-driven API test
 | T11 | **GET rejects `X-Om-Idempotency-Key` absence gracefully** (should NOT be required) | GET with no idempotency header → 200. | US6.1 |
 | T12 | **Invariant #13 snapshot survives member reassignment** | Import March for AgencyMember at Agency A. Move member to Agency B. Query the March contribution → still `agency_id = A`. | US6.2, invariant #13 |
 | T13 | **B10 resolution workflow** (Playwright UI) | Log in as OM PartnerOps → navigate to B10 → see the rejected row from T3 → click "Mark resolved — accepted after fix" → row leaves default view, `resolution_action` persisted, `prm.wic_import.resolved` emitted. | US6.4 |
-| T14 | **B10 RBAC** | Log in as role without `prm.wic.resolve` → `/api/backend/prm/wic/audit-log` returns 403. | US6.4 |
+| T14 | **B10 RBAC** | Log in as role without `prm.wic.resolve` → `/api/prm/wic/audit-log` returns 403. | US6.4 |
 | T15 | **Concurrent supersession race** | Spawn two POSTs for the same (member, month) with different scores in parallel → exactly one row ends up `active`, the other is `archived`, no orphan rows, no duplicate-count events. | Invariant #3, R3 |
 
 **Test fixtures:** one active agency, two active AgencyMembers (one with GH profile `octocat`, one without), one inactive AgencyMember, one unused `ghost-user` profile.
@@ -496,7 +498,7 @@ Reviewed against Piotr's Decision Library, the Fowler lens, and the Phase 4 acce
 
 ### 10.5 Deviations from §1.4.6 — explicit note
 
-The App Spec §1.4.6 uses URL paths `/api/prm/wic/github-profiles` and `/api/prm/wic/import`. This spec uses `/api/service/prm/wic/profiles` and `/api/service/prm/wic/imports/{batch_id}`. The **contract is unchanged** (same headers, same payloads, same ACL rules) — only the URL scheme shifts, because OM's route convention reserves `/api/service/*` for non-session service identities. The `{batch_id}` path segment makes `import_batch_id` structurally non-optional and collapses one failure mode (body-level `import_batch_id` missing or mismatched). The App Spec and this spec are consistent on all other ACL semantics. Flagged to the Spec Orchestrator for cross-spec coherence — a single-line addendum to the App Spec, or a §1.4.6 clarification note, is recommended.
+The App Spec §1.4.6 uses URL paths `/api/prm/wic/github-profiles` and `/api/prm/wic/import`. This spec uses `/api/prm/service/wic/profiles` and `/api/prm/service/wic/imports/{batch_id}`. The **contract is unchanged** (same headers, same payloads, same ACL rules) — only the URL scheme shifts, because OM's route convention reserves `/api/service/*` for non-session service identities. The `{batch_id}` path segment makes `import_batch_id` structurally non-optional and collapses one failure mode (body-level `import_batch_id` missing or mismatched). The App Spec and this spec are consistent on all other ACL semantics. Flagged to the Spec Orchestrator for cross-spec coherence — a single-line addendum to the App Spec, or a §1.4.6 clarification note, is recommended.
 
 `rejection_reason` enum in this spec uses `profile_not_found` (aligned with the Technical Approach verbatim text) where the App Spec §1.4.6 uses `unknown_github_profile`. Both are implemented: the DB stores the App Spec value (`unknown_github_profile`) to match the source-of-truth contract; the Technical Approach nomenclature (`profile_not_found`) is treated as the human-facing alias in B10 UI copy and route handler comments. Integration tests (T3) assert the App Spec value. This preserves §1.4.6 as authoritative while keeping the Technical Approach intelligible to readers.
 
@@ -511,8 +513,8 @@ The App Spec §1.4.6 uses URL paths `/api/prm/wic/github-profiles` and `/api/prm
 
 1. Entity migrations + seeds + `prm.wic.resolve` ACL feature.
 2. `ServiceAuthMiddleware` + `service_idempotency_key` table + unit tests.
-3. `GET /api/service/prm/wic/profiles` route + Zod + integration tests (T8–T11).
-4. `POST /api/service/prm/wic/imports/{batch_id}` route + ACL + `RecordWICContributionCommand` + `SupersedeWICContributionCommand` + events + integration tests (T1–T7, T12, T15).
-5. B10 page (DataTable + row actions) + `GET/POST /api/backend/prm/wic/audit-log` + `ResolveWICImportAuditLogCommand` + Playwright tests (T13, T14).
+3. `GET /api/prm/service/wic/profiles` route + Zod + integration tests (T8–T11).
+4. `POST /api/prm/service/wic/imports/{batch_id}` route + ACL + `RecordWICContributionCommand` + `SupersedeWICContributionCommand` + events + integration tests (T1–T7, T12, T15).
+5. B10 page (DataTable + row actions) + `GET/POST /api/prm/wic/audit-log` + `ResolveWICImportAuditLogCommand` + Playwright tests (T13, T14).
 
 All 5 commits are point-sized. No gap from OM core shipped primitives (OQ-018 resolved per decisions log).
