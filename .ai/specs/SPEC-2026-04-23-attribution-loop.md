@@ -482,3 +482,89 @@ Risk: OM staff unreverses a Path-B LicenseDeal status `active → signed`. If th
 3. `WorkflowDefinition` JSON + activity handlers (forward saga) — US4.1, US4.2, US4.3.
 4. Reverse saga + `/reverse` + `/unreverse-status` endpoints — US4.4, US4.4b.
 5. P2 MIN widget + `/api/portal/min` + `RfpPathBLockSubscriber` — US4.5 + cross-spec contract.
+
+---
+
+## 11. Changelog
+
+### 2026-04-23 — Initial specification
+- Authored by Piotr (om-cto Spec Orchestrator), Martin Fowler review persona. Spec #3 of 7 decomposing `app-spec/app-spec.md`.
+- Scope: US4.1, US4.2, US4.3, US4.4, US4.4b, US4.5 + B5 backend page + portal MIN widget.
+- Depends on SPEC-2026-04-23-agency-foundation (#1) and SPEC-2026-04-23-wip-scoreboard (#2).
+- Estimated commits: 4–5 (OQ-017 resolved — `workflows` ships full saga primitives).
+
+### 2026-05-05 — T2 implementation landed (Patryk via om-implement-spec)
+
+**Module location:** standalone app (`src/modules/prm`, `from: '@app'`) — extends T0 + T1's PRM module rather than scaffolding a new one.
+
+**Files delivered:**
+- `data/entities.ts` — added `LicenseDeal` (table `prm_license_deals`).
+- `data/validators.ts` — added `LICENSE_DEAL_STATUSES`, `LICENSE_DEAL_ATTRIBUTION_PATHS`, `LICENSE_DEAL_ATTRIBUTION_SOURCES`, `LICENSE_DEAL_TRANSITIONS` matrix; create/update/attribute (discriminated)/reverse/unreverse-status/transition/list schemas; `pathToAttributionSource`, `licenseDealCorrelationKey`, `isAttributionFrozen` helpers.
+- `events.ts` — added 7 license_deal events.
+- `acl.ts` — added `prm.license_deal.{read,write,reassign}` and `prm.min.read_own_agency`.
+- `setup.ts` — extended `partner_admin` and `partner_member` ACLs with `prm.min.read_own_agency`; extended `employee` staff role with `prm.license_deal.read`. Seeds the `prm.license_deal.attribution_saga` `WorkflowDefinition` from `workflows/license-deal-attribution.json` on tenant create + `seedDefaults` (idempotent).
+- `lib/errors.ts` — added 10 license_deal error codes (FROZEN).
+- `lib/licenseDealService.ts` — domain service hosting create/update/softDelete/attribute/reverse/transitionStatus/unreverseStatus/findGoldenRuleCandidates/listForMinWidget/snapshotProspectAgency. Encryption helpers, `safeEmit`, optimistic-concurrency on `version`, server-side override detection (Path A), Path-B introspection fallback.
+- `lib/attributionSaga.ts` — `executeAttributionSaga` (forward, idempotent), `compensateAttributionSaga` (LIFO), `runInlineSaga`, `findOpenSagaInstancesByCorrelationKey`. The same activity handlers run via the platform's EXECUTE_FUNCTION dispatcher and inline at `/attribute`-time for synchronous response semantics.
+- `workflows/license-deal-attribution.json` — JSON `WorkflowDefinition` with embedded `WorkflowEventTrigger` on `prm.license_deal.attributed`, `correlationKey` via `{{context.correlationKey}}` (license_deal_id + ':' + attribution_source), `maxConcurrentInstances=1`, retry policy, `compensate: true` on the activity.
+- `subscribers/license-deal-reversal-compensation.ts` — reverse-saga subscriber on `prm.license_deal.reversal_started`. Runs LIFO compensation through `compensateAttributionSaga`.
+- `subscribers/rfp-path-b-lock.ts` — Spec §8.4 cross-spec contract subscriber. Maintains `prm_rfps.is_path_b_locked` on `prm.license_deal.status_changed`. Uses `to_regclass` + `information_schema.columns` introspection (T1 dashboard pattern) to no-op until Spec #5 ships the column. Sole writer per Singularity Law.
+- `di.ts` — registers `licenseDealService` (scoped) and the workflow function `workflowFunction:prm.saga.executeAttribution`.
+- `index.ts` — declares `workflows` as a required dependency.
+- `api/license-deal/route.ts` (GET list / POST create — always `pending`).
+- `api/license-deal/[id]/route.ts` (GET / PUT / DELETE — soft-delete restricted to `pending`).
+- `api/license-deal/[id]/attribute/route.ts` (POST — fires saga + inline saga + 202 with correlationKey).
+- `api/license-deal/[id]/reverse/route.ts` (POST — drives reverse saga).
+- `api/license-deal/[id]/unreverse-status/route.ts` (POST — US4.4b scoped bypass; gated on `prm.license_deal.reassign`).
+- `api/license-deal/[id]/transition/route.ts` (POST — forward status moves).
+- `api/license-deal/golden-rule-candidates/route.ts` (GET — picker data; ALL statuses including `lost`).
+- `api/portal/min/route.ts` (GET — yearly MIN aggregate; tenant-isolated; bucketed annual values).
+- `backend/license-deals/page.{tsx,meta.ts}` — B5 list with filters (lucide `Receipt` icon, shared `pageGroupKey: 'prm.nav.group'`).
+- `backend/license-deals/new/page.{tsx,meta.ts}` — CrudForm-driven create.
+- `backend/license-deals/[id]/page.{tsx,meta.ts}` — Detail with three-tab attribution picker (A/B/C). Path A surfaces ALL candidates including LOST badge per W12; non-default pick requires reasoning. Action bar exposes transition / reverse / unreverse-status.
+- `frontend/[orgSlug]/portal/dashboard/page.tsx` — fourth `PortalCard` for MIN; fetches `/api/prm/portal/min` in parallel with the existing dashboard aggregate. Silently skips when feature missing.
+- `migrations/Migration20260505160923_prm_license_deal.ts` — additive baseline; only creates `prm_license_deals` (42 lines).
+- `migrations/Migration20260505170000_prm_license_deal_indexes.ts` — additive companion: enum CHECKs, mutual-exclusion CHECK on attribution FKs, Path-C reasoning CHECK, FK to `prm_agencies`/`prm_prospects`/self, MIN-widget partial index, invariant #7 attribution-freeze trigger (117 lines).
+- `i18n/en.json` — added 70 keys covering B5 + portal MIN.
+- `__tests__/licenseDealValidators.test.ts` (16 tests), `__tests__/licenseDealService.test.ts` (15 tests), `__tests__/attributionSaga.test.ts` (5 tests). 39 net-new prm tests on top of T1's 79.
+
+**Cross-spec contracts (FROZEN — Specs #5/#6 MUST mirror):**
+1. **Tables**: `prm_license_deals` (PK = `id`).
+2. **Status enum**: `pending` / `signed` / `active` / `churned`. **Frozen.**
+3. **Attribution path enum**: `A` / `B` / `C` / `none`. **Frozen.**
+4. **Attribution source enum**: `prospect` / `rfp` / `direct`. **Frozen.**
+5. **Event IDs**: `prm.license_deal.{created,attributed,attribution_overridden,status_changed,reversal_started,reversed,status_unreversed}`. **Frozen.**
+6. **Saga correlationKey**: `<license_deal_id> + ':' + <attribution_source>` — built by `licenseDealCorrelationKey(...)` in `data/validators.ts`. **Frozen.**
+7. **Workflow definition ID**: `prm.license_deal.attribution_saga` (version 1). **Frozen.**
+8. **Activity handler DI key**: `workflowFunction:prm.saga.executeAttribution`. **Frozen.**
+9. **Feature IDs**: `prm.license_deal.{read,write,reassign}`, `prm.min.read_own_agency`. **Frozen.**
+10. **Error codes**: `license_deal_not_found`, `license_identifier_taken`, `attribution_frozen`, `path_b_locked_rfp`, `attribution_reasoning_required`, `invalid_attribution`, `rfp_not_available`, `golden_rule_default_mismatch`, `churned_is_terminal`, `status_change_not_allowed`. **Frozen.**
+11. **`is_path_b_locked` writer contract** (§8.4 cross-spec): Spec #3 ships `RfpPathBLockSubscriber` on `prm.license_deal.status_changed` as the SOLE writer. Lock = `TRUE` when at least one `attribution_path = 'B' AND status IN ('signed','active')` LicenseDeal references the RFP; else `FALSE`. Subscriber introspects the column at runtime and no-ops until Spec #5 migrates it.
+
+**Quality gates (8/8) — re-validated from a clean working tree:**
+1. Typecheck: PASS — `yarn typecheck` exit 0.
+2. Unit tests: PASS — `yarn test src/modules/prm` → 15 suites, 118 tests, 0 failures (79 inherited + 39 added in T2).
+3. Integration tests: N-A — Playwright scenarios in §9 (IT-9.1..9.7) require a live Postgres + workflow-runtime fixture and are deferred to the QA team's infra stand-up.
+4. Migration review: PASS — `yarn mercato db generate` is a no-op (snapshot matches entities); the two new migration files only touch `prm_license_deals` (42 + 117 lines). No DROP/ALTER COLUMN of pre-existing tables. `down()` is symmetric DROP-only.
+5. AGENTS.md compliance: PASS — events `prm.<entity>.<past_tense>`, features `<module>.<action>`, FK IDs only across modules, DataTable wires pagination props, lucide-react icons in `page.meta.ts`, `pageGroup`/`pageGroupKey`/`pageOrder` set on B5.
+6. Piotr Decision Library checklist: PASS — singular entity / event names, FK IDs only, organization_id mandatory, undoability via reverse saga + unreverse-status, Zod on every input, events over direct imports, tenant isolation, command graph (attribute + reverse), additive BC, domain invariants preserved (#7 trigger + service guard, #14 picker, #17 lock writer, #12 system-actor), no custom dedupe table (OQ-017 — platform owns saga state).
+7. i18n: PASS — every user-facing string in B5 + portal MIN routed through `useT('key', 'fallback')`.
+8. Build: PASS — `yarn build` (Next.js Turbopack) compiled successfully; `yarn generate` clean.
+
+**Migrations NOT applied:** `yarn mercato db migrate` was deliberately not run — per AGENTS rule #4 we hand back to the user for explicit approval. Two migration files staged in `src/modules/prm/migrations/` ready for review.
+
+**Cross-spec deferred dependency handled:**
+- `RFP.is_path_b_locked` column is owned by Spec #5 (`rfp-broadcast-response`). T2's `RfpPathBLockSubscriber` introspects the column at runtime via `to_regclass` + `information_schema.columns` (T1 dashboard pattern in `api/portal/dashboard/route.ts`). When Spec #5 migrates the column the writer activates automatically — zero PRM-side change required.
+
+**Saga discipline (OQ-017):**
+- NO PRM-owned `processed_events` dedupe table. Platform's `WorkflowInstance.correlation_key` index handles dedup via the workflows module wildcard event-trigger subscriber + `maxConcurrentInstances=1`.
+- Saga is a JSON `WorkflowDefinition` seeded in `setup.ts` from `workflows/license-deal-attribution.json`. Activity handlers are plain TS functions registered as `workflowFunction:prm.saga.executeAttribution` in `di.ts`.
+- The reverse path uses a dedicated PRM-owned subscriber (`license-deal-reversal-compensation.ts`) instead of a JSON variant — compensation needs to run synchronously in the same request scope as `LicenseDealService.reverse`. Tracked under OQ resolutions for v2 if a first-class `reverse` trigger contract becomes available.
+
+**Deferred:**
+- Live Playwright IT-9.1..9.7 from §9 — require live Postgres + workflow runtime fixture.
+- Saga retry dashboard surface (mentioned in §8.1) — the `workflows` module ships a backend page at `/backend/workflows/instances/{id}` covering retry/cancel; no PRM-side surface needed.
+- Snapshot table for historical MIN (§Scope (out)) — v2 concern; v1 recomputes on read.
+- Commission calculation + renewal attribution inheritance (§Scope (out)) — v2 backlog.
+
+**Out-of-scope confirmed:** RFP entity (Spec #5), RFP scoring + selection guard (Spec #6), CaseStudy (Spec #7), WIC ingestion (Spec #4).
