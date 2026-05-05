@@ -269,3 +269,190 @@ export function normalizeCompanyName(value: string): string {
 export function normalizeContactEmail(value: string): string {
   return value.trim().toLowerCase()
 }
+
+/* -------------------------------------------------------------------------- */
+/* LicenseDeal (Spec #3 — attribution-loop)                                   */
+/* -------------------------------------------------------------------------- */
+
+/** LicenseDeal status enum — FROZEN (cross-spec contract for Specs #5/#6). */
+export const LICENSE_DEAL_STATUSES = ['pending', 'signed', 'active', 'churned'] as const
+/** Attribution path enum — FROZEN. `none` for unattributed `pending` deals. */
+export const LICENSE_DEAL_ATTRIBUTION_PATHS = ['A', 'B', 'C', 'none'] as const
+/** Attribution source enum — FROZEN. Mirrors the path with human-readable labels. */
+export const LICENSE_DEAL_ATTRIBUTION_SOURCES = ['prospect', 'rfp', 'direct'] as const
+/** Status states that lock attribution per invariant #7. */
+export const LICENSE_DEAL_FROZEN_STATUSES = ['active', 'churned'] as const
+
+export type LicenseDealStatus = (typeof LICENSE_DEAL_STATUSES)[number]
+export type LicenseDealAttributionPath = (typeof LICENSE_DEAL_ATTRIBUTION_PATHS)[number]
+export type LicenseDealAttributionSource = (typeof LICENSE_DEAL_ATTRIBUTION_SOURCES)[number]
+
+/**
+ * Forward status transitions allowed by the aggregate. `pending → signed → active`
+ * is the happy path; `churned` is terminal. `pending → churned` is rejected
+ * (a deal must reach `signed` before it can churn). US4.4b (`unreverse-status`)
+ * provides the bypass for `active → signed` and `signed → pending`.
+ */
+export const LICENSE_DEAL_TRANSITIONS: Readonly<Record<LicenseDealStatus, readonly LicenseDealStatus[]>> = {
+  pending: ['signed'],
+  signed: ['active', 'churned'],
+  active: ['churned'],
+  churned: [],
+}
+
+/** B5 list filters. */
+export const listLicenseDealsBackendSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  status: z.enum(LICENSE_DEAL_STATUSES).optional(),
+  attributionPath: z.enum(LICENSE_DEAL_ATTRIBUTION_PATHS).optional(),
+  agencyId: z.string().uuid().optional(),
+  q: z.string().trim().min(1).max(200).optional(),
+})
+
+/** POST /api/backend/prm/license-deals — creates a `pending` deal (no auto-attribution). */
+export const createLicenseDealSchema = z
+  .object({
+    licenseIdentifier: z.string().min(2).max(120),
+    clientCompanyName: z.string().min(1).max(200),
+    clientIndustry: z.string().max(120).nullable().optional(),
+    type: z.string().max(40).default('enterprise'),
+    isRenewal: z.boolean().default(false),
+    previousLicenseDealId: z.string().uuid().nullable().optional(),
+    annualValueUsd: z
+      .union([z.number().nonnegative().max(1e12), z.string().regex(/^\d+(?:\.\d{1,2})?$/)])
+      .nullable()
+      .optional(),
+    monthlyLicenseAmount: z
+      .union([z.number().nonnegative().max(1e10), z.string().regex(/^\d+(?:\.\d{1,2})?$/)])
+      .nullable()
+      .optional(),
+    notes: z.string().max(10_000).nullable().optional(),
+  })
+  .strict()
+
+/** PUT /api/backend/prm/license-deals/{id} — non-attribution edits only. */
+export const updateLicenseDealSchema = z
+  .object({
+    licenseIdentifier: z.string().min(2).max(120).optional(),
+    clientCompanyName: z.string().min(1).max(200).optional(),
+    clientIndustry: z.string().max(120).nullable().optional(),
+    type: z.string().max(40).optional(),
+    isRenewal: z.boolean().optional(),
+    previousLicenseDealId: z.string().uuid().nullable().optional(),
+    annualValueUsd: z
+      .union([z.number().nonnegative().max(1e12), z.string().regex(/^\d+(?:\.\d{1,2})?$/)])
+      .nullable()
+      .optional(),
+    monthlyLicenseAmount: z
+      .union([z.number().nonnegative().max(1e10), z.string().regex(/^\d+(?:\.\d{1,2})?$/)])
+      .nullable()
+      .optional(),
+    notes: z.string().max(10_000).nullable().optional(),
+    /** Optimistic concurrency token — `version` returned by GET. */
+    ifMatchVersion: z.number().int().nonnegative().optional(),
+  })
+  .strict()
+
+/** Discriminated input for `/license-deals/{id}/attribute`. */
+export const attributePathASchema = z
+  .object({
+    attribution_path: z.literal('A'),
+    prospect_id: z.string().uuid(),
+    /** Echoed back so the server can detect override (when picked != default). */
+    golden_rule_default_prospect_id: z.string().uuid(),
+    /** Required iff non-default pick. Server enforces. */
+    attribution_reasoning: z.string().min(1).max(2_000).optional(),
+    competing_prospect_ids_to_retire: z.array(z.string().uuid()).default([]),
+  })
+  .strict()
+
+export const attributePathBSchema = z
+  .object({
+    attribution_path: z.literal('B'),
+    rfp_id: z.string().uuid(),
+  })
+  .strict()
+
+export const attributePathCSchema = z
+  .object({
+    attribution_path: z.literal('C'),
+    /** Server resolves to the chosen Agency. */
+    attributed_agency_id: z.string().uuid(),
+    /** Required for Path C audit. */
+    attribution_reasoning: z.string().min(1).max(2_000),
+  })
+  .strict()
+
+export const attributeLicenseDealSchema = z.discriminatedUnion('attribution_path', [
+  attributePathASchema,
+  attributePathBSchema,
+  attributePathCSchema,
+])
+
+/** POST /api/backend/prm/license-deals/{id}/reverse — reassigns or unattributes. */
+export const reverseLicenseDealSchema = z.object({
+  reason: z.string().min(10).max(2_000),
+  /** Optional new attribution. When omitted → unattribute (back to `pending` + `none`). */
+  newAttribution: attributeLicenseDealSchema.optional(),
+})
+
+/** POST /api/backend/prm/license-deals/{id}/unreverse-status — US4.4b scoped bypass. */
+export const unreverseLicenseDealStatusSchema = z.object({
+  toStatus: z.enum(['signed', 'pending']),
+  reason: z.string().min(10).max(2_000),
+})
+
+/** POST /api/backend/prm/license-deals/{id}/transition — explicit forward status moves. */
+export const transitionLicenseDealStatusSchema = z.object({
+  toStatus: z.enum(LICENSE_DEAL_STATUSES),
+  reason: z.string().min(1).max(2_000).optional(),
+  ifMatchVersion: z.number().int().nonnegative().optional(),
+})
+
+/** Portal `/api/portal/min` query. */
+export const portalMinQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(3000).optional(),
+})
+
+export type CreateLicenseDealInput = z.infer<typeof createLicenseDealSchema>
+export type UpdateLicenseDealInput = z.infer<typeof updateLicenseDealSchema>
+export type AttributeLicenseDealInput = z.infer<typeof attributeLicenseDealSchema>
+export type AttributePathAInput = z.infer<typeof attributePathASchema>
+export type AttributePathBInput = z.infer<typeof attributePathBSchema>
+export type AttributePathCInput = z.infer<typeof attributePathCSchema>
+export type ReverseLicenseDealInput = z.infer<typeof reverseLicenseDealSchema>
+export type UnreverseLicenseDealStatusInput = z.infer<typeof unreverseLicenseDealStatusSchema>
+export type TransitionLicenseDealStatusInput = z.infer<typeof transitionLicenseDealStatusSchema>
+export type ListLicenseDealsBackendInput = z.infer<typeof listLicenseDealsBackendSchema>
+export type PortalMinQueryInput = z.infer<typeof portalMinQuerySchema>
+
+/** Maps a `LicenseDeal.attributionPath` to its `attribution_source` peer. */
+export function pathToAttributionSource(
+  path: LicenseDealAttributionPath,
+): LicenseDealAttributionSource {
+  switch (path) {
+    case 'A':
+      return 'prospect'
+    case 'B':
+      return 'rfp'
+    case 'C':
+      return 'direct'
+    case 'none':
+    default:
+      return 'direct'
+  }
+}
+
+/** Builds the saga correlation key — license_deal_id + ':' + attribution_source. */
+export function licenseDealCorrelationKey(
+  licenseDealId: string,
+  attributionSource: LicenseDealAttributionSource,
+): string {
+  return `${licenseDealId}:${attributionSource}`
+}
+
+/** Returns true when the LicenseDeal status freezes attribution (invariant #7). */
+export function isAttributionFrozen(status: string): boolean {
+  return (LICENSE_DEAL_FROZEN_STATUSES as readonly string[]).includes(status)
+}

@@ -26,6 +26,17 @@ export const PRM_ERROR_CODES = {
   STATUS_CONFLICT: 'status_conflict',
   LOST_REASON_REQUIRED: 'lost_reason_required',
   AGENCY_MEMBER_NOT_FOUND: 'agency_member_not_found',
+  // Spec #3 — attribution-loop. FROZEN once shipped (cross-spec contract for Specs #5/#6).
+  LICENSE_DEAL_NOT_FOUND: 'license_deal_not_found',
+  LICENSE_IDENTIFIER_TAKEN: 'license_identifier_taken',
+  ATTRIBUTION_FROZEN: 'attribution_frozen',
+  PATH_B_LOCKED_RFP: 'path_b_locked_rfp',
+  ATTRIBUTION_REASONING_REQUIRED: 'attribution_reasoning_required',
+  INVALID_ATTRIBUTION: 'invalid_attribution',
+  RFP_NOT_AVAILABLE: 'rfp_not_available',
+  GOLDEN_RULE_DEFAULT_MISMATCH: 'golden_rule_default_mismatch',
+  CHURNED_IS_TERMINAL: 'churned_is_terminal',
+  STATUS_CHANGE_NOT_ALLOWED: 'status_change_not_allowed',
 } as const
 
 export type PrmErrorCode = (typeof PRM_ERROR_CODES)[keyof typeof PRM_ERROR_CODES]

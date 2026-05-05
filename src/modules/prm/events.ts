@@ -36,6 +36,18 @@ const events = [
   { id: 'prm.prospect.status_changed', label: 'Prospect status changed', entity: 'prospect', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.prospect.updated', label: 'Prospect updated', entity: 'prospect', category: 'crud', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.prospect.registration_reverted', label: 'Prospect registration reverted (compensating)', entity: 'prospect', category: 'system' },
+
+  // LicenseDeal lifecycle (Spec #3 — attribution-loop).
+  // Cross-spec contract (FROZEN): Spec #5 owns the `is_path_b_locked` column on `prm_rfps`,
+  // Spec #6 reads it and enforces the hard guard on RFP re-open. This spec writes via the
+  // `RfpPathBLockSubscriber` on `prm.license_deal.status_changed`.
+  { id: 'prm.license_deal.created', label: 'License deal created', entity: 'license_deal', category: 'lifecycle', clientBroadcast: true },
+  { id: 'prm.license_deal.attributed', label: 'License deal attributed', entity: 'license_deal', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.license_deal.attribution_overridden', label: 'License deal Golden Rule overridden', entity: 'license_deal', category: 'system' },
+  { id: 'prm.license_deal.status_changed', label: 'License deal status changed', entity: 'license_deal', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.license_deal.reversal_started', label: 'License deal reversal started', entity: 'license_deal', category: 'lifecycle', clientBroadcast: true },
+  { id: 'prm.license_deal.reversed', label: 'License deal attribution reversed', entity: 'license_deal', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.license_deal.status_unreversed', label: 'License deal status unreversed (US4.4b)', entity: 'license_deal', category: 'system' },
 ] as const
 
 export const eventsConfig = createModuleEvents({

@@ -49,6 +49,8 @@ const PARTNER_ROLE_DEFINITIONS = [
       'prm.dashboard.view',
       'prm.wic.read_own_agency',
       'prm.tier_requirement.read',
+      // MIN widget (Spec #3 — attribution-loop).
+      'prm.min.read_own_agency',
     ] as string[],
   },
   {
@@ -74,6 +76,8 @@ const PARTNER_ROLE_DEFINITIONS = [
       'prm.dashboard.view',
       'prm.wic.read_own_agency',
       'prm.tier_requirement.read',
+      // MIN widget (Spec #3 — attribution-loop).
+      'prm.min.read_own_agency',
     ] as string[],
   },
 ] as const
@@ -148,6 +152,8 @@ export const setup: ModuleSetupConfig = {
       'prm.agency.read',
       'prm.agency_member.read_all',
       'prm.prospect.read_cross_agency',
+      // Spec #3: extend employee with read access to LicenseDeals (B5 staff view).
+      'prm.license_deal.read',
     ],
   },
 

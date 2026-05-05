@@ -326,3 +326,132 @@ export class AgencyMember {
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
 }
+
+/**
+ * PRM `LicenseDeal` aggregate (Spec #3 — attribution-loop).
+ *
+ * Three mutually-exclusive attribution paths:
+ *   - Path A — Prospect attribution (set `prospect_id`; saga snapshots `attributed_agency_id`
+ *     from Prospect.agency_id and transitions Prospect → won via system actor).
+ *   - Path B — RFP attribution (set `rfp_id`; saga snapshots winner agency from RFP).
+ *   - Path C — Direct sale (set `attributed_agency_id` directly; reasoning required).
+ *   - `none` — `pending` deal pre-attribution.
+ *
+ * Lifecycle: `pending` → `signed` → `active` (terminal-ish), `churned` (terminal).
+ *
+ * Invariant #7 (FROZEN): once `status >= active`, attribution fields are FROZEN.
+ * Reverse requires `/unreverse-status` (US4.4b — scoped bypass) first. Enforced both
+ * in the `LicenseDealService` and via a defence-in-depth DB trigger.
+ *
+ * Cross-spec contract (FROZEN — Specs #5/#6 read these):
+ *   - Table: `prm_license_deals`.
+ *   - Status enum: `pending` / `signed` / `active` / `churned`.
+ *   - Attribution path enum: `A` / `B` / `C` / `none`.
+ *   - Attribution source enum: `prospect` / `rfp` / `direct`.
+ *   - Saga `correlationKey = license_deal_id + ':' + attribution_source`.
+ */
+@Entity({ tableName: 'prm_license_deals' })
+@Unique({ properties: ['tenantId', 'licenseIdentifier'], name: 'prm_license_deals_tenant_identifier_uniq' })
+export class LicenseDeal {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Index()
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  /** Human-readable license identifier (e.g. "OM-2026-0042"). Unique per tenant. */
+  @Property({ name: 'license_identifier', type: 'text' })
+  licenseIdentifier!: string
+
+  /** v1: free text. v2 will replace with FK to a Client aggregate. */
+  @Index()
+  @Property({ name: 'client_company_name', type: 'text' })
+  clientCompanyName!: string
+
+  @Property({ name: 'client_industry', type: 'text', nullable: true })
+  clientIndustry?: string | null
+
+  /** Enum check (DB-side): 'enterprise'. Future v2: trial / smb. */
+  @Property({ type: 'text', default: 'enterprise' })
+  type: string = 'enterprise'
+
+  /** Enum check (DB-side): 'pending' | 'signed' | 'active' | 'churned'. */
+  @Index()
+  @Property({ type: 'text', default: 'pending' })
+  status: string = 'pending'
+
+  @Property({ name: 'is_renewal', type: 'boolean', default: false })
+  isRenewal: boolean = false
+
+  @Property({ name: 'previous_license_deal_id', type: 'uuid', nullable: true })
+  previousLicenseDealId?: string | null
+
+  @Property({ name: 'closed_at', type: Date, nullable: true })
+  closedAt?: Date | null
+
+  @Property({ name: 'signed_at', type: Date, nullable: true })
+  signedAt?: Date | null
+
+  /**
+   * Stored as decimal-string in the DB (numeric(12,2)). MikroORM marshals to string
+   * to preserve precision; service-layer code re-parses to `number` for math.
+   */
+  @Property({ name: 'annual_value_usd', type: 'decimal', nullable: true, precision: 12, scale: 2 })
+  annualValueUsd?: string | null
+
+  @Property({ name: 'monthly_license_amount', type: 'decimal', nullable: true, precision: 12, scale: 2 })
+  monthlyLicenseAmount?: string | null
+
+  /** Enum check (DB-side): 'A' | 'B' | 'C' | 'none'. */
+  @Index()
+  @Property({ name: 'attribution_path', type: 'text', default: 'none' })
+  attributionPath: string = 'none'
+
+  /** Enum check (DB-side): 'prospect' | 'rfp' | 'direct'. */
+  @Property({ name: 'attribution_source', type: 'text', default: 'direct' })
+  attributionSource: string = 'direct'
+
+  /** Path A: FK to `prm_prospects`. Set during saga snapshot. */
+  @Index()
+  @Property({ name: 'prospect_id', type: 'uuid', nullable: true })
+  prospectId?: string | null
+
+  /** Path B: FK to `prm_rfps` table (Spec #5). Nullable + no FK constraint in v1 (table not yet migrated). */
+  @Index()
+  @Property({ name: 'rfp_id', type: 'uuid', nullable: true })
+  rfpId?: string | null
+
+  /** Denormalised snapshot — stays stable even if Prospect.agency_id later changes. */
+  @Index()
+  @Property({ name: 'attributed_agency_id', type: 'uuid', nullable: true })
+  attributedAgencyId?: string | null
+
+  /** Required when overriding Golden Rule (Path A) or selecting Path C. */
+  @Property({ name: 'attribution_reasoning', type: 'text', nullable: true })
+  attributionReasoning?: string | null
+
+  /** Frozen alongside attribution snapshot (invariant #7). */
+  @Property({ name: 'attributed_at', type: Date, nullable: true })
+  attributedAt?: Date | null
+
+  @Property({ type: 'text', nullable: true })
+  notes?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+
+  /** Optimistic-concurrency token — bumped on every aggregate write. */
+  @Property({ type: 'integer', default: 1 })
+  version: number = 1
+}

@@ -42,6 +42,14 @@ export const features = [
   { id: 'prm.dashboard.view', title: 'Read partner-portal dashboard (P2)', module: 'prm' },
   { id: 'prm.wic.read_own_agency', title: 'Read own-agency WIC widget data', module: 'prm' },
   { id: 'prm.tier_requirement.read', title: 'Read tier-requirement widget data', module: 'prm' },
+
+  // LicenseDeal attribution loop (Spec #3 — attribution-loop).
+  // Cross-spec contract (FROZEN). `prm.license_deal.reassign` is the secondary-confirm
+  // gate for US4.4b (status unreverse) per spec §6.1.
+  { id: 'prm.license_deal.read', title: 'Read license deals (B5)', module: 'prm' },
+  { id: 'prm.license_deal.write', title: 'Create/edit/attribute license deals (B5)', module: 'prm' },
+  { id: 'prm.license_deal.reassign', title: 'Status unreverse (US4.4b — scoped bypass)', module: 'prm' },
+  { id: 'prm.min.read_own_agency', title: 'Read own-agency MIN widget data', module: 'prm' },
 ] as const
 
 export type PrmFeatureId = (typeof features)[number]['id']
