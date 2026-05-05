@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { findAndCountWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { Agency } from '../../data/entities'
 import { createAgencySchema } from '../../data/validators'
@@ -78,11 +79,17 @@ export async function GET(req: Request) {
   if (tier) where.tier = tier
   if (q) where.name = { $ilike: `%${q.replace(/[%_]/g, (c) => `\\${c}`)}%` }
 
-  const [items, total] = await em.findAndCount(Agency, where as any, {
-    orderBy: { createdAt: 'desc' },
-    limit: pageSize,
-    offset: (page - 1) * pageSize,
-  })
+  const [items, total] = await findAndCountWithDecryption(
+    em,
+    Agency,
+    where as any,
+    {
+      orderBy: { createdAt: 'desc' },
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    },
+    { tenantId: auth.tenantId },
+  )
   return NextResponse.json({
     ok: true,
     items: items.map(summariseAgency),
