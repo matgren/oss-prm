@@ -28,6 +28,14 @@ const events = [
   // Telemetry / diagnostic events
   { id: 'prm.agency_member.github_profile_conflict_attempted', label: 'GitHub profile conflict attempted', entity: 'agency_member', category: 'system' },
   { id: 'prm.agency.admin_field_access_rejected', label: 'Admin-only field write rejected', entity: 'agency', category: 'system' },
+
+  // Prospect lifecycle (Spec #2 — wip-scoreboard).
+  // Cross-spec contract (FROZEN): downstream Spec #3 attribution-loop binds candidate-index +
+  // attribution saga subscribers to these IDs. Singular entity, past-tense action.
+  { id: 'prm.prospect.registered', label: 'Prospect registered', entity: 'prospect', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.prospect.status_changed', label: 'Prospect status changed', entity: 'prospect', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.prospect.updated', label: 'Prospect updated', entity: 'prospect', category: 'crud', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.prospect.registration_reverted', label: 'Prospect registration reverted (compensating)', entity: 'prospect', category: 'system' },
 ] as const
 
 export const eventsConfig = createModuleEvents({

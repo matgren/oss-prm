@@ -4,6 +4,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { AgencyService } from './lib/agencyService'
 import { AgencyMemberService } from './lib/agencyMemberService'
 import { ReinviteCooldownService } from './lib/reinviteCooldownService'
+import { ProspectService } from './lib/prospectService'
 
 /**
  * PRM dependency-injection registration.
@@ -17,6 +18,7 @@ export function register(container: AppContainer): void {
     agencyMemberService: asFunction(
       ({ em }: { em: EntityManager }) => new AgencyMemberService(em),
     ).scoped(),
+    prospectService: asFunction(({ em }: { em: EntityManager }) => new ProspectService(em)).scoped(),
     reinviteCooldownService: asFunction(() => new ReinviteCooldownService()).singleton(),
     // Convenience: bag of admin-only field names so interceptors and enrichers
     // share one source of truth.

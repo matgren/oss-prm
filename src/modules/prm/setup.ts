@@ -41,6 +41,14 @@ const PARTNER_ROLE_DEFINITIONS = [
       'prm.agency_member.read',
       'prm.agency_member.manage_partner_member',
       'prm.agency_member.self_edit',
+      // Prospect lifecycle + dashboard (Spec #2 — wip-scoreboard).
+      'prm.prospect.read_own_agency',
+      'prm.prospect.register',
+      'prm.prospect.transition_any_in_agency',
+      'prm.prospect.transition_own_authored',
+      'prm.dashboard.view',
+      'prm.wic.read_own_agency',
+      'prm.tier_requirement.read',
     ] as string[],
   },
   {
@@ -59,6 +67,13 @@ const PARTNER_ROLE_DEFINITIONS = [
       'prm.agency.read_admin_fields',
       'prm.agency_member.read',
       'prm.agency_member.self_edit',
+      // Prospect lifecycle + dashboard — author-scoped transitions only (no transition_any_in_agency).
+      'prm.prospect.read_own_agency',
+      'prm.prospect.register',
+      'prm.prospect.transition_own_authored',
+      'prm.dashboard.view',
+      'prm.wic.read_own_agency',
+      'prm.tier_requirement.read',
     ] as string[],
   },
 ] as const
@@ -127,7 +142,13 @@ export const setup: ModuleSetupConfig = {
   defaultRoleFeatures: {
     superadmin: ['prm.*', 'portal.partner.*'],
     admin: ['prm.*', 'portal.partner.*'],
-    employee: ['prm.agency.read', 'prm.agency_member.read_all'],
+    // Spec #2: extend employee with read-only access to the cross-agency Prospect list (B4).
+    // OM PartnerOps reuses the `employee` staff role until a dedicated role is provisioned.
+    employee: [
+      'prm.agency.read',
+      'prm.agency_member.read_all',
+      'prm.prospect.read_cross_agency',
+    ],
   },
 
   /**

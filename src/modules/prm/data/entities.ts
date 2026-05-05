@@ -94,6 +94,144 @@ export class Agency {
 }
 
 /**
+ * PRM `Prospect` aggregate (Spec #2 — wip-scoreboard).
+ *
+ * State machine (invariant #12):
+ *   `new` → `qualified` | `lost`
+ *   `qualified` → `contacted` | `won` | `lost`
+ *   `contacted` → `won` | `lost` | `dormant`
+ *   `dormant` → `qualified` | `lost`
+ *   `won`, `lost` → terminal
+ *
+ * Authorities:
+ *   - The aggregate (`ProspectService.transitionStatus`) is the sole authority on transitions.
+ *   - `won` is reachable only via `by_actor_type = 'system'` (Spec #3 attribution saga).
+ *
+ * Cross-spec contract (FROZEN — downstream Spec #3 attribution-loop reads these):
+ *   - Table name: `prm_prospects`.
+ *   - Source enum: `agency_owned` / `event` / `other`.
+ *   - Status enum: `new` / `qualified` / `contacted` / `won` / `lost` / `dormant`.
+ *   - `registered_at` is IMMUTABLE after INSERT (invariant #1).
+ *   - WIP filter (invariant #14): `status NOT IN ('lost')` — note `won`/`dormant` count as WIP.
+ */
+@Entity({ tableName: 'prm_prospects' })
+export class Prospect {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Index()
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Index()
+  @Property({ name: 'agency_id', type: 'uuid' })
+  agencyId!: string
+
+  @Index()
+  @Property({ name: 'registered_by_agency_member_id', type: 'uuid' })
+  registeredByAgencyMemberId!: string
+
+  @Property({ name: 'company_name', type: 'text' })
+  companyName!: string
+
+  @Property({ name: 'contact_name', type: 'text' })
+  contactName!: string
+
+  @Property({ name: 'contact_email', type: 'text' })
+  contactEmail!: string
+
+  /** Enum check (DB-side): 'agency_owned' | 'event' | 'other'. */
+  @Property({ type: 'text', default: 'agency_owned' })
+  source: string = 'agency_owned'
+
+  /** Enum check (DB-side): 'new' | 'qualified' | 'contacted' | 'won' | 'lost' | 'dormant'. */
+  @Index()
+  @Property({ type: 'text', default: 'new' })
+  status: string = 'new'
+
+  /** Required iff status = 'lost' (aggregate-enforced; DB CHECK as defence-in-depth). */
+  @Property({ name: 'lost_reason', type: 'text', nullable: true })
+  lostReason?: string | null
+
+  @Property({ type: 'text', nullable: true })
+  notes?: string | null
+
+  /**
+   * IMMUTABLE after INSERT per invariant #1. Belt-and-braces: aggregate `update()` whitelists
+   * editable fields and never accepts `registered_at`. The follow-up indexes migration ships
+   * a column-level UPDATE trigger as defence-in-depth.
+   */
+  @Index()
+  @Property({ name: 'registered_at', type: Date })
+  registeredAt: Date = new Date()
+
+  @Property({ name: 'status_changed_at', type: Date })
+  statusChangedAt: Date = new Date()
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+/**
+ * PRM `ProspectCandidateIndex` read-model projection (Spec #2 — wip-scoreboard).
+ *
+ * One row per `Prospect`. Maintained idempotently by `prospect-candidate-index` subscriber on:
+ *   - `prm.prospect.registered`              (UPSERT)
+ *   - `prm.prospect.updated`                 (re-compute normalized keys when company/email changed)
+ *   - `prm.prospect.status_changed`          (UPDATE current_status)
+ *   - `prm.prospect.registration_reverted`   (DELETE)
+ *
+ * Cross-spec contract (FROZEN — Spec #3 candidate-picker reads this):
+ *   - Table: `prm_prospect_candidate_index`.
+ *   - Normalization: `lower(trim(replace(<punct>, ' ', single-space-collapsed)))`.
+ *   - PK: `prospect_id` (1:1 with Prospect aggregate).
+ *   - Includes ALL statuses including `lost` (Spec #3 invariant #14 requires lost rows surfaced
+ *     with badge in attribution candidate picker).
+ */
+@Entity({ tableName: 'prm_prospect_candidate_index' })
+export class ProspectCandidateIndex {
+  @PrimaryKey({ name: 'prospect_id', type: 'uuid' })
+  prospectId!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Index()
+  @Property({ name: 'agency_id', type: 'uuid' })
+  agencyId!: string
+
+  @Index()
+  @Property({ name: 'normalized_company_name', type: 'text' })
+  normalizedCompanyName!: string
+
+  @Index()
+  @Property({ name: 'lowercased_contact_email', type: 'text' })
+  lowercasedContactEmail!: string
+
+  /** Mirror of `prm_prospects.status` — written on every status_changed event. */
+  @Property({ name: 'current_status', type: 'text' })
+  currentStatus!: string
+
+  /** Mirrored for default Golden Rule ordering (Spec #3 picks oldest first by registered_at). */
+  @Property({ name: 'registered_at', type: Date })
+  registeredAt!: Date
+
+  @Property({ name: 'projection_updated_at', type: Date })
+  projectionUpdatedAt!: Date
+}
+
+/**
  * PRM `AgencyMember` aggregate.
  *
  * 1:1 with `customer_accounts.customer_user` (invariant #5 — `UNIQUE (customer_user_id) WHERE NOT NULL`).

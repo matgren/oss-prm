@@ -29,6 +29,19 @@ export const features = [
   // Portal shell
   { id: 'portal.partner.access', title: 'Access partner portal shell', module: 'prm' },
   { id: 'portal.partner.notifications.view', title: 'View partner portal notifications', module: 'prm' },
+
+  // Prospect lifecycle (Spec #2 — wip-scoreboard).
+  // Cross-spec contract (FROZEN): naming follows `prm.<resource>.<action>` per AGENTS.
+  { id: 'prm.prospect.read_own_agency', title: 'Read prospects in own agency (P5/P6)', module: 'prm' },
+  { id: 'prm.prospect.read_cross_agency', title: 'Read prospects across all agencies (B4)', module: 'prm' },
+  { id: 'prm.prospect.register', title: 'Register a new prospect (US3.1)', module: 'prm' },
+  { id: 'prm.prospect.transition_any_in_agency', title: 'Transition any prospect in own agency', module: 'prm' },
+  { id: 'prm.prospect.transition_own_authored', title: 'Transition own-authored prospects', module: 'prm' },
+
+  // Dashboard + tier widgets (Spec #2).
+  { id: 'prm.dashboard.view', title: 'Read partner-portal dashboard (P2)', module: 'prm' },
+  { id: 'prm.wic.read_own_agency', title: 'Read own-agency WIC widget data', module: 'prm' },
+  { id: 'prm.tier_requirement.read', title: 'Read tier-requirement widget data', module: 'prm' },
 ] as const
 
 export type PrmFeatureId = (typeof features)[number]['id']

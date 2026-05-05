@@ -140,3 +140,132 @@ export type InviteAgencyMemberInput = z.infer<typeof inviteAgencyMemberSchema>
 export type PortalInviteAgencyMemberInput = z.infer<typeof portalInviteAgencyMemberSchema>
 export type UpdateAgencyMemberBackendInput = z.infer<typeof updateAgencyMemberBackendSchema>
 export type UpdateAgencyMemberPortalInput = z.infer<typeof updateAgencyMemberPortalSchema>
+
+/* -------------------------------------------------------------------------- */
+/* Prospect (Spec #2 — wip-scoreboard)                                        */
+/* -------------------------------------------------------------------------- */
+
+/** Prospect source enum — FROZEN (cross-spec contract for Spec #3). */
+export const PROSPECT_SOURCES = ['agency_owned', 'event', 'other'] as const
+/** Prospect status enum — FROZEN (cross-spec contract). 6-state machine per invariant #12. */
+export const PROSPECT_STATUSES = [
+  'new',
+  'qualified',
+  'contacted',
+  'won',
+  'lost',
+  'dormant',
+] as const
+/** Statuses a portal user may transition to (won is system-only). */
+export const PROSPECT_PORTAL_TRANSITIONS = [
+  'qualified',
+  'contacted',
+  'lost',
+  'dormant',
+] as const
+
+export type ProspectSource = (typeof PROSPECT_SOURCES)[number]
+export type ProspectStatus = (typeof PROSPECT_STATUSES)[number]
+export type ProspectPortalTransition = (typeof PROSPECT_PORTAL_TRANSITIONS)[number]
+
+/**
+ * State-machine transition matrix (invariant #12).
+ * Map from `currentStatus` to the set of allowed next statuses.
+ * `won` reachable only when actor is `system` — guarded in the aggregate.
+ */
+export const PROSPECT_TRANSITIONS: Readonly<Record<ProspectStatus, readonly ProspectStatus[]>> = {
+  new: ['qualified', 'lost'],
+  qualified: ['contacted', 'won', 'lost'],
+  contacted: ['won', 'lost', 'dormant'],
+  dormant: ['qualified', 'lost'],
+  won: [], // terminal
+  lost: [], // terminal
+}
+
+/** POST /api/prm/portal/prospects — register a new Prospect (US3.1). */
+export const registerProspectSchema = z
+  .object({
+    companyName: z.string().min(1).max(200),
+    contactName: z.string().min(1).max(150),
+    contactEmail: z.string().email().max(200),
+    source: z.enum(PROSPECT_SOURCES).default('agency_owned'),
+    notes: z.string().max(10_000).nullable().optional(),
+  })
+  .strict()
+
+/** PATCH /api/prm/portal/prospects/{id} — discriminated edit-or-transition body. */
+export const updateProspectEditSchema = z
+  .object({
+    kind: z.literal('edit'),
+    companyName: z.string().min(1).max(200).optional(),
+    contactName: z.string().min(1).max(150).optional(),
+    contactEmail: z.string().email().max(200).optional(),
+    notes: z.string().max(10_000).nullable().optional(),
+  })
+  .strict()
+
+export const updateProspectTransitionSchema = z
+  .object({
+    kind: z.literal('transition'),
+    toStatus: z.enum(PROSPECT_PORTAL_TRANSITIONS),
+    lostReason: z.string().min(10).max(1_000).optional(),
+    /** Optimistic concurrency token = `status_changed_at` ISO-8601 string. */
+    ifMatchStatusChangedAt: z.string().min(1),
+  })
+  .strict()
+
+export const updateProspectSchema = z.discriminatedUnion('kind', [
+  updateProspectEditSchema,
+  updateProspectTransitionSchema,
+])
+
+/** Backend B4 list filters (cross-agency, OM staff). */
+export const listProspectsBackendSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  agencyId: z.string().uuid().optional(),
+  status: z.enum(PROSPECT_STATUSES).optional(),
+  /** Server normalizes input the same way as the index column. */
+  normalizedCompanyName: z.string().trim().max(200).optional(),
+  /** Server lowercases input. */
+  lowercasedContactEmail: z.string().trim().max(200).optional(),
+})
+
+/** Portal P5 list filters (own-agency). */
+export const listProspectsPortalSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  status: z.enum(PROSPECT_STATUSES).optional(),
+  source: z.enum(PROSPECT_SOURCES).optional(),
+  /** YYYY-MM filter on registered_at. */
+  registeredMonth: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
+})
+
+export type RegisterProspectInput = z.infer<typeof registerProspectSchema>
+export type UpdateProspectEditInput = z.infer<typeof updateProspectEditSchema>
+export type UpdateProspectTransitionInput = z.infer<typeof updateProspectTransitionSchema>
+export type UpdateProspectInput = z.infer<typeof updateProspectSchema>
+export type ListProspectsBackendInput = z.infer<typeof listProspectsBackendSchema>
+export type ListProspectsPortalInput = z.infer<typeof listProspectsPortalSchema>
+
+/**
+ * Normalize a company name for the `prm_prospect_candidate_index` projection.
+ * Lowercased, trimmed, punctuation stripped, internal whitespace collapsed.
+ */
+export function normalizeCompanyName(value: string): string {
+  return value
+    .toLowerCase()
+    // Strip punctuation/symbols (keep letters, digits, whitespace).
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    // Collapse whitespace.
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Lowercase + trim normalization for the contact-email candidate-search column. */
+export function normalizeContactEmail(value: string): string {
+  return value.trim().toLowerCase()
+}

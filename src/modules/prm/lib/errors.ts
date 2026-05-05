@@ -18,6 +18,14 @@ export const PRM_ERROR_CODES = {
   ROLE_SLUG_NOT_SEEDED: 'role_slug_not_seeded',
   VALIDATION_FAILED: 'validation_failed',
   FORBIDDEN: 'forbidden',
+  // Spec #2 — wip-scoreboard. FROZEN once shipped (cross-spec contract).
+  PROSPECT_NOT_FOUND: 'prospect_not_found',
+  INVALID_TRANSITION: 'invalid_transition',
+  WON_IS_OM_ONLY: 'won_is_om_only',
+  NOT_AUTHOR_OR_ADMIN: 'not_author_or_admin',
+  STATUS_CONFLICT: 'status_conflict',
+  LOST_REASON_REQUIRED: 'lost_reason_required',
+  AGENCY_MEMBER_NOT_FOUND: 'agency_member_not_found',
 } as const
 
 export type PrmErrorCode = (typeof PRM_ERROR_CODES)[keyof typeof PRM_ERROR_CODES]
