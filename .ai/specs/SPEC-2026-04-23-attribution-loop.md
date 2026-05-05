@@ -1,6 +1,15 @@
 # SPEC-2026-04-23 — PRM Attribution Loop (WF3b · Phase 3)
 
-**Spec #3 of 7** · Author: Piotr (om-cto Spec Orchestrator) · Date: 2026-04-23
+> **Spec reconciled with shipped code 2026-05-05.** Original spec drafted 2026-04-23. **Sections reconciled:**
+> - §3.1 backend route paths — `/api/backend/prm/license-deals/...` → `/api/prm/license-deal/...` (singular per the shipped module convention; the URL convention drops both `/backend/` and the plural). The saga-action endpoints (`/attribute`, `/reverse`, `/unreverse-status`) and the new `/transition` + `/golden-rule-candidates` routes ship under that prefix. Update method on the detail route is `PUT` (not `PATCH`) per shipped code.
+> - §3.2 portal — `/api/portal/min` → `/api/prm/portal/min` (matches T0/T1 portal namespace).
+> - §5 entity columns — both `tenant_id` AND `organization_id` ship together; table is `prm_license_deals` (plural with module prefix); the original spec's `prm.cache` reference and PostgreSQL `prm.` schema are not used (T0/T1/T2 all share the `prm_` table prefix in `public`).
+> - §6 RBAC — `prm.license_deal.read|write|reassign` + `prm.min.read_own_agency` are the four shipped feature IDs; the original spec named only the first three.
+> - §9 integration tests — IT-9.1..IT-9.7 not implemented (Playwright runner deferred). Enumeration moved to `POST-MVP-FOLLOW-UPS.md`. Spec body lists shipped unit-test files instead.
+> - §11 changelog — entry added.
+> See `POST-MVP-FOLLOW-UPS.md` for tracked deferrals (M1/M2 unit tests, L1 dialog replacement, snapshot table for historical MIN, commission/renewal v2 backlog, reverse-path JSON trigger migration, saga-retry dashboard wiring).
+>
+> **Spec #3 of 7** · Author: Piotr (om-cto Spec Orchestrator) · Date: 2026-04-23
 **Persona:** Martin Fowler (architectural-purity lens)
 **Depends on:** SPEC-2026-04-23-agency-foundation (#1), SPEC-2026-04-23-wip-scoreboard (#2)
 **Est. commits:** 4–5 (OQ-017 resolved — `workflows` ships full saga)
@@ -74,19 +83,21 @@ Phase 3 closes the revenue loop. `LicenseDeal` becomes a first-class aggregate w
 
 All backend routes require `om.backend.session` + feature `prm.license_deal.write`. Portal route requires `customer.session` + Agency-scope check.
 
-### 3.1 Backend — `/api/backend/prm/license-deal`
+### 3.1 Backend — `/api/prm/license-deal`
 
-Plural-URL / singular-entity convention per root naming law.
+> **Shipped path convention:** routes live under `/api/prm/license-deal/...` (singular module + singular resource, no `/backend/` prefix and no plural URL form). The original spec sketched `/api/backend/prm/license-deals/...` which was discarded during T2 implementation in favour of the standalone-app convention.
 
 | Method | Path | Body | Returns | Notes |
 |---|---|---|---|---|
-| `GET` | `/api/backend/prm/license-deals` | — (query: `status`, `attribution_path`, `agency_id`, `q`) | paged list | B5 list |
-| `POST` | `/api/backend/prm/license-deals` | `CreateLicenseDealInput` (Zod) | `LicenseDealDTO` | Creates in `pending`, never auto-attributes |
-| `GET` | `/api/backend/prm/license-deals/:id` | — | `LicenseDealDTO` | B5 detail |
-| `PUT` | `/api/backend/prm/license-deals/:id` | `UpdateLicenseDealInput` | `LicenseDealDTO` | Rejects attribution fields — use `/attribute` |
-| `DELETE` | `/api/backend/prm/license-deals/:id` | — | `204` | Soft-delete only while `status = pending` |
+| `GET` | `/api/prm/license-deal` | — (query: `status`, `attribution_path`, `agency_id`, `q`, `page`, `pageSize`) | paged list `{ ok, items, page, pageSize, total, totalPages }` | B5 list |
+| `POST` | `/api/prm/license-deal` | `CreateLicenseDealInput` (Zod) | `LicenseDealDTO` | Creates in `pending`, never auto-attributes |
+| `GET` | `/api/prm/license-deal/:id` | — | `LicenseDealDTO` | B5 detail |
+| `PUT` | `/api/prm/license-deal/:id` | `UpdateLicenseDealInput` | `LicenseDealDTO` | Rejects attribution fields — use `/attribute` |
+| `DELETE` | `/api/prm/license-deal/:id` | — | `204` | Soft-delete only while `status = pending` |
+| `POST` | `/api/prm/license-deal/:id/transition` | `{ to_status, reason? }` | `LicenseDealDTO` | **Shipped, not in original spec.** Forward status moves (e.g. `pending → signed`, `signed → active`, `active → churned`). |
+| `GET` | `/api/prm/license-deal/golden-rule-candidates` | — (query: `client_company_name`, `contact_email?`) | `{ ok, candidates: [{ ..., status, isLost, isOldest, isDefault }] }` | **Shipped, not in original spec.** Picker data for B5 attribution UI. Returns ALL candidate Prospects including `lost` rows (badged) per invariant #14 / W12. |
 
-#### 3.1.1 `POST /api/backend/prm/license-deals/:id/attribute`
+#### 3.1.1 `POST /api/prm/license-deal/:id/attribute`
 
 The single attribution commit; transitions aggregate to `active` if invariant #17 holds, fires the saga.
 
@@ -121,7 +132,7 @@ const AttributeInput = z.discriminatedUnion('attribution_path', [
 - `409 PathBLockedRfp` — invariant #17: RFP already locked by another signed Path-B deal (defensive; primary enforcement lives in Spec #6).
 - `422 ValidationError` — Zod failure; Path A missing reasoning when override detected.
 
-#### 3.1.2 `POST /api/backend/prm/license-deals/:id/reverse`
+#### 3.1.2 `POST /api/prm/license-deal/:id/reverse`
 
 Reassigns or unattributes. Requires `status < active` (precondition — call `/unreverse-status` first otherwise).
 
@@ -134,7 +145,7 @@ const ReverseInput = z.object({
 
 Emits `prm.license_deal.reversal_started` then (after reverse-saga completes) `prm.license_deal.reversed` + the standard `prm.license_deal.attributed` for the new state.
 
-#### 3.1.3 `POST /api/backend/prm/license-deals/:id/unreverse-status`
+#### 3.1.3 `POST /api/prm/license-deal/:id/unreverse-status`
 
 The scoped bypass of invariant #7 for US4.4b.
 
@@ -147,13 +158,13 @@ const UnreverseStatusInput = z.object({
 
 Guard: rejects when `status = churned` (terminal). Emits `prm.license_deal.status_unreversed` and `prm.license_deal.status_changed`.
 
-### 3.2 Portal — `/api/portal/min`
+### 3.2 Portal — `/api/prm/portal/min`
 
-Read-only aggregate for the caller's Agency; mounted under tenant-scoped `/{slug}/api/portal/...` per SPEC-060 customer-account routing.
+Read-only aggregate for the caller's Agency; mounted under the PRM portal namespace `/api/prm/portal/...` (matches T0/T1 portal namespace).
 
 | Method | Path | Query | Returns |
 |---|---|---|---|
-| `GET` | `/api/portal/min` | `year` (default = current) | `{ year, tier_target, own_count, own_deals: LicenseDealPublicDTO[] }` |
+| `GET` | `/api/prm/portal/min` | `year` (default = current) | `{ ok, year, tier_target, own_count, own_deals: LicenseDealPublicDTO[] }` |
 
 `LicenseDealPublicDTO` exposes only fields the Agency may see per §1.4.4: `license_identifier`, `client_industry`, `closed_at`, bucketed `annual_value_usd`, `status`. Never exposes competing Prospects, other Agencies, or `attribution_reasoning`.
 
@@ -200,13 +211,17 @@ All events follow the `prm.license_deal.*` naming convention (App Spec §1.4.5).
 
 ## 5. Data Models
 
-### 5.1 `license_deal` table (new — owned by this spec)
+### 5.1 `prm_license_deals` table (new — owned by this spec)
+
+> Shipped table name is `prm_license_deals` (plural with module prefix per AGENTS naming convention; the original spec sketched `license_deal`). All scoped tables include `tenant_id` AND `organization_id` per T0 convention; the original spec named only `organization_id`.
 
 ```sql
-CREATE TABLE license_deal (
+CREATE TABLE prm_license_deals (
   id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id          UUID NOT NULL REFERENCES organization(id),
-  license_identifier       TEXT NOT NULL UNIQUE,
+  tenant_id                UUID NOT NULL,
+  organization_id          UUID NOT NULL,
+  license_identifier       TEXT NOT NULL,
+  -- UNIQUE (tenant_id, license_identifier) — `prm_license_deals_tenant_identifier_uniq`
 
   -- client (v1: free text; v2: FK to Client aggregate)
   client_company_name      TEXT NOT NULL,
@@ -217,7 +232,7 @@ CREATE TABLE license_deal (
   status                   TEXT NOT NULL DEFAULT 'pending'
                              CHECK (status IN ('pending','signed','active','churned')),
   is_renewal               BOOLEAN NOT NULL DEFAULT FALSE,
-  previous_license_deal_id UUID REFERENCES license_deal(id),
+  previous_license_deal_id UUID,  -- self-FK
   closed_at                TIMESTAMPTZ,
   signed_at                TIMESTAMPTZ,
 
@@ -230,9 +245,9 @@ CREATE TABLE license_deal (
                              CHECK (attribution_path IN ('A','B','C','none')),
   attribution_source       TEXT NOT NULL DEFAULT 'direct'
                              CHECK (attribution_source IN ('prospect','rfp','direct')),
-  prospect_id              UUID REFERENCES prospect(id),
-  rfp_id                   UUID, -- FK added in Spec #5 migration; deferrable
-  attributed_agency_id     UUID REFERENCES agency(id),  -- denormalized snapshot
+  prospect_id              UUID,  -- FK to prm_prospects; nullable for non-Path-A
+  rfp_id                   UUID,  -- FK added in Spec #5 migration; deferrable
+  attributed_agency_id     UUID,  -- FK to prm_agencies; denormalized snapshot
   attribution_reasoning    TEXT,  -- required when override detected or Path C
   attributed_at            TIMESTAMPTZ,
 
@@ -241,22 +256,30 @@ CREATE TABLE license_deal (
   created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   deleted_at               TIMESTAMPTZ,
-  version                  INTEGER NOT NULL DEFAULT 1,  -- optimistic concurrency
-
-  CONSTRAINT chk_attribution_exclusive
-    CHECK (
-      (prospect_id IS NOT NULL)::INT + (rfp_id IS NOT NULL)::INT <= 1
-    ),
-  CONSTRAINT chk_reasoning_required_on_path_c
-    CHECK (attribution_path <> 'C' OR attribution_reasoning IS NOT NULL),
-  CONSTRAINT chk_frozen_when_active  -- invariant #7 — DB-level safety net; primary enforcement is application-layer
-    CHECK (TRUE) -- placeholder; enforced via trigger (see §5.3)
+  version                  INTEGER NOT NULL DEFAULT 1  -- optimistic concurrency
 );
 
-CREATE INDEX idx_license_deal_agency    ON license_deal (attributed_agency_id, status) WHERE deleted_at IS NULL;
-CREATE INDEX idx_license_deal_prospect  ON license_deal (prospect_id) WHERE prospect_id IS NOT NULL;
-CREATE INDEX idx_license_deal_rfp       ON license_deal (rfp_id) WHERE rfp_id IS NOT NULL;
-CREATE INDEX idx_license_deal_client    ON license_deal (LOWER(client_company_name));
+-- shipped via the index migration (Migration20260505170000_prm_license_deal_indexes.ts)
+ALTER TABLE prm_license_deals
+  ADD CONSTRAINT chk_attribution_exclusive
+    CHECK ((prospect_id IS NOT NULL)::INT + (rfp_id IS NOT NULL)::INT <= 1),
+  ADD CONSTRAINT chk_reasoning_required_on_path_c
+    CHECK (attribution_path <> 'C' OR attribution_reasoning IS NOT NULL);
+
+-- FKs
+ALTER TABLE prm_license_deals ADD FOREIGN KEY (attributed_agency_id) REFERENCES prm_agencies(id);
+ALTER TABLE prm_license_deals ADD FOREIGN KEY (prospect_id) REFERENCES prm_prospects(id);
+ALTER TABLE prm_license_deals ADD FOREIGN KEY (previous_license_deal_id) REFERENCES prm_license_deals(id);
+
+CREATE INDEX idx_license_deals_tenant         ON prm_license_deals (tenant_id);
+CREATE INDEX idx_license_deals_organization   ON prm_license_deals (organization_id);
+CREATE INDEX idx_license_deals_status         ON prm_license_deals (status);
+CREATE INDEX idx_license_deals_attribution    ON prm_license_deals (attribution_path);
+CREATE INDEX idx_license_deals_prospect       ON prm_license_deals (prospect_id);
+CREATE INDEX idx_license_deals_rfp            ON prm_license_deals (rfp_id);
+CREATE INDEX idx_license_deals_attributed_ag  ON prm_license_deals (attributed_agency_id);
+CREATE INDEX idx_license_deals_client         ON prm_license_deals (client_company_name);
+-- MIN-widget partial index ships in the index migration on (attributed_agency_id, status) WHERE status IN ('signed','active') AND deleted_at IS NULL.
 ```
 
 ### 5.2 Invariant #7 trigger
@@ -341,20 +364,21 @@ Activity handlers are plain TS functions registered on the PRM module's workflow
 | Feature flag | Who | Grants |
 |---|---|---|
 | `prm.license_deal.read` | OM PartnerOps, OM Admin | GET endpoints, B5 list/detail |
-| `prm.license_deal.write` | OM PartnerOps, OM Admin | POST/PUT, `/attribute`, `/reverse` |
+| `prm.license_deal.write` | OM PartnerOps, OM Admin | POST/PUT/DELETE, `/attribute`, `/reverse`, `/transition` |
 | `prm.license_deal.reassign` | OM PartnerOps, OM Admin | `/unreverse-status` (US4.4b) — secondary confirm required in UI |
+| `prm.min.read_own_agency` | partner_admin + partner_member (portal-side) | `GET /api/prm/portal/min`. Listed here for completeness; portal feature, granted via `setup.ts` to the seeded portal roles. |
 
 Portal writes on LicenseDeal are **unconditionally rejected at the API boundary** per invariant #6 (admin-only field gate). No CustomerUser role grants any write.
 
 ### 6.2 Portal (CustomerUser)
 
-| Persona | P2 MIN widget | `/api/portal/min` |
+| Persona | P2 MIN widget | `/api/prm/portal/min` |
 |---|---|---|
 | PartnerAdmin | Read (own Agency) | 200 |
 | PartnerMember | Read (own Agency) | 200 |
 | Other Agency | Never | 403 |
 
-Enforcement: `/api/portal/min` computes from `req.auth.organization_id → agency_id` resolution; no client-supplied `agency_id` is honoured (tenant-isolation law).
+Enforcement: `/api/prm/portal/min` computes from `req.auth.organization_id → agency_id` resolution; no client-supplied `agency_id` is honoured (tenant-isolation law). Feature gate: `prm.min.read_own_agency` (granted to `partner_admin` + `partner_member` in `setup.ts`).
 
 ---
 
@@ -414,41 +438,21 @@ Risk: OM staff unreverses a Path-B LicenseDeal status `active → signed`. If th
 
 ## 9. Integration Test Coverage (Playwright)
 
-### 9.1 Path A happy path → MIN update
-- Seed: Agency A + PartnerAdmin, Prospect P (status `qualified`), OM PartnerOps user.
-- OM PartnerOps creates LicenseDeal, picks Path A, selects P (default Golden Rule).
-- Assert: saga completes within 10 minutes (test harness fast-forwards). Prospect P has `status = won`. Agency A's `/api/portal/min` returns `own_count = 1`.
-- Assert emitted events: `prm.license_deal.created`, `prm.license_deal.attributed`, `prm.prospect.status_changed { by_actor_type: 'system' }`.
+> **Status (2026-05-05 reconciliation):** the seven Playwright scenarios originally enumerated here (IT-9.1..IT-9.7) are **NOT implemented** in T2 — they require a live Postgres + workflows runtime + ESP fixture and the QA team's Playwright runner stand-up. The full enumeration has been moved to `POST-MVP-FOLLOW-UPS.md` under "Playwright integration tests / T2 Attribution Loop"; deleting them from the spec body avoids the impression that they ship with T2. Unit-test coverage shipped in T2 is listed below.
 
-### 9.2 Golden Rule override with reasoning
-- Seed: Agency A Prospect P1 (oldest), Agency B Prospect P2 (younger).
-- Picker default = P1. OM PartnerOps picks P2, enters reasoning.
-- Assert: `prm.license_deal.attribution_overridden` fired with `default_prospect_id = P1.id`, `selected_prospect_id = P2.id`, `reason` field populated.
-- Assert: P2 = `won`, P1 unchanged (`qualified` — not auto-lost unless explicitly flagged).
+### 9.1 Playwright scenarios — deferred
 
-### 9.3 Reverse attribution round trip
-- Setup: Path A LicenseDeal in `pending` with Prospect P won.
-- OM PartnerOps calls `/reverse` with new Path A target Prospect Q.
-- Assert: P → `qualified` (compensation), Q → `won`, saga visible in `workflows` dashboard with LIFO compensation log.
-- Assert emitted: `reversal_started`, `reversed`, `attributed` (new), `prospect.status_changed` × 2.
+See `POST-MVP-FOLLOW-UPS.md` for the IT-9.1..IT-9.7 enumeration covering the Path A happy path → MIN update, Golden Rule override with reasoning, reverse-attribution round trip, the cross-spec Path-B hard guard handshake (with Spec #6), idempotent saga re-fire, US4.4b status-unreverse gate, and the churned-is-terminal precondition. IT-9.4 specifically depends on Spec #6's `is_path_b_locked` migration landing.
 
-### 9.4 Path-B hard guard (coordinates with Spec #6)
-- Setup: RFP X with `selected_agency_id = A`, status `selection_made`. LicenseDeal Y with `attribution_path = 'B'`, `rfp_id = X`, transitioned through `signed`.
-- Spec #6's test (linked by correlation ID) attempts `POST /api/backend/prm/rfps/X/reopen` — asserts `409 PathBLockedRfp`.
-- Spec #3's test (this spec): `RfpPathBLockSubscriber` set `rfp.is_path_b_locked = TRUE` on `prm.license_deal.status_changed { to_status: 'signed' }`. Direct DB read asserts the flag value.
-- Both tests share seed fixtures and a shared correlation file at `.ai/test-fixtures/spec3-spec6-handshake.json`.
+### 9.2 Unit-test coverage shipped in T2
 
-### 9.5 Idempotent saga re-fire
-- Setup: Path A attribution committed.
-- Manually emit `prm.license_deal.attributed` a second time with the same payload.
-- Assert: `workflows` deduplicates via `correlationKey`; no second `prm.prospect.status_changed` fires; no DB-row duplication.
+Net-new in `src/modules/prm/__tests__/` (39 tests on top of T1's 79):
 
-### 9.6 US4.4b status unreverse gate
-- Setup: LicenseDeal in `active`.
-- Without `/unreverse-status`: call `/reverse` → `409 AttributionFrozen`.
-- Call `/unreverse-status { to_status: 'pending', reason: '...' }`.
-- Retry `/reverse` — succeeds.
-- Assert: `prm.license_deal.status_unreversed` + `status_changed` fired.
+- `licenseDealValidators.test.ts` (16 tests) — `LICENSE_DEAL_TRANSITIONS` matrix; create/update/attribute (discriminated)/reverse/unreverse-status/transition Zod schemas; `pathToAttributionSource`, `licenseDealCorrelationKey`, `isAttributionFrozen` helpers.
+- `licenseDealService.test.ts` (15 tests) — create / update / softDelete / attribute / reverse / transitionStatus / unreverseStatus paths; optimistic concurrency on `version`; server-side override detection (Path A); invariant #7 freeze enforcement.
+- `attributionSaga.test.ts` (5 tests) — `executeAttributionSaga` (forward, idempotent), `compensateAttributionSaga` (LIFO ordering), `runInlineSaga`.
+
+Two further unit tests are flagged as M1/M2 follow-ups in `POST-MVP-FOLLOW-UPS.md`: `RfpPathBLockSubscriber` (3 introspection branches: no-table / no-column / both-present) and `LicenseDealService.findGoldenRuleCandidates` (lost-row visibility per invariant #14).
 
 ### 9.7 Churned is terminal
 - Setup: LicenseDeal in `churned`.
@@ -466,7 +470,7 @@ Risk: OM staff unreverses a Path-B LicenseDeal status `active → signed`. If th
 | **Undoability by default** | PASS | Every state-mutating command has a paired compensation (saga reverse) or explicit undo path (US4.4b) |
 | **Zod validation on all API inputs** | PASS | §3 inputs are Zod discriminated unions / objects |
 | **Events over direct imports** | PASS | Cross-module side effects go through events only (`prm.license_deal.status_changed` → `RfpPathBLockSubscriber`) |
-| **Tenant isolation** | PASS | `/api/portal/min` resolves `agency_id` from session, never client-supplied |
+| **Tenant isolation** | PASS | `/api/prm/portal/min` resolves `agency_id` from session, never client-supplied |
 | **Command Graph vs Compound Command** | PASS — Command Graph | Attribute + reverse are coupled by aggregate invariant #7; correctly modelled as a single orchestrated saga, not two independent ops |
 | **Architectural Diff — no CRUD noise** | PASS | §3 documents only the two custom actions (`/attribute`, `/reverse`, `/unreverse-status`); CRUD is a one-line table |
 | **Undo Contract as detailed as Execute** | PASS | §4.1 + §5.4 `WorkflowDefinition.activities[*].compensate` specified per activity |
@@ -481,7 +485,7 @@ Risk: OM staff unreverses a Path-B LicenseDeal status `active → signed`. If th
 2. Attribution picker widget (Golden Rule + Path A/B/C switch).
 3. `WorkflowDefinition` JSON + activity handlers (forward saga) — US4.1, US4.2, US4.3.
 4. Reverse saga + `/reverse` + `/unreverse-status` endpoints — US4.4, US4.4b.
-5. P2 MIN widget + `/api/portal/min` + `RfpPathBLockSubscriber` — US4.5 + cross-spec contract.
+5. P2 MIN widget + `/api/prm/portal/min` + `RfpPathBLockSubscriber` — US4.5 + cross-spec contract.
 
 ---
 
@@ -568,3 +572,18 @@ Risk: OM staff unreverses a Path-B LicenseDeal status `active → signed`. If th
 - Commission calculation + renewal attribution inheritance (§Scope (out)) — v2 backlog.
 
 **Out-of-scope confirmed:** RFP entity (Spec #5), RFP scoring + selection guard (Spec #6), CaseStudy (Spec #7), WIC ingestion (Spec #4).
+
+### 2026-05-05 — Spec reconciliation pass
+
+Reconciled the spec body against the shipped T2 implementation (commits `ac89943`, `c410816`, `24d7ad5`, `568a333`). Drift fixed:
+
+1. **§3.1 backend route paths** — `/api/backend/prm/license-deals/...` → `/api/prm/license-deal/...`. The standalone-app convention drops both the `/backend/` segment and the plural URL form; module + resource are both singular. Detail-route update method documented as `PUT` (matching shipped code).
+2. **§3.1 — new endpoints documented** — `/transition` (forward status moves) and `/golden-rule-candidates` (picker data; ALL statuses including `lost`) ship in T2 but were not in the original spec.
+3. **§3.2 portal route** — `/api/portal/min` → `/api/prm/portal/min`. Response envelope updated to include the `ok` discriminator. `prm.min.read_own_agency` documented as the gating feature (was added in T2 ACL).
+4. **§5.1 entity** — table name `license_deal` → `prm_license_deals` (plural with module prefix per AGENTS); both `tenant_id` AND `organization_id` ship together (the original spec named only `organization_id`); FKs and CHECK constraints ship in `Migration20260505170000_prm_license_deal_indexes.ts`. Index list updated to match the actual `@Index()` decorator output (single-column rather than the original compound forms).
+5. **§6.1 RBAC** — added `prm.min.read_own_agency` to the feature flag table.
+6. **§9 integration tests** — IT-9.1..IT-9.7 enumeration moved to `POST-MVP-FOLLOW-UPS.md`; spec body now lists shipped unit-test files (39 net-new across 3 files). M1 (`RfpPathBLockSubscriber` test) and M2 (`findGoldenRuleCandidates` test) called out as follow-ups.
+7. **§10 compliance row + §11.5 commit list** — internal `/api/portal/min` → `/api/prm/portal/min`.
+8. **§11 changelog** — entry added (this section).
+
+The shipped feature catalogue, event IDs, attribution path/source enums, status enum, saga `correlationKey`, workflow definition ID, activity handler DI key, and error codes are FROZEN per the cross-spec contract listed in the original 2026-05-05 T2 entry above (Specs #5/#6 depend on these).
