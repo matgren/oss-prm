@@ -640,3 +640,67 @@ None.
 - **Commands:** Passed. Three commands with explicit undo contracts (with documented non-reversible carve-out for saga-mediated transitions).
 - **Risks:** Passed. Eleven concrete risks with mitigations and residuals across data integrity, cascade, isolation, migration, and operations.
 - **Verdict:** Approved.
+
+### 2026-05-05 — T1 implementation landed (Patryk via om-implement-spec)
+
+**Module location:** standalone app (`src/modules/prm`, `from: '@app'`) — extends T0's PRM module rather than scaffolding a new one. Adapted from the spec's `packages/prm` per the standalone-app convention.
+
+**Files delivered:**
+- `data/entities.ts` — added `Prospect` (table `prm_prospects`) and `ProspectCandidateIndex` (table `prm_prospect_candidate_index`).
+- `data/validators.ts` — added `registerProspectSchema`, `updateProspectSchema` (discriminated edit/transition), `listProspectsPortalSchema`, `listProspectsBackendSchema`, `PROSPECT_TRANSITIONS` matrix, `normalizeCompanyName` / `normalizeContactEmail` helpers.
+- `lib/prospectService.ts` — domain service hosting the 6-state machine, author-scope guard, won-is-system-only guard, optimistic concurrency on `status_changed_at`, register/update/transitionStatus/revertRegistration/findCandidatesByNormalizedKey methods.
+- `lib/prospectCandidateIndexProjection.ts` — shared idempotent UPSERT/DELETE handler used by the four event-specific projection subscribers.
+- `lib/tierRequirements.ts` — static tier-requirements registry + `computeTierProgress` helper (Phase-1 deferred App-Spec seed promoted to in-code static).
+- `events.ts` — added 4 prospect events.
+- `acl.ts` — added 8 prospect/dashboard features.
+- `setup.ts` — extended `partner_admin` and `partner_member` ACLs with prospect/dashboard features; extended `employee` staff role with `prm.prospect.read_cross_agency`.
+- `subscribers/prospect-candidate-index-on-{registered,updated,status-changed,reverted}.ts` — four subscribers wired to the shared projection handler.
+- `api/portal/prospects/route.ts` (GET/POST) — list + register.
+- `api/portal/prospects/[id]/route.ts` (GET/PATCH) — detail + edit + transition with discriminated body, author-scope feature gating, `registered_at` rejection at the route boundary.
+- `api/portal/dashboard/route.ts` — single-round-trip aggregate for P2 (WIP, WIC with schema-introspection fallback, tier progress).
+- `api/prospects/route.ts` (GET) — B4 cross-agency read-only listing joining the projection table.
+- `backend/prospects/page.{tsx,meta.ts}` — B4 read-only `DataTable`.
+- `frontend/[orgSlug]/portal/prospects/page.{tsx,meta.ts}` — P5 custom React list + register form (no DataTable per OQ-010).
+- `frontend/[orgSlug]/portal/prospects/[id]/page.{tsx,meta.ts}` — P6 custom React detail + edit + state-machine-aware transition CTAs + lost-reason capture dialog.
+- `frontend/[orgSlug]/portal/dashboard/page.{tsx,meta.ts}` — P2 widgets via `PortalCard` with monthly/yearly toggle (L-011) and historical-status banner.
+- `migrations/Migration20260505120000_prm_prospect.ts` — additive baseline; only creates `prm_prospects` + `prm_prospect_candidate_index`.
+- `migrations/Migration20260505130000_prm_prospect_indexes.ts` — additive companion: enum CHECKs, `lost_reason` CHECK, FK to `prm_agencies` (RESTRICT), FK to `prm_agency_members` (RESTRICT), FK to `prm_prospects` (CASCADE) on the projection, WIP-widget partial index, portal-list keyset index, `registered_at` immutability trigger (invariant #1 defence-in-depth).
+- `i18n/en.json` — added 89 keys covering portal P5/P6/P2 + backend B4.
+- `__tests__/prospectService.test.ts` (16 tests), `__tests__/prospectValidators.test.ts` (12 tests), `__tests__/prospectCandidateIndexProjection.test.ts` (5 tests), `__tests__/tierRequirements.test.ts` (7 tests).
+
+**Cross-spec contracts (FROZEN — Spec #3 attribution-loop MUST mirror):**
+1. **Tables**: `prm_prospects`, `prm_prospect_candidate_index` (PK = `prospect_id`).
+2. **Event IDs**: `prm.prospect.registered`, `prm.prospect.status_changed`, `prm.prospect.updated`, `prm.prospect.registration_reverted`. **Frozen.**
+3. **Event payload contract** (subset Spec #3 binds to):
+   - `prm.prospect.registered`: `{ prospectId, agencyId, organizationId, tenantId, registeredAt, source, normalizedCompanyName, lowercasedContactEmail, registeredByAgencyMemberId, status }`.
+   - `prm.prospect.status_changed`: `{ prospectId, agencyId, organizationId, tenantId, fromStatus, toStatus, byActorType, byActorId, reason?, changedAt }`.
+   - `prm.prospect.updated`: `{ prospectId, agencyId, organizationId, tenantId, changedFields, changedAt, normalizedCompanyName, lowercasedContactEmail }`.
+   - `prm.prospect.registration_reverted`: `{ prospectId, agencyId, organizationId, tenantId }`.
+4. **Feature IDs**: `prm.prospect.{read_own_agency,read_cross_agency,register,transition_any_in_agency,transition_own_authored}`, `prm.dashboard.view`, `prm.wic.read_own_agency`, `prm.tier_requirement.read`. **Frozen.**
+5. **Error codes**: `prospect_not_found`, `invalid_transition`, `won_is_om_only`, `not_author_or_admin`, `status_conflict`, `lost_reason_required`. **Frozen.**
+6. **Projection schema**: `prm_prospect_candidate_index { prospect_id (PK, FK→prm_prospects ON DELETE CASCADE), organization_id, agency_id, normalized_company_name, lowercased_contact_email, current_status, registered_at, projection_updated_at }`. Default ordering for the Spec #3 candidate-picker is `registered_at ASC` (Golden Rule, oldest-first). The projection includes ALL statuses (including `lost`) per invariant #14 — Spec #3 surfaces `lost` rows with a badge in the candidate picker.
+7. **Normalized-key contract**:
+   - `normalizedCompanyName` = lowercase, trim, strip non-Unicode-letters/digits/whitespace, collapse whitespace.
+   - `lowercasedContactEmail` = `toLowerCase(trim(value))`.
+   The `normalizeCompanyName` / `normalizeContactEmail` helpers in `data/validators.ts` are the single source of truth — Spec #3's candidate-picker MUST call them on user input before querying the index.
+8. **State machine (invariant #12)**: `PROSPECT_TRANSITIONS` map in `data/validators.ts`. `won` is reachable only when `actor.type === 'system'` (Spec #3 attribution saga is the only system-actor caller in v1).
+
+**Quality gates (8/8) — re-validated from a clean working tree:**
+1. Typecheck: PASS — `yarn typecheck` exit 0.
+2. Unit tests: PASS — `yarn test src/modules/prm` → 12 suites, 79 tests, 0 failures (32 inherited from T0 + 47 added in T1).
+3. Integration tests: N-A — Playwright scenarios in §9 (IT-9.1..9.9) require a live Postgres + ESP fixture and are deferred to the QA team's infra stand-up.
+4. Migration review: PASS — `yarn mercato db generate` is a no-op (snapshot matches entities); the two new migration files only touch `prm_prospects` and `prm_prospect_candidate_index` (43 + 73 lines). No DROP/ALTER COLUMN of pre-existing tables.
+5. AGENTS.md compliance: PASS — events `prm.<entity>.<past_tense>`, features `<module>.<action>`, FK IDs only across modules (no `@ManyToOne` to `Agency`/`AgencyMember`), DataTable wires pagination props, lucide-react icons in `page.meta.ts`, `pageGroup`/`pageGroupKey`/`pageOrder` set on B4.
+6. Piotr Decision Library checklist: PASS — BC additive-only, reuses `customerAuth` + `findOneWithDecryption` + `safeEmit` + `PortalCard`, command-shaped service mutations, every invariant has an explicit enforcement point in code (state machine in `ProspectService.transitionStatus`, registered_at immutability via aggregate whitelist + DB trigger, won-actor guard, author-scope guard, optimistic concurrency).
+7. i18n: PASS — every user-facing string in P5/P6/P2/B4 routed through `useT('key', 'fallback')`; locale dictionary at `i18n/en.json`.
+8. Build: PASS — `yarn build` (Next.js 16.2.3, Turbopack) compiled successfully; `yarn generate` clean.
+
+**Migrations NOT applied:** `yarn mercato db migrate` was deliberately not run — per AGENTS rule #4 we hand back to the user for explicit approval. Two migration files staged in `src/modules/prm/migrations/` ready for review.
+
+**Deferred:**
+- Live Playwright IT-9.1..9.9 from §9 — require live ESP + DB fixtures.
+- Cache wiring (§3.1, §6.2) — the spec calls for a `prm.agency.{agencyId}.dashboard.{yyyy-mm}` cache tag with 60s TTL and event-driven invalidation. The framework's cache wrappers attach to the CRUD-factory layer; the dashboard route is a hand-rolled portal aggregate which would need a custom wrapper. Deferred to a follow-up commit when traffic justifies it. The route is correct and tenant-scoped — only the cache surface is unimplemented.
+- Static `tier_requirements` DB table — App-Spec §1.4.7 calls for a seeded table; T0 deferred the seed and T1 ships the registry as an in-code constant in `lib/tierRequirements.ts` to keep the dashboard widget green. If a follow-up spec promotes it to a DB table, the helper signature stays stable.
+- Compensating-event undo of `prm.prospect.update` — the service exposes `revertRegistration` (undo of `register`) but `update`-undo would require capturing a before-snapshot in a command bus that PRM has not yet adopted. Spec §4.1 documents the contract; implementation is wired into the saga in Spec #3.
+
+**Out-of-scope confirmed:** LicenseDeal attribution (Spec #3), RFP entities (Specs #5/#6), CaseStudy (Spec #7), WIC ingestion (Spec #4 — T1 ships only the widget read path with the awaiting-data placeholder).
