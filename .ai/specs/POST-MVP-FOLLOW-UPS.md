@@ -19,6 +19,12 @@ This is the source of truth for follow-up work — when an item ships, delete th
 - **Snapshot table for historical MIN (T2)** — v1 recomputes on read; v2 concern when MIN history queries become hot. Origin: SPEC-2026-04-23-attribution-loop.md §Scope (out). Owner: TBD. Effort: L.
 - **Commission calculation / renewal attribution inheritance (T2)** — v2 backlog; v1 ships flat MIN aggregate + renewal flag only. Origin: SPEC-2026-04-23-attribution-loop.md §Scope (out). Owner: TBD. Effort: L.
 
+## Performance watchlist
+
+Items here aren't owed work — they're triggers. Add a compound index / cache layer / etc. if and when production observation warrants it.
+
+- **`prm_prospects` `(organization_id, agency_id, status)` compound index** — Trigger: WIP dashboard queries > 500ms in production. Origin: SPEC-2026-04-23-wip-scoreboard.md §5 (single-column indexes shipped instead of the compound index originally drafted).
+
 ## Playwright integration tests (deferred — require live Postgres + ESP fixture)
 
 ### T0 Agency Foundation (SPEC-2026-04-23-agency-foundation.md §9)
