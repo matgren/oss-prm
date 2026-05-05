@@ -5,8 +5,6 @@ This is the source of truth for follow-up work — when an item ships, delete th
 
 ## Tracker
 
-- **M1 — RfpPathBLockSubscriber unit test** — Three branches: no-table / no-column / both-present (introspection fallback per Spec #3 §8.4). Origin: SPEC-2026-04-23-attribution-loop.md §11 (T2 review M1). Owner: TBD. Effort: ~1h.
-- **M2 — LicenseDealService.findGoldenRuleCandidates unit test** — Asserts Golden Rule lost-row visibility per invariant #14 (Spec #3 picker MUST surface `lost` candidates with badge). Origin: SPEC-2026-04-23-attribution-loop.md §11 (T2 review M2). Owner: TBD. Effort: ~30min.
 - **L1 — Replace `window.prompt` with proper Dialog in B5 reverse / unreverse-status flows** — Cmd+Enter submit, Escape cancel per AGENTS dialog convention; current implementation at `src/modules/prm/backend/license-deals/[id]/page.tsx:549,569`. Origin: SPEC-2026-04-23-attribution-loop.md §11 (T2 review L1). Owner: TBD. Effort: M.
 - **Cache invalidator subscribers (T0 Agency)** — `prm:agency:list:tenant:{id}`, `prm:agency:{id}`, `prm:portal:agency:{id}:status_banner` declared in spec but not wired in shipped T0. Origin: SPEC-2026-04-23-agency-foundation.md §3.1.2-§3.1.4. Owner: TBD. Effort: M.
 - **Optimistic concurrency on Agency PATCH (T0)** — `If-Match` / `updated_at` token pattern not implemented; T2's `LicenseDeal.version` is the reference implementation. Origin: SPEC-2026-04-23-agency-foundation.md §3.1.4. Owner: TBD. Effort: M.
