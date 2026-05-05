@@ -1,5 +1,11 @@
 # SPEC-2026-04-23-agency-foundation — PRM Phase 1: Agency Foundation
 
+> **Spec reconciled with shipped code 2026-05-05 — partial pass (in progress).**
+> Original spec drafted 2026-04-23. **Sections reconciled in this pass:**
+> §3.1 backend routes (path base is `/api/prm/...` not `/api/backend/prm/...`; pagination is `page` + `pageSize` offset-based, not `cursor`/keyset; response envelope is `{ ok, items, page, pageSize, total, totalPages }` not `{ items, nextCursor }`; cache invalidator subscribers flagged as deferred per `POST-MVP-FOLLOW-UPS.md`; optimistic concurrency on Agency PATCH flagged as not-implemented).
+> **Sections still to reconcile** (pending follow-up): §3.2 portal route paths, §5 entity columns (`tenant_id` + `organization_id` shipped together; soft-delete via `deleted_at`; jsonb dictionary arrays not uuid[]; AgencyMember additional shipped columns), §9 integration test status, §11 changelog accuracy.
+> See git blame for the diff and `POST-MVP-FOLLOW-UPS.md` (TBD) for tracked deferrals.
+>
 > **Spec ID:** SPEC-2026-04-23-agency-foundation
 > **Spec #:** 1 of 7 (WF1 decomposition of `app-spec/app-spec.md` by Piotr, om-cto Spec Orchestrator, 2026-04-23)
 > **Workflow:** WF1 — Agency Lifecycle (onboard → active → historical)
@@ -88,11 +94,13 @@ Strategic (L-009): the bottleneck being dissolved is Mat's per-agency admin time
 
 ## 3. API Contracts
 
-> **Shared auth.** Portal routes (`/api/portal/*`) use the session cookie issued by `customer_accounts`' isolated JWT pipeline; backend routes (`/api/backend/*`) use the staff User session cookie from `auth`. **No service-account routes in this spec** — WIC import routes are Phase 4 scope. All request/response bodies validated with `zod`; all error responses use the platform-standard `{ error: { code, message, details? } }` envelope. All routes export `openApi` metadata per `packages/core` convention. Pagination uses `cursor` + `pageSize ≤ 100` (keyset, not OFFSET).
+> **Shared auth.** Portal routes (`/api/prm/portal/*`) use the session cookie issued by `customer_accounts`' isolated JWT pipeline; backend routes (`/api/prm/*`) use the staff User session cookie from `auth`. **No service-account routes in this spec** — WIC import routes are Phase 4 scope. All request/response bodies validated with `zod`; all error responses use the platform-standard `{ ok: false, error: <string | { code, message, details? }> }` envelope. All routes export `openApi` metadata per `packages/core` convention. **Pagination is `page` + `pageSize ≤ 100` offset-based** (the shipped routes use `findAndCountWithDecryption(em, ..., { limit, offset })`); the original spec called for cursor/keyset but no shipped route implements it. Response envelope: `{ ok: true, items, page, pageSize, total, totalPages }`.
 
 ### 3.1 Backend routes (OM staff / User session)
 
-#### 3.1.1 `POST /api/backend/prm/agency`
+> **Shipped path convention:** all backend routes live under `/api/prm/...` (singular module name, no `/backend/` prefix). The original spec wrote `/api/backend/prm/...`; references below have been corrected.
+
+#### 3.1.1 `POST /api/prm/agency`
 - **Purpose:** US1.1 — Create Agency (and its paired `directory.Organization`) in one transaction.
 - **Auth:** `requireAuth` + `requireFeatures(['prm.agency.create'])` (OMPartnerOps, OMAdmin).
 - **Request:**
@@ -115,28 +123,28 @@ Strategic (L-009): the bottleneck being dissolved is Mat's per-agency admin time
 - **Emits:** `prm.agency.created`. If `tier != 'om_agency'` default, also `prm.agency.tier_changed`.
 - **Transaction boundary:** single DB transaction across `directory.organization`, `prm.agency`, plus event outbox insert. Partial failure → full rollback (invariant #4).
 
-#### 3.1.2 `GET /api/backend/prm/agency?cursor=…&pageSize=…&tier=…&status=…&q=…`
+#### 3.1.2 `GET /api/prm/agency?page=…&pageSize=…&tier=…&status=…&q=…`
 - **Purpose:** B1 DataTable list (cross-agency).
 - **Auth:** `requireFeatures(['prm.agency.read'])`.
-- **Response 200:** `{ items: Agency[], nextCursor?: string }` (pageSize ≤ 100).
-- **Cache:** tag `prm:agency:list:tenant:{tenant_id}` (tenant-scoped); invalidated on `prm.agency.created`, `prm.agency.tier_changed`, `prm.agency.status_changed`, `prm.agency.onboarding_state_changed`.
+- **Response 200:** `{ ok: true, items: Agency[], page, pageSize, total, totalPages }` (offset-based, `pageSize ≤ 100`, default 50).
+- **Cache:** declared in original spec as tag `prm:agency:list:tenant:{tenant_id}` invalidated on `prm.agency.*` events. **NOT WIRED in T0** — the cache invalidator subscribers were deferred (see `POST-MVP-FOLLOW-UPS.md`).
 
-#### 3.1.3 `GET /api/backend/prm/agency/{id}`
+#### 3.1.3 `GET /api/prm/agency/{id}`
 - **Purpose:** B2 detail load.
 - **Auth:** `requireFeatures(['prm.agency.read'])`.
 - **Response 200:** full `Agency` projection including admin-only fields (backend is trusted; no enricher stripping).
-- **Cache:** tag `prm:agency:{id}`; invalidated on any `prm.agency.*` event with that `agency_id`.
+- **Cache:** declared in original spec as tag `prm:agency:{id}`. **NOT WIRED in T0** (deferred — see `POST-MVP-FOLLOW-UPS.md`).
 
-#### 3.1.4 `PATCH /api/backend/prm/agency/{id}`
+#### 3.1.4 `PATCH /api/prm/agency/{id}`
 - **Purpose:** US1.1 post-create edits; US1.3 flag toggles; US1.7 status transition; OM staff name edits.
 - **Auth:** `requireFeatures(['prm.agency.update_all'])` (OMPartnerOps, OMAdmin). Admin-only fields require the same feature; no separate gate here — the portal route is the guarded surface (§3.2.3).
 - **Request:** partial `Agency` — any writable field. `slug` is immutable post-create (rejected 400).
 - **Response 200:** `{ agency: Agency }` with updated timestamps.
-- **Errors:** `400 slug_is_immutable`; `409 concurrent_modification` (optimistic via `updated_at` If-Match); `403 forbidden`.
+- **Errors:** `400 slug_is_immutable`; `403 forbidden`. Optimistic concurrency via `updated_at` If-Match was specified but **NOT IMPLEMENTED** in shipped T0 — last-writer-wins is the current behaviour for Agency PATCH (see `POST-MVP-FOLLOW-UPS.md`). LicenseDeal in T2 ships the version-token pattern that this spec promised.
 - **Emits:** per field delta — `prm.agency.tier_changed` (tier), `prm.agency.status_changed` (status), `prm.agency.onboarding_state_changed` (any of the three booleans).
-- **Cache invalidation:** `prm:agency:{id}` + `prm:agency:list:tenant:{tenant_id}` + on status change, `prm:portal:agency:{id}:status_banner`.
+- **Cache invalidation:** declared in the original spec; **NOT WIRED in T0** (deferred — see `POST-MVP-FOLLOW-UPS.md`).
 
-#### 3.1.5 `POST /api/backend/prm/agency/{id}/invite`
+#### 3.1.5 `POST /api/prm/agency/{id}/invite`
 - **Purpose:** US1.2 — Invite first PartnerAdmin; also US1.5 OM-staff path for subsequent members; reused for re-invite.
 - **Auth:** `requireFeatures(['prm.agency.invite_admin'])` (OMPartnerOps, OMAdmin).
 - **Request:**
@@ -160,12 +168,12 @@ Strategic (L-009): the bottleneck being dissolved is Mat's per-agency admin time
 - **Emits:** `prm.agency_member.added` on success; `prm.agency_member.github_profile_conflict_attempted` on GH conflict.
 - **Idempotency:** not idempotent across calls (each call produces a new invitation token); client-side debounced via the cooldown.
 
-#### 3.1.6 `GET /api/backend/prm/agency/{id}/member?cursor=…&pageSize=…`
+#### 3.1.6 `GET /api/prm/agency/{id}/member?page=…&pageSize=…`
 - **Purpose:** B2 Members tab (scoped to one Agency).
 - **Auth:** `requireFeatures(['prm.agency_member.read_all'])`.
-- **Response 200:** `{ items: AgencyMember[], nextCursor?: string }`.
+- **Response 200:** `{ ok: true, items: AgencyMember[], page, pageSize, total, totalPages }` (offset-based).
 
-#### 3.1.7 `PATCH /api/backend/prm/agency-member/{id}`
+#### 3.1.7 `PATCH /api/prm/agency-member/{id}`
 - **Purpose:** US1.6 lockout recovery via role reassignment; OM-staff edits of cross-agency member personal fields if needed.
 - **Auth:** `requireFeatures(['prm.agency_member.write_all'])`.
 - **Request:**
@@ -183,10 +191,10 @@ Strategic (L-009): the bottleneck being dissolved is Mat's per-agency admin time
 - **Response 200:** `{ agency_member: AgencyMember }`.
 - **Emits:** `prm.agency_member.role_changed` (on role change) or `prm.agency_member.removed` (on deactivation).
 
-#### 3.1.8 `GET /api/backend/prm/agency-member?cursor=…&pageSize=…&q=…&github_profile=…`
+#### 3.1.8 `GET /api/prm/agency-member?page=…&pageSize=…&q=…&github_profile=…`
 - **Purpose:** B3 cross-agency read-only list (github_profile conflict search surface).
 - **Auth:** `requireFeatures(['prm.agency_member.read_all'])`.
-- **Response 200:** `{ items: AgencyMember[] (with agency_name joined), nextCursor?: string }`.
+- **Response 200:** `{ ok: true, items: AgencyMember[] (with agency_name joined), page, pageSize, total, totalPages }` (offset-based).
 - **Read-only:** no write endpoints under this path (§3.1.7 operates via `agency-member/{id}`, which is routed off the Agency aggregate in the UI).
 
 ### 3.2 Portal routes (CustomerUser session)
