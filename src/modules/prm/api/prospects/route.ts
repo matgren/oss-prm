@@ -56,7 +56,6 @@ export async function GET(req: Request) {
   if (wantsKeyedFilter) {
     // Server normalizes the input to match the index column.
     const ixQuery = knex('prm_prospect_candidate_index as ix')
-      .where('ix.agency_id', knex.raw('ix.agency_id'))
       .orderBy('ix.registered_at', 'asc')
     if (agencyId) ixQuery.where('ix.agency_id', agencyId)
     if (status) ixQuery.where('ix.current_status', status)
