@@ -23,6 +23,20 @@ Items here aren't owed work — they're triggers. Add a compound index / cache l
 
 - **`prm_prospects` `(organization_id, agency_id, status)` compound index** — Trigger: WIP dashboard queries > 500ms in production. Origin: SPEC-2026-04-23-wip-scoreboard.md §5 (single-column indexes shipped instead of the compound index originally drafted).
 
+## Design system follow-ups
+
+Items here are cosmetic DS-compliance gaps (color tokens, text sizes, spacing). Bundle with adjacent UI work; not worth standalone fix commits.
+
+- **Hardcoded amber banner palette** — `border-amber-300 bg-amber-50 text-amber-900` for historical / lost-reason banners. 5 instances across `src/modules/prm/frontend/[orgSlug]/portal/dashboard/page.tsx:94`, `…/portal/agency/page.tsx:35`, `…/portal/members/page.tsx:97`, `…/portal/prospects/[id]/page.tsx:206`, `src/modules/prm/backend/license-deals/[id]/page.tsx:312`. Replace with semantic warning tokens once they exist in this OM version. Origin: T0/T1/T2 mixed. Effort: S.
+- **Hardcoded emerald onboarding chips** — `bg-emerald-50 text-emerald-800` on Contract / NDA / Onboarded chips. 3 instances in `src/modules/prm/frontend/[orgSlug]/portal/agency/page.tsx:138-140`. Migrate to a `StatusBadge` once a success token exists. Origin: T0. Effort: S.
+- **Hardcoded red LOST badge** — `bg-red-100 text-red-700` on the candidate "LOST" badge in `src/modules/prm/backend/license-deals/[id]/page.tsx:347`. Migrate to a destructive status token / `StatusBadge`. Origin: T2. Effort: S.
+- **Hardcoded `text-rose-700` error label** — was inlined as `<div className="… text-rose-700">{error}</div>` in 5 portal pages; the four critical ones already moved to `ErrorMessage`, but the inline error inside the prospect-detail "back to list" branch (`…/portal/prospects/[id]/page.tsx:176`) still reads `text-rose-700` after the swap. Verify all rose-700 usages have moved to semantic tokens. Origin: T0/T1. Effort: S.
+- **Raw `<select>` filters and form fields** — 9 instances across `src/modules/prm/backend/page.tsx:133,150`, `src/modules/prm/backend/prospects/page.tsx:155`, `src/modules/prm/backend/license-deals/page.tsx:179,198`, `src/modules/prm/frontend/[orgSlug]/portal/prospects/page.tsx:206,242,259`, `src/modules/prm/frontend/[orgSlug]/portal/agency/page.tsx:191`. This OM version (0.4.x) does not ship a `Select` primitive — core modules (e.g. customers pipeline) use raw `<select>` with the same hand-rolled `h-8/h-9 rounded-md border border-input` classes. Migrate when an OM `Select` primitive lands. Origin: T0/T1/T2. Effort: M.
+- **Raw `<input type="month">` filter** — 1 instance in `src/modules/prm/frontend/[orgSlug]/portal/prospects/page.tsx:278`. No date-range / month primitive currently used in PRM; bundle with a future date-input refresh. Origin: T1. Effort: S.
+- **Raw `<input type="radio">` candidate picker** — 1 instance in `src/modules/prm/backend/license-deals/[id]/page.tsx:331`. No Radio primitive in this OM version; the surrounding card-style pick-row layout matches existing OM core patterns. Migrate when a `Radio` / `RadioGroup` primitive lands. Origin: T2. Effort: S.
+- **Hardcoded `border-l-2 border-primary/60` quote box** — `src/modules/prm/backend/license-deals/[id]/page.tsx:185` uses raw primary tint for an attribution-reasoning callout. Promote to a `Callout` or `Alert` primitive when one fits. Origin: T2. Effort: S.
+- **Raw `<table>` lists** — `src/modules/prm/backend/[id]/page.tsx:315`, `…/portal/members/page.tsx:169`, `…/portal/prospects/page.tsx:293`. Each is a small read-only list (members / prospects); OQ-010 explicitly opts out of `DataTable` for portal surfaces. Tracker has no DS-blocker but switch to `DataTable` for the backend-facing members tab once a "compact" variant is available. Origin: T0/T1. Effort: M.
+
 ## Playwright integration tests (deferred — require live Postgres + ESP fixture)
 
 ### T0 Agency Foundation (SPEC-2026-04-23-agency-foundation.md §9)
