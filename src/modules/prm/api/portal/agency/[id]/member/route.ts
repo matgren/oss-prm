@@ -175,7 +175,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       organizationId: agency.organizationId,
       agencyName: agency.name,
       roleSlug: result.member.roleSlug,
-    }).catch(() => undefined)
+    }).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err)
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[prm] partner invite email dispatch failed for agencyMemberId=${result.member.id}: ${message}`,
+        { agencyId: agency.id, agencyMemberId: result.member.id, invitationId: result.invitation.id },
+      )
+    })
     return NextResponse.json(
       {
         ok: true,

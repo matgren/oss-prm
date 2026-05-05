@@ -1,5 +1,6 @@
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { AgencyMember } from '../data/entities'
 
 export const metadata = {
@@ -28,11 +29,17 @@ export default async function handler(payload: AgencyStatusChangedPayload): Prom
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  const members = await em.find(AgencyMember, {
-    agencyId: payload.agencyId,
-    tenantId: payload.tenantId,
-    deletedAt: null,
-  })
+  const members = await findWithDecryption(
+    em,
+    AgencyMember,
+    {
+      agencyId: payload.agencyId,
+      tenantId: payload.tenantId,
+      deletedAt: null,
+    },
+    undefined,
+    { tenantId: payload.tenantId },
+  )
   if (members.length === 0) return
   for (const member of members) {
     member.agencyStatus = payload.toStatus

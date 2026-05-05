@@ -1,6 +1,7 @@
 'use client'
 import * as React from 'react'
 import Link from 'next/link'
+import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -66,12 +67,12 @@ export default function CrossAgencyMembersPage() {
     void load()
   }, [load])
 
-  const columns = React.useMemo(
+  const columns = React.useMemo<ColumnDef<MemberRow>[]>(
     () => [
       {
         id: 'name',
         header: t('prm.members.col.name', 'Name'),
-        cell: ({ row }: any) => (
+        cell: ({ row }) => (
           <Link className="underline-offset-2 hover:underline" href={`/backend/prm/agency-members/${row.original.id}`}>
             {row.original.firstName} {row.original.lastName}
           </Link>
@@ -81,7 +82,7 @@ export default function CrossAgencyMembersPage() {
       {
         id: 'agency',
         header: t('prm.members.col.agency', 'Agency'),
-        cell: ({ row }: any) => (
+        cell: ({ row }) => (
           <Link href={`/backend/prm/${row.original.agencyId}`} className="underline-offset-2 hover:underline">
             {row.original.agencyName ?? row.original.agencyId.slice(0, 8)}
           </Link>
@@ -92,7 +93,7 @@ export default function CrossAgencyMembersPage() {
       {
         id: 'state',
         header: t('prm.members.col.state', 'State'),
-        cell: ({ row }: any) => (!row.original.isActive ? 'Deactivated' : !row.original.activatedAt ? 'Invited' : 'Active'),
+        cell: ({ row }) => (!row.original.isActive ? 'Deactivated' : !row.original.activatedAt ? 'Invited' : 'Active'),
       },
       { id: 'githubProfile', header: t('prm.members.col.gh', 'GitHub'), accessorKey: 'githubProfile' },
     ],
@@ -145,7 +146,7 @@ export default function CrossAgencyMembersPage() {
         </div>
         <DataTable<MemberRow>
           entityId="prm.agency_member"
-          columns={columns as any}
+          columns={columns}
           data={items}
           isLoading={loading}
           error={error}

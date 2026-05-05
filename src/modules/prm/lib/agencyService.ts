@@ -1,9 +1,10 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { Organization, Tenant } from '@open-mercato/core/modules/directory/data/entities'
 import { Agency } from '../data/entities'
 import { AGENCY_TIERS, type AgencyTier, type CreateAgencyInput } from '../data/validators'
 import { PRM_ERROR_CODES, PrmDomainError, isUniqueViolation } from './errors'
-import { emitPrmEvent } from '../events'
+import { safeEmit } from './safeEmit'
 
 /**
  * Domain helper for the `Agency` aggregate.
@@ -22,16 +23,28 @@ export class AgencyService {
     if (!AGENCY_TIERS.includes(input.tier as AgencyTier)) {
       throw new PrmDomainError(PRM_ERROR_CODES.VALIDATION_FAILED, 'Invalid tier', 400)
     }
-    const tenant = await this.em.findOne(Tenant, { id: scope.tenantId, deletedAt: null })
+    const tenant = await findOneWithDecryption(
+      this.em,
+      Tenant,
+      { id: scope.tenantId, deletedAt: null },
+      undefined,
+      { tenantId: scope.tenantId },
+    )
     if (!tenant) {
       throw new PrmDomainError(PRM_ERROR_CODES.FORBIDDEN, 'Tenant not found', 403)
     }
 
-    const existing = await this.em.findOne(Agency, {
-      tenantId: scope.tenantId,
-      slug: input.slug,
-      deletedAt: null,
-    })
+    const existing = await findOneWithDecryption(
+      this.em,
+      Agency,
+      {
+        tenantId: scope.tenantId,
+        slug: input.slug,
+        deletedAt: null,
+      },
+      undefined,
+      { tenantId: scope.tenantId },
+    )
     if (existing) {
       throw new PrmDomainError(
         PRM_ERROR_CODES.AGENCY_SLUG_TAKEN,
@@ -84,42 +97,62 @@ export class AgencyService {
       throw err
     }
 
-    await emitPrmEvent('prm.agency.created', {
-      agencyId: agency.id,
-      organizationId: agency.organizationId,
-      tenantId: agency.tenantId,
-      slug: agency.slug,
-      tier: agency.tier,
-      createdByUserId: scope.userId ?? null,
-    } as any).catch(() => undefined)
+    await safeEmit(
+      'prm.agency.created',
+      {
+        agencyId: agency.id,
+        organizationId: agency.organizationId,
+        tenantId: agency.tenantId,
+        slug: agency.slug,
+        tier: agency.tier,
+        createdByUserId: scope.userId ?? null,
+      },
+      { context: { agencyId: agency.id, tenantId: agency.tenantId } },
+    )
 
     if (input.tier !== 'om_agency') {
-      await emitPrmEvent('prm.agency.tier_changed', {
-        agencyId: agency.id,
-        tenantId: agency.tenantId,
-        fromTier: 'om_agency',
-        toTier: agency.tier,
-        changedByUserId: scope.userId ?? null,
-        reason: 'create_default',
-      } as any).catch(() => undefined)
+      await safeEmit(
+        'prm.agency.tier_changed',
+        {
+          agencyId: agency.id,
+          tenantId: agency.tenantId,
+          fromTier: 'om_agency',
+          toTier: agency.tier,
+          changedByUserId: scope.userId ?? null,
+          reason: 'create_default',
+        },
+        { context: { agencyId: agency.id, tenantId: agency.tenantId } },
+      )
     }
 
     return agency
   }
 
   async findById(id: string, scope: { tenantId: string }): Promise<Agency | null> {
-    return this.em.findOne(Agency, { id, tenantId: scope.tenantId, deletedAt: null })
+    return findOneWithDecryption(
+      this.em,
+      Agency,
+      { id, tenantId: scope.tenantId, deletedAt: null },
+      undefined,
+      { tenantId: scope.tenantId },
+    )
   }
 
   async findByOrganizationId(
     organizationId: string,
     scope: { tenantId: string },
   ): Promise<Agency | null> {
-    return this.em.findOne(Agency, {
-      organizationId,
-      tenantId: scope.tenantId,
-      deletedAt: null,
-    })
+    return findOneWithDecryption(
+      this.em,
+      Agency,
+      {
+        organizationId,
+        tenantId: scope.tenantId,
+        deletedAt: null,
+      },
+      undefined,
+      { tenantId: scope.tenantId },
+    )
   }
 
   /**
@@ -176,37 +209,49 @@ export class AgencyService {
     await this.em.flush()
 
     if (before.tier !== agency.tier) {
-      await emitPrmEvent('prm.agency.tier_changed', {
-        agencyId: agency.id,
-        tenantId: agency.tenantId,
-        fromTier: before.tier,
-        toTier: agency.tier,
-        changedByUserId: scope.userId ?? null,
-        reason: scope.reason ?? null,
-      } as any).catch(() => undefined)
+      await safeEmit(
+        'prm.agency.tier_changed',
+        {
+          agencyId: agency.id,
+          tenantId: agency.tenantId,
+          fromTier: before.tier,
+          toTier: agency.tier,
+          changedByUserId: scope.userId ?? null,
+          reason: scope.reason ?? null,
+        },
+        { context: { agencyId: agency.id, tenantId: agency.tenantId } },
+      )
     }
     if (before.status !== agency.status) {
-      await emitPrmEvent('prm.agency.status_changed', {
-        agencyId: agency.id,
-        tenantId: agency.tenantId,
-        fromStatus: before.status,
-        toStatus: agency.status,
-        changedByUserId: scope.userId ?? null,
-        reason: scope.reason ?? null,
-      } as any).catch(() => undefined)
+      await safeEmit(
+        'prm.agency.status_changed',
+        {
+          agencyId: agency.id,
+          tenantId: agency.tenantId,
+          fromStatus: before.status,
+          toStatus: agency.status,
+          changedByUserId: scope.userId ?? null,
+          reason: scope.reason ?? null,
+        },
+        { context: { agencyId: agency.id, tenantId: agency.tenantId } },
+      )
     }
     if (
       before.contractSigned !== agency.contractSigned ||
       before.ndaSigned !== agency.ndaSigned ||
       before.onboarded !== agency.onboarded
     ) {
-      await emitPrmEvent('prm.agency.onboarding_state_changed', {
-        agencyId: agency.id,
-        tenantId: agency.tenantId,
-        contractSigned: agency.contractSigned,
-        ndaSigned: agency.ndaSigned,
-        onboarded: agency.onboarded,
-      } as any).catch(() => undefined)
+      await safeEmit(
+        'prm.agency.onboarding_state_changed',
+        {
+          agencyId: agency.id,
+          tenantId: agency.tenantId,
+          contractSigned: agency.contractSigned,
+          ndaSigned: agency.ndaSigned,
+          onboarded: agency.onboarded,
+        },
+        { context: { agencyId: agency.id, tenantId: agency.tenantId } },
+      )
     }
 
     return agency

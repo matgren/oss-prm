@@ -1,5 +1,9 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import {
+  findOneWithDecryption,
+  findWithDecryption,
+} from '@open-mercato/shared/lib/encryption/find'
+import {
   CustomerRole,
   CustomerUserInvitation,
 } from '@open-mercato/core/modules/customer_accounts/data/entities'
@@ -18,7 +22,7 @@ import {
   PrmDomainError,
   isUniqueViolation,
 } from './errors'
-import { emitPrmEvent } from '../events'
+import { safeEmit } from './safeEmit'
 
 const _AGENCY_TIER_GUARD = AGENCY_TIERS // touched to keep import for diagnostics if unused
 
@@ -32,37 +36,57 @@ export class AgencyMemberService {
   constructor(private readonly em: EntityManager) {}
 
   async findByAgency(agencyId: string, scope: { tenantId: string }): Promise<AgencyMember[]> {
-    return this.em.find(
+    return findWithDecryption(
+      this.em,
       AgencyMember,
       { agencyId, tenantId: scope.tenantId, deletedAt: null },
       { orderBy: { createdAt: 'asc' } },
+      { tenantId: scope.tenantId },
     )
   }
 
   async findById(id: string, scope: { tenantId: string }): Promise<AgencyMember | null> {
-    return this.em.findOne(AgencyMember, { id, tenantId: scope.tenantId, deletedAt: null })
+    return findOneWithDecryption(
+      this.em,
+      AgencyMember,
+      { id, tenantId: scope.tenantId, deletedAt: null },
+      undefined,
+      { tenantId: scope.tenantId },
+    )
   }
 
   async findByInvitationId(
     invitationId: string,
     scope: { tenantId: string },
   ): Promise<AgencyMember | null> {
-    return this.em.findOne(AgencyMember, {
-      invitationId,
-      tenantId: scope.tenantId,
-      deletedAt: null,
-    })
+    return findOneWithDecryption(
+      this.em,
+      AgencyMember,
+      {
+        invitationId,
+        tenantId: scope.tenantId,
+        deletedAt: null,
+      },
+      undefined,
+      { tenantId: scope.tenantId },
+    )
   }
 
   async findByCustomerUserId(
     customerUserId: string,
     scope: { tenantId: string },
   ): Promise<AgencyMember | null> {
-    return this.em.findOne(AgencyMember, {
-      customerUserId,
-      tenantId: scope.tenantId,
-      deletedAt: null,
-    })
+    return findOneWithDecryption(
+      this.em,
+      AgencyMember,
+      {
+        customerUserId,
+        tenantId: scope.tenantId,
+        deletedAt: null,
+      },
+      undefined,
+      { tenantId: scope.tenantId },
+    )
   }
 
   /**
@@ -95,11 +119,17 @@ export class AgencyMemberService {
       )
     }
 
-    const role = await this.em.findOne(CustomerRole, {
-      tenantId: agency.tenantId,
-      slug: input.roleSlug,
-      deletedAt: null,
-    })
+    const role = await findOneWithDecryption(
+      this.em,
+      CustomerRole,
+      {
+        tenantId: agency.tenantId,
+        slug: input.roleSlug,
+        deletedAt: null,
+      },
+      undefined,
+      { tenantId: agency.tenantId, organizationId: agency.organizationId },
+    )
     if (!role) {
       throw new PrmDomainError(
         PRM_ERROR_CODES.ROLE_SLUG_NOT_SEEDED,
@@ -111,11 +141,17 @@ export class AgencyMemberService {
     const lowerEmail = input.email.trim().toLowerCase()
 
     // Detect duplicate within agency early — privacy-preserving, no cross-agency leak.
-    const existingInAgency = await this.em.findOne(AgencyMember, {
-      agencyId: agency.id,
-      emailLookup: lowerEmail,
-      deletedAt: null,
-    })
+    const existingInAgency = await findOneWithDecryption(
+      this.em,
+      AgencyMember,
+      {
+        agencyId: agency.id,
+        emailLookup: lowerEmail,
+        deletedAt: null,
+      },
+      undefined,
+      { tenantId: agency.tenantId, organizationId: agency.organizationId },
+    )
     if (existingInAgency) {
       throw new PrmDomainError(
         PRM_ERROR_CODES.EMAIL_ALREADY_MEMBER,
@@ -127,19 +163,31 @@ export class AgencyMemberService {
 
     // Pre-check GH conflict to short-circuit before invitation row is created.
     if (input.githubProfile) {
-      const conflict = await this.em.findOne(AgencyMember, {
-        githubProfile: input.githubProfile,
-        isActive: true,
-        deletedAt: null,
-      })
+      // Cross-tenant GH-profile lock — invariant #5. Deliberately NOT scoped by tenant_id
+      // (the lock is global), but we still pass tenantId for decryption-key fallback.
+      const conflict = await findOneWithDecryption(
+        this.em,
+        AgencyMember,
+        {
+          githubProfile: input.githubProfile,
+          isActive: true,
+          deletedAt: null,
+        },
+        undefined,
+        { tenantId: agency.tenantId, organizationId: agency.organizationId },
+      )
       if (conflict) {
-        await emitPrmEvent('prm.agency_member.github_profile_conflict_attempted', {
-          attemptedGithubProfile: input.githubProfile,
-          attemptedByAgencyId: agency.id,
-          attemptedByCustomerUserId: args.invitedByCustomerUserId ?? null,
-          existingOwnerAgencyId: conflict.agencyId,
-          attemptedAt: new Date().toISOString(),
-        } as any).catch(() => undefined)
+        await safeEmit(
+          'prm.agency_member.github_profile_conflict_attempted',
+          {
+            attemptedGithubProfile: input.githubProfile,
+            attemptedByAgencyId: agency.id,
+            attemptedByCustomerUserId: args.invitedByCustomerUserId ?? null,
+            existingOwnerAgencyId: conflict.agencyId,
+            attemptedAt: new Date().toISOString(),
+          },
+          { context: { agencyId: agency.id, tenantId: agency.tenantId } },
+        )
         throw new PrmDomainError(
           PRM_ERROR_CODES.GITHUB_PROFILE_CONFLICT,
           GITHUB_PROFILE_CONFLICT_MESSAGE,
@@ -187,13 +235,17 @@ export class AgencyMemberService {
       await this.em.flush()
     } catch (err) {
       if (isUniqueViolation(err)) {
-        await emitPrmEvent('prm.agency_member.github_profile_conflict_attempted', {
-          attemptedGithubProfile: input.githubProfile ?? null,
-          attemptedByAgencyId: agency.id,
-          attemptedByCustomerUserId: args.invitedByCustomerUserId ?? null,
-          existingOwnerAgencyId: null,
-          attemptedAt: new Date().toISOString(),
-        } as any).catch(() => undefined)
+        await safeEmit(
+          'prm.agency_member.github_profile_conflict_attempted',
+          {
+            attemptedGithubProfile: input.githubProfile ?? null,
+            attemptedByAgencyId: agency.id,
+            attemptedByCustomerUserId: args.invitedByCustomerUserId ?? null,
+            existingOwnerAgencyId: null,
+            attemptedAt: new Date().toISOString(),
+          },
+          { context: { agencyId: agency.id, tenantId: agency.tenantId } },
+        )
         throw new PrmDomainError(
           PRM_ERROR_CODES.GITHUB_PROFILE_CONFLICT,
           GITHUB_PROFILE_CONFLICT_MESSAGE,
@@ -204,14 +256,18 @@ export class AgencyMemberService {
       throw err
     }
 
-    await emitPrmEvent('prm.agency_member.added', {
-      agencyId: agency.id,
-      tenantId: agency.tenantId,
-      agencyMemberId: member.id,
-      githubProfile: member.githubProfile ?? null,
-      roleSlug: member.roleSlug,
-      invitationId: invitation.id,
-    } as any).catch(() => undefined)
+    await safeEmit(
+      'prm.agency_member.added',
+      {
+        agencyId: agency.id,
+        tenantId: agency.tenantId,
+        agencyMemberId: member.id,
+        githubProfile: member.githubProfile ?? null,
+        roleSlug: member.roleSlug,
+        invitationId: invitation.id,
+      },
+      { context: { agencyId: agency.id, tenantId: agency.tenantId, agencyMemberId: member.id } },
+    )
 
     return { member, invitation, rawToken }
   }
@@ -261,28 +317,40 @@ export class AgencyMemberService {
     }
 
     if (before.roleSlug !== member.roleSlug) {
-      await emitPrmEvent('prm.agency_member.role_changed', {
-        agencyId: member.agencyId,
-        tenantId: member.tenantId,
-        agencyMemberId: member.id,
-        fromRole: before.roleSlug,
-        toRole: member.roleSlug,
-        changedByUserId: scope.changedByUserId ?? null,
-        changedAt: new Date().toISOString(),
-      } as any).catch(() => undefined)
+      await safeEmit(
+        'prm.agency_member.role_changed',
+        {
+          agencyId: member.agencyId,
+          tenantId: member.tenantId,
+          agencyMemberId: member.id,
+          fromRole: before.roleSlug,
+          toRole: member.roleSlug,
+          changedByUserId: scope.changedByUserId ?? null,
+          changedAt: new Date().toISOString(),
+        },
+        { context: { agencyId: member.agencyId, agencyMemberId: member.id } },
+      )
     }
     if (before.isActive && !member.isActive) {
-      await emitPrmEvent('prm.agency_member.removed', {
+      await safeEmit(
+        'prm.agency_member.removed',
+        {
+          agencyId: member.agencyId,
+          tenantId: member.tenantId,
+          agencyMemberId: member.id,
+        },
+        { context: { agencyId: member.agencyId, agencyMemberId: member.id } },
+      )
+    }
+    await safeEmit(
+      'prm.agency_member.updated',
+      {
         agencyId: member.agencyId,
         tenantId: member.tenantId,
         agencyMemberId: member.id,
-      } as any).catch(() => undefined)
-    }
-    await emitPrmEvent('prm.agency_member.updated', {
-      agencyId: member.agencyId,
-      tenantId: member.tenantId,
-      agencyMemberId: member.id,
-    } as any).catch(() => undefined)
+      },
+      { context: { agencyId: member.agencyId, agencyMemberId: member.id } },
+    )
 
     return member
   }

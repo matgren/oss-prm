@@ -1,6 +1,6 @@
 import type { ApiInterceptor } from '@open-mercato/shared/lib/crud/api-interceptor'
 import { ADMIN_ONLY_AGENCY_FIELDS } from '../data/validators'
-import { emitPrmEvent } from '../events'
+import { safeEmit } from '../lib/safeEmit'
 
 /**
  * Portal-side guard enforcing invariant #6: admin-only fields on `prm.agency` cannot be
@@ -40,12 +40,16 @@ const portalAgencyAdminGuard: ApiInterceptor = {
     const customerUserId = (ctx as any)?.userId ?? null
 
     for (const field of offendingKeys) {
-      await emitPrmEvent('prm.agency.admin_field_access_rejected', {
-        agencyId,
-        fieldName: field,
-        customerUserId,
-        attemptedAt: new Date().toISOString(),
-      } as any).catch(() => undefined)
+      await safeEmit(
+        'prm.agency.admin_field_access_rejected',
+        {
+          agencyId,
+          fieldName: field,
+          customerUserId,
+          attemptedAt: new Date().toISOString(),
+        },
+        { context: { agencyId, fieldName: field, customerUserId } },
+      )
     }
 
     return {

@@ -3,6 +3,10 @@ import { z } from 'zod'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import {
+  findAndCountWithDecryption,
+  findWithDecryption,
+} from '@open-mercato/shared/lib/encryption/find'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { Agency, AgencyMember } from '../../data/entities'
 
@@ -96,20 +100,28 @@ export async function GET(req: Request) {
       ],
     })
   }
-  const [items, total] = await em.findAndCount(AgencyMember, where as any, {
-    orderBy: { createdAt: 'desc' },
-    limit: pageSize,
-    offset: (page - 1) * pageSize,
-  })
+  const [items, total] = await findAndCountWithDecryption(
+    em,
+    AgencyMember,
+    where as any,
+    {
+      orderBy: { createdAt: 'desc' },
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    },
+    { tenantId: auth.tenantId },
+  )
 
   // Hydrate agency_name (avoid N+1).
   const agencyIds = Array.from(new Set(items.map((m) => m.agencyId)))
   const agencyNameById = new Map<string, string>()
   if (agencyIds.length > 0) {
-    const agencies = await em.find(
+    const agencies = await findWithDecryption(
+      em,
       Agency,
       { id: { $in: agencyIds } as any, tenantId: auth.tenantId, deletedAt: null },
       { fields: ['id', 'name'] as any },
+      { tenantId: auth.tenantId },
     )
     for (const a of agencies) agencyNameById.set(a.id, a.name)
   }

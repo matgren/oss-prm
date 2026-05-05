@@ -3,6 +3,10 @@ import { z } from 'zod'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import {
+  findOneWithDecryption,
+  findWithDecryption,
+} from '@open-mercato/shared/lib/encryption/find'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import {
   CustomerRole,
@@ -100,27 +104,51 @@ async function syncCustomerRoleAssignment(
   args: { tenantId: string; organizationId: string; customerUserId: string; roleSlug: string },
 ): Promise<void> {
   const em = container.resolve('em') as EntityManager
-  const user = await em.findOne(CustomerUser, { id: args.customerUserId, deletedAt: null })
+  const user = await findOneWithDecryption(
+    em,
+    CustomerUser,
+    { id: args.customerUserId, deletedAt: null },
+    undefined,
+    { tenantId: args.tenantId, organizationId: args.organizationId },
+  )
   if (!user) return
-  const role = await em.findOne(CustomerRole, {
-    tenantId: user.tenantId,
-    slug: args.roleSlug,
-    deletedAt: null,
-  })
+  const role = await findOneWithDecryption(
+    em,
+    CustomerRole,
+    {
+      tenantId: user.tenantId,
+      slug: args.roleSlug,
+      deletedAt: null,
+    },
+    undefined,
+    { tenantId: user.tenantId },
+  )
   if (!role) return
   // Drop other partner_* role assignments first (idempotent — reversible by re-running).
   const partnerSlugSet = new Set<string>(ROLE_SLUGS)
-  const allPartnerRoles = await em.find(CustomerRole, {
-    tenantId: user.tenantId,
-    deletedAt: null,
-  })
+  const allPartnerRoles = await findWithDecryption(
+    em,
+    CustomerRole,
+    {
+      tenantId: user.tenantId,
+      deletedAt: null,
+    },
+    undefined,
+    { tenantId: user.tenantId },
+  )
   const partnerRoleIds = allPartnerRoles.filter((r) => partnerSlugSet.has(r.slug as any)).map((r) => r.id)
   if (partnerRoleIds.length > 0) {
-    const existingAssignments = await em.find(CustomerUserRole, {
-      user: user.id as any,
-      role: { $in: partnerRoleIds } as any,
-      deletedAt: null,
-    } as any)
+    const existingAssignments = await findWithDecryption(
+      em,
+      CustomerUserRole,
+      {
+        user: user.id as any,
+        role: { $in: partnerRoleIds } as any,
+        deletedAt: null,
+      } as any,
+      undefined,
+      { tenantId: user.tenantId },
+    )
     for (const assignment of existingAssignments) {
       assignment.deletedAt = new Date()
       em.persist(assignment)

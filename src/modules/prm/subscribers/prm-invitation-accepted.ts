@@ -1,7 +1,8 @@
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { AgencyMember } from '../data/entities'
-import { emitPrmEvent } from '../events'
+import { safeEmit } from '../lib/safeEmit'
 
 export const metadata = {
   event: 'customer_accounts.invitation.accepted',
@@ -35,12 +36,18 @@ export default async function handler(payload: InvitationAcceptedPayload): Promi
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  const member = await em.findOne(AgencyMember, {
-    invitationId: payload.invitationId,
-    tenantId: payload.tenantId,
-    customerUserId: null,
-    deletedAt: null,
-  })
+  const member = await findOneWithDecryption(
+    em,
+    AgencyMember,
+    {
+      invitationId: payload.invitationId,
+      tenantId: payload.tenantId,
+      customerUserId: null,
+      deletedAt: null,
+    },
+    undefined,
+    { tenantId: payload.tenantId },
+  )
   if (!member) {
     // Either the invitation isn't PRM-managed (other module owns it) or the
     // subscriber already ran. Both are no-ops.
@@ -52,10 +59,17 @@ export default async function handler(payload: InvitationAcceptedPayload): Promi
   member.updatedAt = new Date()
   await em.flush()
 
-  await emitPrmEvent('prm.agency_member.activated', {
-    agencyId: member.agencyId,
-    tenantId: member.tenantId,
-    agencyMemberId: member.id,
-    customerUserId: payload.userId,
-  } as any).catch(() => undefined)
+  await safeEmit(
+    'prm.agency_member.activated',
+    {
+      agencyId: member.agencyId,
+      tenantId: member.tenantId,
+      agencyMemberId: member.id,
+      customerUserId: payload.userId,
+    },
+    {
+      container,
+      context: { agencyId: member.agencyId, agencyMemberId: member.id, invitationId: payload.invitationId },
+    },
+  )
 }

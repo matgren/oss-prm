@@ -1,6 +1,7 @@
 'use client'
 import * as React from 'react'
 import Link from 'next/link'
+import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -82,13 +83,13 @@ export default function AgenciesListPage() {
     void load()
   }, [load])
 
-  const columns = React.useMemo(
+  const columns = React.useMemo<ColumnDef<AgencySummary>[]>(
     () => [
       {
         id: 'name',
         header: t('prm.agencies.col.name', 'Name'),
         accessorKey: 'name',
-        cell: ({ row }: any) => (
+        cell: ({ row }) => (
           <Link className="font-medium text-foreground underline-offset-2 hover:underline" href={`/backend/prm/${row.original.id}`}>
             {row.original.name}
           </Link>
@@ -101,8 +102,8 @@ export default function AgenciesListPage() {
       {
         id: 'onboarding',
         header: t('prm.agencies.col.onboarding', 'Onboarding'),
-        cell: ({ row }: any) => {
-          const a = row.original as AgencySummary
+        cell: ({ row }) => {
+          const a = row.original
           return (
             <span className="text-xs text-muted-foreground">
               {a.contractSigned ? 'C' : '·'} / {a.ndaSigned ? 'N' : '·'} / {a.onboarded ? 'O' : '·'}
@@ -186,7 +187,7 @@ export default function AgenciesListPage() {
 
         <DataTable<AgencySummary>
           entityId="prm.agency"
-          columns={columns as any}
+          columns={columns}
           data={items}
           isLoading={loading}
           error={error}

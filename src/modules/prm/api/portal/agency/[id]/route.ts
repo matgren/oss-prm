@@ -12,7 +12,7 @@ import { updateAgencyPortalSchema, ADMIN_ONLY_AGENCY_FIELDS } from '../../../../
 import type { AgencyService } from '../../../../lib/agencyService'
 import { PRM_ERROR_CODES, PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 import { summariseAgency } from '../../../agency/route'
-import { emitPrmEvent } from '../../../../events'
+import { safeEmit } from '../../../../lib/safeEmit'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -123,12 +123,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
   if (offending.length > 0) {
     for (const field of offending) {
-      await emitPrmEvent('prm.agency.admin_field_access_rejected', {
-        agencyId: params.id,
-        fieldName: field,
-        customerUserId: auth.sub,
-        attemptedAt: new Date().toISOString(),
-      } as any).catch(() => undefined)
+      await safeEmit(
+        'prm.agency.admin_field_access_rejected',
+        {
+          agencyId: params.id,
+          fieldName: field,
+          customerUserId: auth.sub,
+          attemptedAt: new Date().toISOString(),
+        },
+        { container, context: { agencyId: params.id, fieldName: field, customerUserId: auth.sub } },
+      )
     }
     return NextResponse.json(
       {
