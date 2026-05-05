@@ -16,6 +16,7 @@ This is the source of truth for follow-up work — when an item ships, delete th
 - **Bounce-webhook handler (T0)** — OQ-014 deferred to v2; v1 relies on 72h TTL expiry + manual re-invite. Origin: SPEC-2026-04-23-agency-foundation.md §11. Owner: TBD. Effort: M.
 - **Snapshot table for historical MIN (T2)** — v1 recomputes on read; v2 concern when MIN history queries become hot. Origin: SPEC-2026-04-23-attribution-loop.md §Scope (out). Owner: TBD. Effort: L.
 - **Commission calculation / renewal attribution inheritance (T2)** — v2 backlog; v1 ships flat MIN aggregate + renewal flag only. Origin: SPEC-2026-04-23-attribution-loop.md §Scope (out). Owner: TBD. Effort: L.
+- **`prm:prospect_candidate_index` reindex hardcodes `b.id` PK (T1)** — The framework's reindexer (`@open-mercato/core/src/modules/query_index/lib/reindexer.ts:179`) hardcodes `b.id` as the partition column, but this projection's PK is `prospect_id`. `yarn mercato query_index reindex --entity prm:prospect_candidate_index` fails with `column b.id does not exist`. Workaround options: rename PK to `id` with `prospect_id` as a unique column, OR exclude this read-model from indexed-entity sweeps. Discovered during 2026-05-06 troubleshoot of the bootstrap-cache bug. Origin: SPEC-2026-04-23-wip-scoreboard.md §5. Owner: TBD. Effort: M.
 
 ## Performance watchlist
 
