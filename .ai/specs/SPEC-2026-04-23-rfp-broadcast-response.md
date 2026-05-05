@@ -1,5 +1,7 @@
 # SPEC-2026-04-23: RFP Broadcast & Response (Portal-side cluster)
 
+> **Cross-spec drift fixed 2026-05-05.** When this spec is implemented, routes MUST live under `/api/prm/rfp/...` (backend) and `/api/prm/portal/rfp/...` (portal) to match the shipped T0/T1/T2 namespace convention — NOT `/api/backend/prm/rfp/...` and `/api/portal/rfp/...` as currently drafted. Tables must use the `prm_` table-prefix convention (e.g. `prm_rfps`, `prm_rfp_responses`). The cross-spec `prm_rfps.is_path_b_locked` column called out in Spec #3 §8.4 is owned here. All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+>
 > **Spec #5 of 7** decomposing `app-spec/app-spec.md` (Piotr, om-cto Spec Orchestrator, 2026-04-23).
 > **Workflow:** WF4 (RFP) — portal-side story cluster.
 > **Phase:** 5a.

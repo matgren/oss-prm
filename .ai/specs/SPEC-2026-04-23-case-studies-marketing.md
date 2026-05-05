@@ -1,6 +1,8 @@
 # SPEC-2026-04-23 — PRM Case Studies & Marketing Library (WF2-partial + WF6 · Phase 6)
 
-**Spec #7 of 7** · Author: Piotr (om-cto Spec Orchestrator) · Date: 2026-04-23
+> **Cross-spec drift fixed 2026-05-05.** When this spec is implemented, routes MUST live under `/api/prm/case-study/...`, `/api/prm/marketing-material/...`, `/api/prm/portal/case-study/...`, `/api/prm/portal/library/...` (singular resources, no `/backend/` segment) per the shipped T0/T1/T2 namespace convention — NOT `/api/backend/prm/case-studies/...` and `/api/portal/case-studies/...` as currently drafted. Tables must use the `prm_` prefix (`prm_case_studies`, `prm_marketing_materials`). All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+>
+> **Spec #7 of 7** · Author: Piotr (om-cto Spec Orchestrator) · Date: 2026-04-23
 **Persona:** Martin Fowler (architectural-purity lens)
 **Depends on:** SPEC-2026-04-23-agency-foundation (#1). Soft-dependency on SPEC-2026-04-23-rfp-broadcast-response (#5) — which *reads* CaseStudies produced here.
 **Est. commits:** 5 (point — OQ-011, OQ-012, OQ-019 resolved; per-feature cache invalidators only)

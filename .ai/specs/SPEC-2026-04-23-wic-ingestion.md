@@ -1,5 +1,7 @@
 # SPEC-2026-04-23 WIC Ingestion & Display
 
+> **Cross-spec drift fixed 2026-05-05.** When this spec is implemented, backend routes MUST live under `/api/prm/wic/...` (not `/api/backend/prm/wic/...`) and service routes under `/api/prm/service/wic/...` (not `/api/service/prm/wic/...`) to match the shipped T0/T1/T2 namespace convention. The current spec body uses the older drafting paths; treat the path prefix as authoritative-by-convention from the T0/T1/T2 reconciliation, not from this spec's literal text. All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+>
 **Spec:** #4 of 7 (PRM decomposition)
 **Workflow:** WF5 — WIC Ingestion & Display
 **Phase:** 4 (parallelizable with Phase 3)

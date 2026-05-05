@@ -1,5 +1,7 @@
 # SPEC-2026-04-23 — RFP Scoring, Selection, Lifecycle (WF4 · Phase 5b)
 
+> **Cross-spec drift fixed 2026-05-05.** When this spec is implemented, backend routes MUST live under `/api/prm/rfp/...` (NOT `/api/backend/prm/rfps/...` as currently drafted) — singular module, drops the `/backend/` segment per the shipped T0/T1/T2 convention. The `is_path_b_locked` lock signal arrives via `RfpPathBLockSubscriber` (owned by Spec #3) on the column owned by Spec #5; see Spec #3 §8.4. All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
+>
 > **Persona:** Martin Fowler (architectural purity, domain-driven, append-only audit trail as first-class design).
 > **Author:** Piotr (om-cto Spec Orchestrator), 2026-04-23.
 > **Scope:** WF4 back-half — scoring, selection, challenge round, close, re-open. Spec #6 of 7.
