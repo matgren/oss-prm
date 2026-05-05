@@ -4,6 +4,9 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Input } from '@open-mercato/ui/primitives/input'
+import { Textarea } from '@open-mercato/ui/primitives/textarea'
+import { cn } from '@open-mercato/shared/lib/utils'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
@@ -211,18 +214,21 @@ function AttributionPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttrib
       </p>
       <div className="mb-4 flex gap-1 border-b">
         {(['A', 'B', 'C'] as PathTab[]).map((tab) => (
-          <button
+          <Button
             key={tab}
             type="button"
-            className={`-mb-px border-b-2 px-3 py-1 text-sm font-medium ${
+            variant="ghost"
+            size="sm"
+            className={cn(
+              '-mb-px h-auto rounded-none border-b-2 px-3 py-1 text-sm font-medium hover:bg-transparent',
               activeTab === tab
                 ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
             onClick={() => setActiveTab(tab)}
           >
             {t(`prm.licenseDeals.path.${tab}`, `Path ${tab}`)}
-          </button>
+          </Button>
         ))}
       </div>
       {activeTab === 'A' ? (
@@ -368,8 +374,8 @@ function PathAPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: 
           <span className="font-medium">
             {t('prm.licenseDeals.attribute.A.reasoningLabel', 'Reasoning (required for non-default pick)')}
           </span>
-          <textarea
-            className="min-h-[5rem] rounded-md border border-input bg-background px-2 py-1 text-sm"
+          <Textarea
+            className="min-h-[5rem]"
             value={reasoning}
             onChange={(e) => setReasoning(e.target.value)}
           />
@@ -422,9 +428,8 @@ function PathBPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: 
       </p>
       <label className="mb-3 flex flex-col gap-1 text-sm">
         <span className="font-medium">{t('prm.licenseDeals.attribute.B.rfpLabel', 'RFP id')}</span>
-        <input
+        <Input
           type="text"
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
           value={rfpId}
           onChange={(e) => setRfpId(e.target.value)}
         />
@@ -485,9 +490,8 @@ function PathCPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: 
       </p>
       <label className="mb-3 flex flex-col gap-1 text-sm">
         <span className="font-medium">{t('prm.licenseDeals.attribute.C.agencyLabel', 'Attributed agency id')}</span>
-        <input
+        <Input
           type="text"
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
           value={agencyId}
           onChange={(e) => setAgencyId(e.target.value)}
         />
@@ -496,8 +500,8 @@ function PathCPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: 
         <span className="font-medium">
           {t('prm.licenseDeals.attribute.C.reasoningLabel', 'Reasoning (required)')}
         </span>
-        <textarea
-          className="min-h-[5rem] rounded-md border border-input bg-background px-2 py-1 text-sm"
+        <Textarea
+          className="min-h-[5rem]"
           value={reasoning}
           onChange={(e) => setReasoning(e.target.value)}
         />

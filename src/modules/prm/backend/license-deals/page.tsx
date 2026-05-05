@@ -5,6 +5,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Input } from '@open-mercato/ui/primitives/input'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
@@ -214,9 +215,9 @@ export default function LicenseDealsBackendPage() {
             <span className="text-muted-foreground">
               {t('prm.licenseDeals.filter.q', 'Search (identifier or client)')}
             </span>
-            <input
+            <Input
               type="search"
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              className="h-8"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => {
