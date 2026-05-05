@@ -53,6 +53,21 @@ type DashboardResponse = {
 
 type ScopeMode = 'monthly' | 'yearly'
 
+type MinResponse = {
+  ok: true
+  year: number
+  ownCount: number
+  ownAnnualValueUsd: number
+  ownDeals: Array<{
+    licenseIdentifier: string
+    clientIndustry: string | null
+    closedAt: string | null
+    signedAt: string | null
+    annualValueUsd: { low: number; high: number } | null
+    status: string
+  }>
+}
+
 function ScopeToggle(props: { value: ScopeMode; onChange: (v: ScopeMode) => void; t: (k: string, fb?: string) => string }) {
   return (
     <div className="inline-flex overflow-hidden rounded-md border text-xs">
@@ -117,16 +132,23 @@ export default function PortalDashboardPage() {
   const [error, setError] = React.useState<string | null>(null)
   const [wipScope, setWipScope] = React.useState<ScopeMode>('monthly')
   const [wicScope, setWicScope] = React.useState<ScopeMode>('monthly')
+  const [min, setMin] = React.useState<MinResponse | null>(null)
 
   const load = React.useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await apiCall<DashboardResponse>('/api/prm/portal/dashboard')
-      if (!res.ok || !res.result?.ok) {
+      const [dashRes, minRes] = await Promise.all([
+        apiCall<DashboardResponse>('/api/prm/portal/dashboard'),
+        apiCall<MinResponse>('/api/prm/portal/min'),
+      ])
+      if (!dashRes.ok || !dashRes.result?.ok) {
         throw new Error(t('prm.portal.dashboard.loadError', 'Failed to load dashboard.'))
       }
-      setData(res.result.dashboard)
+      setData(dashRes.result.dashboard)
+      // MIN widget is feature-gated separately — silently skip when 403.
+      if (minRes.ok && minRes.result?.ok) setMin(minRes.result)
+      else setMin(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard')
     } finally {
@@ -298,6 +320,69 @@ export default function PortalDashboardPage() {
           )}
         </PortalCard>
       </div>
+
+      {min ? (
+        <PortalCard>
+          <PortalCardHeader
+            label={t('prm.min.label', 'MIN')}
+            title={t('prm.min.title', 'MIN Attribution')}
+            description={t(
+              'prm.min.description',
+              "Yearly Minimum Income Network attribution from this Agency's licensed deals.",
+            )}
+          />
+          {min.ownCount === 0 ? (
+            <div className="mt-3 rounded-md border border-dashed bg-muted/30 px-3 py-4 text-center text-xs text-muted-foreground">
+              {t(
+                'prm.min.empty',
+                'No attributed deals for this year yet — keep registering Prospects and the saga will fill this in.',
+              )}
+            </div>
+          ) : (
+            <div className="mt-2 space-y-3">
+              <div className="flex items-end justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {t('prm.min.summary.count', 'Attributed deals')}
+                  </div>
+                  <div className="text-3xl font-semibold tracking-tight">{min.ownCount}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {t('prm.min.summary.total', 'Total annual value (USD)')}
+                  </div>
+                  <div className="text-3xl font-semibold tracking-tight">
+                    ${min.ownAnnualValueUsd.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+              <PortalCardDivider />
+              <ul className="space-y-1 text-xs">
+                {min.ownDeals.slice(0, 8).map((d) => (
+                  <li
+                    key={d.licenseIdentifier}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <span className="truncate font-medium">{d.licenseIdentifier}</span>
+                    <span className="truncate text-muted-foreground">
+                      {d.clientIndustry ?? '—'}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {d.signedAt ? new Date(d.signedAt).toLocaleDateString() : '—'}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {d.annualValueUsd
+                        ? `$${d.annualValueUsd.low.toLocaleString()}–$${d.annualValueUsd.high.toLocaleString()}`
+                        : '—'}
+                    </span>
+                    <span className="rounded-full border px-2 py-0.5">{d.status}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </PortalCard>
+      ) : null}
     </div>
   )
 }
