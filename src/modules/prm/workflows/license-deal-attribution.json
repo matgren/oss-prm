@@ -1,0 +1,110 @@
+{
+  "workflowId": "prm.license_deal.attribution_saga",
+  "workflowName": "PRM License Deal Attribution Saga",
+  "description": "Forward saga for LicenseDeal attribution. Path A: snapshot Prospect agency + transition Prospect→won. Path B: snapshot RFP winner. Path C: noop (write already committed). Compensation runs LIFO on prm.license_deal.reversal_started.",
+  "version": 1,
+  "enabled": true,
+  "metadata": {
+    "category": "PRM",
+    "tags": ["prm", "attribution", "saga", "license_deal"],
+    "icon": "git-branch",
+    "entityType": "LicenseDeal"
+  },
+  "definition": {
+    "steps": [
+      {
+        "stepId": "start",
+        "stepName": "Start",
+        "stepType": "START",
+        "description": "Receive prm.license_deal.attributed event"
+      },
+      {
+        "stepId": "execute_path",
+        "stepName": "Execute Attribution Path",
+        "stepType": "AUTOMATED",
+        "description": "Path A: snapshot Prospect agency + transition Prospect→won. Path B: snapshot RFP winner. Path C: noop."
+      },
+      {
+        "stepId": "end",
+        "stepName": "Complete",
+        "stepType": "END",
+        "description": "Saga complete"
+      }
+    ],
+    "triggers": [
+      {
+        "triggerId": "license_deal_attributed_trigger",
+        "name": "License Deal Attributed Trigger",
+        "description": "Fires the attribution saga when prm.license_deal.attributed is emitted",
+        "eventPattern": "prm.license_deal.attributed",
+        "config": {
+          "entityType": "LicenseDeal",
+          "contextMapping": [
+            { "targetKey": "licenseDealId", "sourceExpression": "licenseDealId" },
+            { "targetKey": "tenantId", "sourceExpression": "tenantId" },
+            { "targetKey": "organizationId", "sourceExpression": "organizationId" },
+            { "targetKey": "attributionPath", "sourceExpression": "attributionPath" },
+            { "targetKey": "attributionSource", "sourceExpression": "attributionSource" },
+            { "targetKey": "prospectId", "sourceExpression": "prospectId" },
+            { "targetKey": "rfpId", "sourceExpression": "rfpId" },
+            { "targetKey": "attributedAgencyId", "sourceExpression": "attributedAgencyId" },
+            { "targetKey": "competingProspectIdsToRetire", "sourceExpression": "competingProspectIdsToRetire" },
+            { "targetKey": "correlationKey", "sourceExpression": "correlationKey" }
+          ],
+          "maxConcurrentInstances": 1
+        },
+        "enabled": true,
+        "priority": 100
+      }
+    ],
+    "transitions": [
+      {
+        "transitionId": "start_to_execute",
+        "transitionName": "Begin Saga",
+        "fromStepId": "start",
+        "toStepId": "execute_path",
+        "trigger": "auto",
+        "priority": 100,
+        "continueOnActivityFailure": false,
+        "activities": [
+          {
+            "activityId": "execute_attribution_saga",
+            "activityName": "Execute Attribution Path Activity",
+            "activityType": "EXECUTE_FUNCTION",
+            "async": false,
+            "config": {
+              "functionName": "prm.saga.executeAttribution",
+              "args": {
+                "licenseDealId": "{{context.licenseDealId}}",
+                "tenantId": "{{context.tenantId}}",
+                "organizationId": "{{context.organizationId}}",
+                "attributionPath": "{{context.attributionPath}}",
+                "attributionSource": "{{context.attributionSource}}",
+                "prospectId": "{{context.prospectId}}",
+                "rfpId": "{{context.rfpId}}",
+                "attributedAgencyId": "{{context.attributedAgencyId}}",
+                "competingProspectIdsToRetire": "{{context.competingProspectIdsToRetire}}",
+                "correlationKey": "{{context.correlationKey}}"
+              }
+            },
+            "retryPolicy": {
+              "maxAttempts": 3,
+              "initialIntervalMs": 1000,
+              "backoffCoefficient": 2,
+              "maxIntervalMs": 10000
+            },
+            "compensate": true
+          }
+        ]
+      },
+      {
+        "transitionId": "execute_to_end",
+        "transitionName": "Complete Saga",
+        "fromStepId": "execute_path",
+        "toStepId": "end",
+        "trigger": "auto",
+        "priority": 100
+      }
+    ]
+  }
+}

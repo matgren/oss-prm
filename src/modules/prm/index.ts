@@ -8,7 +8,7 @@ export const metadata: ModuleInfo = {
     'Foundation module for the Partner Relationship Management app: agencies, members, invitations, and the portal for partner-facing flows.',
   author: 'Open Mercato Team',
   license: 'MIT',
-  requires: ['customer_accounts', 'directory', 'notifications', 'dictionaries'],
+  requires: ['customer_accounts', 'directory', 'notifications', 'dictionaries', 'workflows'],
 }
 
 export { features } from './acl'

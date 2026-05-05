@@ -1,9 +1,16 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import {
   CustomerRole,
   CustomerRoleAcl,
 } from '@open-mercato/core/modules/customer_accounts/data/entities'
+import {
+  WorkflowDefinition,
+  type WorkflowDefinitionData,
+} from '@open-mercato/core/modules/workflows/data/entities'
 
 /**
  * PRM module setup.
@@ -81,6 +88,80 @@ const PARTNER_ROLE_DEFINITIONS = [
     ] as string[],
   },
 ] as const
+
+type AttributionSagaSeed = {
+  workflowId: string
+  workflowName: string
+  description?: string | null
+  version: number
+  enabled: boolean
+  metadata?: Record<string, unknown> | null
+  definition: WorkflowDefinitionData
+}
+
+const __esmDirname = (() => {
+  try {
+    return path.dirname(fileURLToPath(import.meta.url))
+  } catch {
+    // CJS / Jest fallback — file path unavailable; use a process-relative anchor.
+    return process.cwd()
+  }
+})()
+
+function readAttributionSagaSeed(): AttributionSagaSeed | null {
+  const candidates = [
+    path.join(__esmDirname, 'workflows', 'license-deal-attribution.json'),
+    path.join(process.cwd(), 'src', 'modules', 'prm', 'workflows', 'license-deal-attribution.json'),
+  ]
+  const filePath = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!filePath) return null
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as AttributionSagaSeed
+  } catch {
+    return null
+  }
+}
+
+async function seedAttributionSagaWorkflow(
+  em: EntityManager,
+  scope: { tenantId: string; organizationId: string },
+): Promise<void> {
+  const seed = readAttributionSagaSeed()
+  if (!seed) return
+  const existing = await em.findOne(WorkflowDefinition, {
+    workflowId: seed.workflowId,
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId,
+  })
+  if (existing) {
+    // Idempotent refresh — keep the latest definition snapshot in case the JSON
+    // shipped with this module version drifts from a prior seed.
+    if (existing.version !== seed.version || existing.enabled !== seed.enabled) {
+      existing.version = seed.version
+      existing.enabled = seed.enabled
+      existing.definition = seed.definition
+      existing.metadata = (seed.metadata ?? null) as typeof existing.metadata
+      em.persist(existing)
+      await em.flush()
+    }
+    return
+  }
+  const def = em.create(WorkflowDefinition, {
+    workflowId: seed.workflowId,
+    workflowName: seed.workflowName,
+    description: seed.description ?? null,
+    version: seed.version,
+    enabled: seed.enabled,
+    definition: seed.definition,
+    metadata: (seed.metadata ?? null) as Record<string, unknown> | null,
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as any)
+  em.persist(def)
+  await em.flush()
+}
 
 async function seedPartnerRoles(
   em: EntityManager,
@@ -170,10 +251,12 @@ export const setup: ModuleSetupConfig = {
 
   async onTenantCreated({ em, tenantId, organizationId }) {
     await seedPartnerRoles(em as EntityManager, { tenantId, organizationId })
+    await seedAttributionSagaWorkflow(em as EntityManager, { tenantId, organizationId })
   },
 
   async seedDefaults({ em, tenantId, organizationId }) {
     await seedPartnerRoles(em as EntityManager, { tenantId, organizationId })
+    await seedAttributionSagaWorkflow(em as EntityManager, { tenantId, organizationId })
   },
 }
 
