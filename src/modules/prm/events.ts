@@ -26,8 +26,8 @@ const events = [
   { id: 'prm.agency_member.updated', label: 'Agency member personal fields updated', entity: 'agency_member', category: 'crud', clientBroadcast: true, portalBroadcast: true },
 
   // Telemetry / diagnostic events
-  { id: 'prm.agency_member.github_profile_conflict_attempted', label: 'GitHub profile conflict attempted', entity: 'agency_member', category: 'telemetry' },
-  { id: 'prm.agency.admin_field_access_rejected', label: 'Admin-only field write rejected', entity: 'agency', category: 'telemetry' },
+  { id: 'prm.agency_member.github_profile_conflict_attempted', label: 'GitHub profile conflict attempted', entity: 'agency_member', category: 'system' },
+  { id: 'prm.agency.admin_field_access_rejected', label: 'Admin-only field write rejected', entity: 'agency', category: 'system' },
 ] as const
 
 export const eventsConfig = createModuleEvents({

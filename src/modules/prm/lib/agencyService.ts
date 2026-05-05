@@ -1,0 +1,216 @@
+import type { EntityManager } from '@mikro-orm/postgresql'
+import { Organization, Tenant } from '@open-mercato/core/modules/directory/data/entities'
+import { Agency } from '../data/entities'
+import { AGENCY_TIERS, type AgencyTier, type CreateAgencyInput } from '../data/validators'
+import { PRM_ERROR_CODES, PrmDomainError, isUniqueViolation } from './errors'
+import { emitPrmEvent } from '../events'
+
+/**
+ * Domain helper for the `Agency` aggregate.
+ *
+ * - All writes happen on the request-scoped EM (transactional with `customer_accounts`).
+ * - Cross-module FKs use the IDs only — no `@ManyToOne` to Organization (per AGENTS.md).
+ * - All side-effect events are emitted only after the persistence completes.
+ */
+export class AgencyService {
+  constructor(private readonly em: EntityManager) {}
+
+  async createAgencyWithOrganization(
+    input: CreateAgencyInput,
+    scope: { tenantId: string; userId?: string | null },
+  ): Promise<Agency> {
+    if (!AGENCY_TIERS.includes(input.tier as AgencyTier)) {
+      throw new PrmDomainError(PRM_ERROR_CODES.VALIDATION_FAILED, 'Invalid tier', 400)
+    }
+    const tenant = await this.em.findOne(Tenant, { id: scope.tenantId, deletedAt: null })
+    if (!tenant) {
+      throw new PrmDomainError(PRM_ERROR_CODES.FORBIDDEN, 'Tenant not found', 403)
+    }
+
+    const existing = await this.em.findOne(Agency, {
+      tenantId: scope.tenantId,
+      slug: input.slug,
+      deletedAt: null,
+    })
+    if (existing) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.AGENCY_SLUG_TAKEN,
+        `Slug "${input.slug}" is already taken in this tenant`,
+        409,
+        { field: 'slug' },
+      )
+    }
+
+    // Create paired Organization. Slug is mirrored from Agency for human-friendly URLs.
+    const organization = this.em.create(Organization, {
+      tenant,
+      name: input.name,
+      slug: input.slug,
+      isActive: true,
+      createdAt: new Date(),
+    } as any)
+    this.em.persist(organization)
+
+    const agency = this.em.create(Agency, {
+      tenantId: scope.tenantId,
+      organizationId: (organization as any).id,
+      name: input.name,
+      slug: input.slug,
+      headquartersCountry: input.headquartersCountry,
+      tier: input.tier,
+      status: 'active',
+      industries: [],
+      services: [],
+      techCapabilities: [],
+      contractSigned: false,
+      ndaSigned: false,
+      onboarded: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any)
+    this.em.persist(agency)
+
+    try {
+      await this.em.flush()
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new PrmDomainError(
+          PRM_ERROR_CODES.AGENCY_SLUG_TAKEN,
+          `Slug "${input.slug}" is already taken in this tenant`,
+          409,
+          { field: 'slug' },
+        )
+      }
+      throw err
+    }
+
+    await emitPrmEvent('prm.agency.created', {
+      agencyId: agency.id,
+      organizationId: agency.organizationId,
+      tenantId: agency.tenantId,
+      slug: agency.slug,
+      tier: agency.tier,
+      createdByUserId: scope.userId ?? null,
+    } as any).catch(() => undefined)
+
+    if (input.tier !== 'om_agency') {
+      await emitPrmEvent('prm.agency.tier_changed', {
+        agencyId: agency.id,
+        tenantId: agency.tenantId,
+        fromTier: 'om_agency',
+        toTier: agency.tier,
+        changedByUserId: scope.userId ?? null,
+        reason: 'create_default',
+      } as any).catch(() => undefined)
+    }
+
+    return agency
+  }
+
+  async findById(id: string, scope: { tenantId: string }): Promise<Agency | null> {
+    return this.em.findOne(Agency, { id, tenantId: scope.tenantId, deletedAt: null })
+  }
+
+  async findByOrganizationId(
+    organizationId: string,
+    scope: { tenantId: string },
+  ): Promise<Agency | null> {
+    return this.em.findOne(Agency, {
+      organizationId,
+      tenantId: scope.tenantId,
+      deletedAt: null,
+    })
+  }
+
+  /**
+   * Apply a partial update + emit field-diff events. Caller is responsible for
+   * authorization (admin-only field guards live in the route layer).
+   */
+  async updateAgency(
+    id: string,
+    patch: Record<string, unknown>,
+    scope: { tenantId: string; userId?: string | null; reason?: string | null },
+  ): Promise<Agency> {
+    const agency = await this.findById(id, scope)
+    if (!agency) {
+      throw new PrmDomainError(PRM_ERROR_CODES.AGENCY_NOT_FOUND, 'Agency not found', 404)
+    }
+
+    const before = {
+      tier: agency.tier,
+      status: agency.status,
+      contractSigned: agency.contractSigned,
+      ndaSigned: agency.ndaSigned,
+      onboarded: agency.onboarded,
+    }
+
+    if ('name' in patch && typeof patch.name === 'string') agency.name = patch.name
+    if ('description' in patch) agency.description = (patch.description as string | null) ?? null
+    if ('websiteUrl' in patch) agency.websiteUrl = (patch.websiteUrl as string | null) ?? null
+    if ('logoUrl' in patch) agency.logoUrl = (patch.logoUrl as string | null) ?? null
+    if ('headquartersCountry' in patch && typeof patch.headquartersCountry === 'string') {
+      agency.headquartersCountry = patch.headquartersCountry
+    }
+    if ('headquartersCity' in patch) {
+      agency.headquartersCity = (patch.headquartersCity as string | null) ?? null
+    }
+    if ('teamSizeBucket' in patch) {
+      agency.teamSizeBucket = (patch.teamSizeBucket as string | null) ?? null
+    }
+    if ('industries' in patch && Array.isArray(patch.industries)) {
+      agency.industries = patch.industries as string[]
+    }
+    if ('services' in patch && Array.isArray(patch.services)) {
+      agency.services = patch.services as string[]
+    }
+    if ('techCapabilities' in patch && Array.isArray(patch.techCapabilities)) {
+      agency.techCapabilities = patch.techCapabilities as string[]
+    }
+    if ('tier' in patch && typeof patch.tier === 'string') agency.tier = patch.tier
+    if ('status' in patch && typeof patch.status === 'string') agency.status = patch.status
+    if ('contractSigned' in patch) agency.contractSigned = !!patch.contractSigned
+    if ('ndaSigned' in patch) agency.ndaSigned = !!patch.ndaSigned
+    if ('onboarded' in patch) agency.onboarded = !!patch.onboarded
+    agency.updatedAt = new Date()
+
+    await this.em.flush()
+
+    if (before.tier !== agency.tier) {
+      await emitPrmEvent('prm.agency.tier_changed', {
+        agencyId: agency.id,
+        tenantId: agency.tenantId,
+        fromTier: before.tier,
+        toTier: agency.tier,
+        changedByUserId: scope.userId ?? null,
+        reason: scope.reason ?? null,
+      } as any).catch(() => undefined)
+    }
+    if (before.status !== agency.status) {
+      await emitPrmEvent('prm.agency.status_changed', {
+        agencyId: agency.id,
+        tenantId: agency.tenantId,
+        fromStatus: before.status,
+        toStatus: agency.status,
+        changedByUserId: scope.userId ?? null,
+        reason: scope.reason ?? null,
+      } as any).catch(() => undefined)
+    }
+    if (
+      before.contractSigned !== agency.contractSigned ||
+      before.ndaSigned !== agency.ndaSigned ||
+      before.onboarded !== agency.onboarded
+    ) {
+      await emitPrmEvent('prm.agency.onboarding_state_changed', {
+        agencyId: agency.id,
+        tenantId: agency.tenantId,
+        contractSigned: agency.contractSigned,
+        ndaSigned: agency.ndaSigned,
+        onboarded: agency.onboarded,
+      } as any).catch(() => undefined)
+    }
+
+    return agency
+  }
+}
+
+export default AgencyService

@@ -1,0 +1,68 @@
+/**
+ * PRM-typed error codes used by the route layer to translate domain failures into
+ * structured `{ error: { code, message } }` envelopes.
+ *
+ * Codes are FROZEN once shipped — downstream specs may bind UI flows to them.
+ */
+export const PRM_ERROR_CODES = {
+  AGENCY_SLUG_TAKEN: 'agency_slug_taken',
+  AGENCY_NOT_FOUND: 'agency_not_found',
+  AGENCY_DELETE_BLOCKED: 'agency_delete_blocked',
+  AGENCY_HISTORICAL: 'agency_historical',
+  ADMIN_ONLY_FIELD: 'admin_only_field',
+  CANNOT_DEACTIVATE_SELF: 'cannot_deactivate_self',
+  ROLE_NOT_SELF_ASSIGNABLE: 'role_not_self_assignable',
+  GITHUB_PROFILE_CONFLICT: 'github_profile_conflict',
+  EMAIL_ALREADY_MEMBER: 'email_already_member',
+  INVITE_COOLDOWN_ACTIVE: 'invite_cooldown_active',
+  ROLE_SLUG_NOT_SEEDED: 'role_slug_not_seeded',
+  VALIDATION_FAILED: 'validation_failed',
+  FORBIDDEN: 'forbidden',
+} as const
+
+export type PrmErrorCode = (typeof PRM_ERROR_CODES)[keyof typeof PRM_ERROR_CODES]
+
+export class PrmDomainError extends Error {
+  constructor(
+    public readonly code: PrmErrorCode,
+    message: string,
+    public readonly status: number = 400,
+    public readonly details?: Record<string, unknown>,
+  ) {
+    super(message)
+    this.name = 'PrmDomainError'
+  }
+}
+
+/** Standard envelope used by all PRM routes for error responses. */
+export function toPrmErrorBody(err: PrmDomainError): {
+  ok: false
+  error: { code: PrmErrorCode; message: string; details?: Record<string, unknown> }
+} {
+  return {
+    ok: false,
+    error: {
+      code: err.code,
+      message: err.message,
+      ...(err.details ? { details: err.details } : {}),
+    },
+  }
+}
+
+/**
+ * Convenience helper used at the route layer to map MikroORM unique-violation errors
+ * into the L-010 privacy-preserving envelope without revealing the conflicting Agency.
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const code = (err as any).code
+  // Postgres SQLSTATE 23505 = unique_violation. MikroORM surfaces the original `code`.
+  return code === '23505' || (err as any).constraintName !== undefined
+}
+
+/**
+ * L-010 privacy-preserving message used when the GitHub-profile global UNIQUE trips.
+ * Never reveals which Agency owns the conflicting profile.
+ */
+export const GITHUB_PROFILE_CONFLICT_MESSAGE =
+  'A profile with this GitHub handle is already active in our partner network. Please contact OM PartnerOps if you believe this is in error.'
