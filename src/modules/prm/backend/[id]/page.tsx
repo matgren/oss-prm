@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { cn } from '@open-mercato/shared/lib/utils'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { useT, type TranslateFn } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
@@ -136,24 +137,30 @@ export default function AgencyDetailPage() {
       <PageBody>
         <div className="border-b">
           <nav className="flex gap-1">
-            <button
+            <Button
               type="button"
-              className={`border-b-2 px-3 py-2 text-sm transition-colors ${
-                tab === 'profile' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground'
-              }`}
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'h-auto rounded-none border-b-2 px-3 py-2 text-sm hover:bg-transparent',
+                tab === 'profile' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground',
+              )}
               onClick={() => setTab('profile')}
             >
               {t('prm.agencies.tab.profile', 'Profile')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={`border-b-2 px-3 py-2 text-sm transition-colors ${
-                tab === 'members' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground'
-              }`}
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'h-auto rounded-none border-b-2 px-3 py-2 text-sm hover:bg-transparent',
+                tab === 'members' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground',
+              )}
               onClick={() => setTab('members')}
             >
               {t('prm.agencies.tab.members', 'Members')} ({members.length})
-            </button>
+            </Button>
           </nav>
         </div>
 

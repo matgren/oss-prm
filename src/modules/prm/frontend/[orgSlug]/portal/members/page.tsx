@@ -2,6 +2,8 @@
 import * as React from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Input } from '@open-mercato/ui/primitives/input'
+import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 
@@ -88,8 +90,8 @@ export default function PortalMembersPage() {
     }
   }
 
-  if (loading) return <div className="p-6 text-sm text-muted-foreground">{t('prm.portal.members.loading', 'Loading…')}</div>
-  if (error) return <div className="p-6 text-sm text-rose-700">{error}</div>
+  if (loading) return <LoadingMessage label={t('prm.portal.members.loading', 'Loading…')} />
+  if (error) return <ErrorMessage label={error} />
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-6">
@@ -121,8 +123,7 @@ export default function PortalMembersPage() {
         >
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground">{t('prm.portal.members.firstName', 'First name')}</span>
-            <input
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            <Input
               value={invite.firstName}
               required
               onChange={(e) => setInvite((s) => ({ ...s, firstName: e.target.value }))}
@@ -130,8 +131,7 @@ export default function PortalMembersPage() {
           </label>
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground">{t('prm.portal.members.lastName', 'Last name')}</span>
-            <input
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            <Input
               value={invite.lastName}
               required
               onChange={(e) => setInvite((s) => ({ ...s, lastName: e.target.value }))}
@@ -139,9 +139,8 @@ export default function PortalMembersPage() {
           </label>
           <label className="flex flex-col gap-1 text-sm md:col-span-2">
             <span className="text-muted-foreground">{t('prm.portal.members.email', 'Email')}</span>
-            <input
+            <Input
               type="email"
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
               value={invite.email}
               required
               onChange={(e) => setInvite((s) => ({ ...s, email: e.target.value }))}
@@ -149,8 +148,7 @@ export default function PortalMembersPage() {
           </label>
           <label className="flex flex-col gap-1 text-sm md:col-span-2">
             <span className="text-muted-foreground">{t('prm.portal.members.gh', 'GitHub handle (optional)')}</span>
-            <input
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            <Input
               value={invite.githubProfile}
               onChange={(e) => setInvite((s) => ({ ...s, githubProfile: e.target.value }))}
             />

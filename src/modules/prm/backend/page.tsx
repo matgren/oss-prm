@@ -5,6 +5,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Input } from '@open-mercato/ui/primitives/input'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
@@ -164,9 +165,9 @@ export default function AgenciesListPage() {
           </label>
           <label className="flex flex-1 flex-col gap-1 text-sm">
             <span className="text-muted-foreground">{t('prm.agencies.filter.q', 'Search')}</span>
-            <input
+            <Input
               type="search"
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              className="h-8"
               placeholder="Search by name"
               value={q}
               onChange={(e) => {

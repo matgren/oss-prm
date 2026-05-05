@@ -2,6 +2,9 @@
 import * as React from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Input } from '@open-mercato/ui/primitives/input'
+import { Textarea } from '@open-mercato/ui/primitives/textarea'
+import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 
@@ -90,10 +93,10 @@ export default function PortalAgencyProfilePage() {
   }, [load])
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">{t('prm.portal.agency.loading', 'Loading…')}</div>
+    return <LoadingMessage label={t('prm.portal.agency.loading', 'Loading…')} />
   }
   if (error) {
-    return <div className="p-6 text-sm text-rose-700">{error}</div>
+    return <ErrorMessage label={error} />
   }
   if (!agency || !agencyId) return null
 
@@ -154,8 +157,7 @@ export default function PortalAgencyProfilePage() {
       >
         <label className="flex flex-col gap-1 text-sm md:col-span-2">
           <span className="text-muted-foreground">{t('prm.portal.agency.fields.name', 'Name')}</span>
-          <input
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          <Input
             value={form.name}
             required
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -163,25 +165,23 @@ export default function PortalAgencyProfilePage() {
         </label>
         <label className="flex flex-col gap-1 text-sm md:col-span-2">
           <span className="text-muted-foreground">{t('prm.portal.agency.fields.description', 'Description')}</span>
-          <textarea
-            className="min-h-24 rounded-md border border-input bg-background p-3 text-sm"
+          <Textarea
+            className="min-h-24"
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-muted-foreground">{t('prm.portal.agency.fields.website', 'Website')}</span>
-          <input
+          <Input
             type="url"
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             value={form.websiteUrl}
             onChange={(e) => setForm((f) => ({ ...f, websiteUrl: e.target.value }))}
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-muted-foreground">{t('prm.portal.agency.fields.city', 'Headquarters city')}</span>
-          <input
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          <Input
             value={form.headquartersCity}
             onChange={(e) => setForm((f) => ({ ...f, headquartersCity: e.target.value }))}
           />
