@@ -4,6 +4,9 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Input } from '@open-mercato/ui/primitives/input'
+import { Textarea } from '@open-mercato/ui/primitives/textarea'
+import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 
@@ -161,11 +164,7 @@ export default function PortalProspectDetailPage() {
   )
 
   if (loading && !prospect) {
-    return (
-      <div className="p-6 text-sm text-muted-foreground">
-        {t('prm.portal.prospects.detail.loading', 'Loading…')}
-      </div>
-    )
+    return <LoadingMessage label={t('prm.portal.prospects.detail.loading', 'Loading…')} />
   }
   if (error) {
     return (
@@ -173,7 +172,7 @@ export default function PortalProspectDetailPage() {
         <Link className="text-sm text-primary underline-offset-2 hover:underline" href={`/${orgSlug}/portal/prospects`}>
           {t('prm.portal.prospects.detail.back', 'Back to prospects')}
         </Link>
-        <div className="text-sm text-rose-700">{error}</div>
+        <ErrorMessage label={error} />
       </div>
     )
   }
@@ -261,8 +260,8 @@ export default function PortalProspectDetailPage() {
               'A reason of at least 10 characters is required for audit purposes.',
             )}
           </p>
-          <textarea
-            className="min-h-20 w-full rounded-md border border-input bg-background p-3 text-sm"
+          <Textarea
+            className="min-h-20 w-full"
             value={lostReason}
             placeholder={t('prm.portal.prospects.detail.lostDialog.placeholder', 'Why are we losing this prospect?')}
             onChange={(e) => setLostReason(e.target.value)}
@@ -304,8 +303,7 @@ export default function PortalProspectDetailPage() {
       >
         <label className="flex flex-col gap-1 text-sm md:col-span-2">
           <span className="text-muted-foreground">{t('prm.portal.prospects.fields.company', 'Company name')}</span>
-          <input
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          <Input
             value={form.companyName}
             disabled={!canEdit}
             required
@@ -314,8 +312,7 @@ export default function PortalProspectDetailPage() {
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-muted-foreground">{t('prm.portal.prospects.fields.contactName', 'Contact name')}</span>
-          <input
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          <Input
             value={form.contactName}
             disabled={!canEdit}
             required
@@ -324,9 +321,8 @@ export default function PortalProspectDetailPage() {
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-muted-foreground">{t('prm.portal.prospects.fields.contactEmail', 'Contact email')}</span>
-          <input
+          <Input
             type="email"
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             value={form.contactEmail}
             disabled={!canEdit}
             required
@@ -335,8 +331,8 @@ export default function PortalProspectDetailPage() {
         </label>
         <label className="flex flex-col gap-1 text-sm md:col-span-2">
           <span className="text-muted-foreground">{t('prm.portal.prospects.fields.notes', 'Notes')}</span>
-          <textarea
-            className="min-h-24 rounded-md border border-input bg-background p-3 text-sm"
+          <Textarea
+            className="min-h-24"
             value={form.notes}
             disabled={!canEdit}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}

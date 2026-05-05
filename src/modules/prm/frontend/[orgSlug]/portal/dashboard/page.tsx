@@ -6,6 +6,9 @@ import {
   PortalCardHeader,
   PortalCardDivider,
 } from '@open-mercato/ui/portal/components/PortalCard'
+import { Button } from '@open-mercato/ui/primitives/button'
+import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
+import { cn } from '@open-mercato/shared/lib/utils'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
 type TierRequirement = {
@@ -71,20 +74,30 @@ type MinResponse = {
 function ScopeToggle(props: { value: ScopeMode; onChange: (v: ScopeMode) => void; t: (k: string, fb?: string) => string }) {
   return (
     <div className="inline-flex overflow-hidden rounded-md border text-xs">
-      <button
+      <Button
         type="button"
-        className={`px-2 py-1 ${props.value === 'monthly' ? 'bg-foreground text-background' : 'bg-background text-muted-foreground'}`}
+        variant="ghost"
+        size="sm"
+        className={cn(
+          'h-auto rounded-none px-2 py-1 text-xs hover:bg-transparent',
+          props.value === 'monthly' ? 'bg-foreground text-background' : 'bg-background text-muted-foreground',
+        )}
         onClick={() => props.onChange('monthly')}
       >
         {props.t('prm.portal.dashboard.toggle.monthly', 'This month')}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
-        className={`px-2 py-1 ${props.value === 'yearly' ? 'bg-foreground text-background' : 'bg-background text-muted-foreground'}`}
+        variant="ghost"
+        size="sm"
+        className={cn(
+          'h-auto rounded-none px-2 py-1 text-xs hover:bg-transparent',
+          props.value === 'yearly' ? 'bg-foreground text-background' : 'bg-background text-muted-foreground',
+        )}
         onClick={() => props.onChange('yearly')}
       >
         {props.t('prm.portal.dashboard.toggle.yearly', 'This year')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -161,10 +174,10 @@ export default function PortalDashboardPage() {
   }, [load])
 
   if (loading && !data) {
-    return <div className="p-6 text-sm text-muted-foreground">{t('prm.portal.dashboard.loading', 'Loading…')}</div>
+    return <LoadingMessage label={t('prm.portal.dashboard.loading', 'Loading…')} />
   }
   if (error) {
-    return <div className="p-6 text-sm text-rose-700">{error}</div>
+    return <ErrorMessage label={error} />
   }
   if (!data) {
     return <NoAgencyState t={t} />

@@ -3,6 +3,9 @@ import * as React from 'react'
 import Link from 'next/link'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Input } from '@open-mercato/ui/primitives/input'
+import { Textarea } from '@open-mercato/ui/primitives/textarea'
+import { ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 
@@ -169,8 +172,7 @@ export default function PortalProspectsListPage() {
             <span className="text-muted-foreground">
               {t('prm.portal.prospects.fields.company', 'Company name')}
             </span>
-            <input
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            <Input
               value={register.companyName}
               required
               onChange={(e) => setRegister((r) => ({ ...r, companyName: e.target.value }))}
@@ -180,8 +182,7 @@ export default function PortalProspectsListPage() {
             <span className="text-muted-foreground">
               {t('prm.portal.prospects.fields.contactName', 'Contact name')}
             </span>
-            <input
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            <Input
               value={register.contactName}
               required
               onChange={(e) => setRegister((r) => ({ ...r, contactName: e.target.value }))}
@@ -191,9 +192,8 @@ export default function PortalProspectsListPage() {
             <span className="text-muted-foreground">
               {t('prm.portal.prospects.fields.contactEmail', 'Contact email')}
             </span>
-            <input
+            <Input
               type="email"
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
               value={register.contactEmail}
               required
               onChange={(e) => setRegister((r) => ({ ...r, contactEmail: e.target.value }))}
@@ -217,8 +217,8 @@ export default function PortalProspectsListPage() {
           </label>
           <label className="flex flex-col gap-1 text-sm md:col-span-2">
             <span className="text-muted-foreground">{t('prm.portal.prospects.fields.notes', 'Notes')}</span>
-            <textarea
-              className="min-h-20 rounded-md border border-input bg-background p-3 text-sm"
+            <Textarea
+              className="min-h-20"
               value={register.notes}
               onChange={(e) => setRegister((r) => ({ ...r, notes: e.target.value }))}
             />
@@ -275,9 +275,9 @@ export default function PortalProspectsListPage() {
           <span className="text-muted-foreground">
             {t('prm.portal.prospects.filter.month', 'Month (YYYY-MM)')}
           </span>
-          <input
+          <Input
             type="month"
-            className="h-8 rounded-md border border-input bg-background px-2"
+            className="h-8"
             value={registeredMonth}
             onChange={(e) => {
               setRegisteredMonth(e.target.value)
@@ -287,7 +287,7 @@ export default function PortalProspectsListPage() {
         </label>
       </section>
 
-      {error ? <div className="text-sm text-rose-700">{error}</div> : null}
+      {error ? <ErrorMessage label={error} /> : null}
 
       <div className="overflow-x-auto rounded-md border">
         <table className="w-full text-sm">
