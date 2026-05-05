@@ -1,10 +1,13 @@
 # SPEC-2026-04-23-agency-foundation — PRM Phase 1: Agency Foundation
 
-> **Spec reconciled with shipped code 2026-05-05 — partial pass (in progress).**
-> Original spec drafted 2026-04-23. **Sections reconciled in this pass:**
-> §3.1 backend routes (path base is `/api/prm/...` not `/api/backend/prm/...`; pagination is `page` + `pageSize` offset-based, not `cursor`/keyset; response envelope is `{ ok, items, page, pageSize, total, totalPages }` not `{ items, nextCursor }`; cache invalidator subscribers flagged as deferred per `POST-MVP-FOLLOW-UPS.md`; optimistic concurrency on Agency PATCH flagged as not-implemented).
-> **Sections still to reconcile** (pending follow-up): §3.2 portal route paths, §5 entity columns (`tenant_id` + `organization_id` shipped together; soft-delete via `deleted_at`; jsonb dictionary arrays not uuid[]; AgencyMember additional shipped columns), §9 integration test status, §11 changelog accuracy.
-> See git blame for the diff and `POST-MVP-FOLLOW-UPS.md` (TBD) for tracked deferrals.
+> **Spec reconciled with shipped code 2026-05-05.**
+> Original spec drafted 2026-04-23. **Sections reconciled:**
+> - §3.1 backend routes — path base is `/api/prm/...` not `/api/backend/prm/...`; pagination is `page` + `pageSize` offset-based, not `cursor`/keyset; response envelope is `{ ok, items, page, pageSize, total, totalPages }` not `{ items, nextCursor }`; cache invalidator subscribers flagged as deferred per `POST-MVP-FOLLOW-UPS.md`; optimistic concurrency on Agency PATCH flagged as not-implemented.
+> - §3.2 portal route paths — base is `/api/prm/portal/...` (NOT `/api/portal/...`); members list returns flat `{ ok, items }` (no pagination shipped — spec called for cursor); the implicit-role invite endpoint ships at `/api/prm/portal/agency/{id}/member` POST (not `/member/invite`).
+> - §5 entity columns — both `tenant_id` AND `organization_id` ship on `Agency` (spec named only `tenant_id`); both entities ship `deleted_at` for soft-delete (spec said hard delete only); `industries` / `services` / `tech_capabilities` are stored as `jsonb` arrays of dictionary string IDs, not `uuid[]`; `AgencyMember` ships additional columns the original spec did not name (`email_lookup`, `invitation_id`, `agency_status`, `role_slug`).
+> - §9 integration tests — IT-1..IT-6 not shipped (Playwright runner deferred to QA team's infra stand-up); enumeration moved to `POST-MVP-FOLLOW-UPS.md`.
+> - §11 changelog — verified accuracy against shipped commits (dc31c0a, 568a333, 24d7ad5, c410816, ac89943, 39786d1, plus T0-fix series).
+> See git blame for the diff and `POST-MVP-FOLLOW-UPS.md` for tracked deferrals.
 >
 > **Spec ID:** SPEC-2026-04-23-agency-foundation
 > **Spec #:** 1 of 7 (WF1 decomposition of `app-spec/app-spec.md` by Piotr, om-cto Spec Orchestrator, 2026-04-23)
@@ -77,7 +80,7 @@ Strategic (L-009): the bottleneck being dissolved is Mat's per-agency admin time
 - **PRM invite email:** PRM ships `emails/PartnerInviteEmail.tsx` + send call on invite creation (OQ-014 — `customer_accounts` ships token lifecycle + accept event, but NOT invite email / re-invite cooldown / bounce webhook). **Re-invite cooldown uses `@open-mercato/shared/lib/ratelimit`** — `RateLimiterService.consume('invite:' + email + ':' + agency_id, { points: 1, duration: 24*60*60 })` — per PROXY-GATE-RESOLUTIONS.md §Q5. No PRM-owned cooldown column.
 - **Admin-only field dual enforcement (invariant #6):**
   - Backend: `acl` features on CrudForm (`prm.agency.edit_admin_fields`) restrict B2 field visibility.
-  - Portal: route-level `ApiInterceptor` on portal `PUT /api/portal/agency/{id}` rejects writes to `tier`, `status`, `contract_signed`, `nda_signed`, `onboarded` regardless of CustomerUser role. ~20 lines / entity.
+  - Portal: route-level `ApiInterceptor` on portal `PATCH /api/prm/portal/agency/{id}` rejects writes to `tier`, `status`, `contract_signed`, `nda_signed`, `onboarded` regardless of CustomerUser role. ~20 lines / entity.
   - **Admin-only read-display on portal (OQ-020):** one `ResponseEnricher` gated on `prm.agency.read_admin_fields` feature, namespaced `_prm` — NOT per-field. Gap 0.
 - **GH-profile global unique (invariant #5):** DB-level unique index on `agency_member.github_profile`. Held from invite creation (C6 `is_active = true` from invite time). L-010 rejection UX: "A profile with this GitHub handle is already active in our partner network. Please contact OM PartnerOps if you believe this is in error." No reveal of conflicting Agency name.
 - **Seeded roles (via `setup.ts`):**
@@ -199,7 +202,9 @@ Strategic (L-009): the bottleneck being dissolved is Mat's per-agency admin time
 
 ### 3.2 Portal routes (CustomerUser session)
 
-#### 3.2.1 `GET /api/portal/agency/{id}`
+> **Shipped path convention:** all portal routes live under `/api/prm/portal/...` (the module-prefixed `/api/prm/...` namespace mirrors backend routes; `customer_accounts` ships its own `/api/portal/...` paths separately). The original spec wrote `/api/portal/...`; references below have been corrected.
+
+#### 3.2.1 `GET /api/prm/portal/agency/{id}`
 - **Purpose:** P3 profile load; also hydrates P2 dashboard Agency context.
 - **Auth:** `requireAuth` (portal session) + `requireFeatures(['prm.agency.read'])` + tenant-scope guard (`CustomerUser.organization_id === agency.organization_id`).
 - **Response 200:**
@@ -225,7 +230,7 @@ Strategic (L-009): the bottleneck being dissolved is Mat's per-agency admin time
 - **Enricher:** the `_prm` block is added by a single `ResponseEnricher` gated on `prm.agency.read_admin_fields` (OQ-020). Absent block ⇒ caller lacks the feature; portal UI degrades to hiding admin badges. Never per-field.
 - **Cache:** tag `prm:portal:agency:{id}`; invalidated on `prm.agency.*` events for that id.
 
-#### 3.2.2 `PATCH /api/portal/agency/{id}`
+#### 3.2.2 `PATCH /api/prm/portal/agency/{id}`
 - **Purpose:** US2.1 — PartnerAdmin edits editable profile fields.
 - **Auth:** `requireAuth` + `requireFeatures(['prm.agency.update'])` + tenant-scope guard.
 - **Guarded fields (route-level `ApiInterceptor`, invariant #6):** writes to `tier`, `status`, `contract_signed`, `nda_signed`, `onboarded` rejected with `403 admin_only_field`. Emits `prm.agency.admin_field_access_rejected { agency_id, field_name, customer_user_id, attempted_at, attempted_value? }`. Per Piotr's brief: *~20 lines / entity*.
@@ -234,21 +239,22 @@ Strategic (L-009): the bottleneck being dissolved is Mat's per-agency admin time
 - **Emits:** no domain event (profile edits are agency-local display data; no downstream subscriber depends on them).
 - **Cache invalidation:** `prm:portal:agency:{id}`.
 
-#### 3.2.3 `GET /api/portal/agency/{id}/member?cursor=…&pageSize=…`
+#### 3.2.3 `GET /api/prm/portal/agency/{id}/member`
 - **Purpose:** P4 member list.
 - **Auth:** `requireFeatures(['prm.agency_member.read'])` + tenant-scope.
-- **Response 200:** `{ items: AgencyMember[], nextCursor?: string }`.
+- **Response 200:** `{ ok: true, items: AgencyMember[] }` — flat list, no pagination shipped (P4 lists own-agency members; expected count is small enough that pagination was deferred). The original spec called for cursor/`nextCursor`; the shipped route returns the full list.
 
-#### 3.2.4 `POST /api/portal/agency/{id}/member/invite`
+#### 3.2.4 `POST /api/prm/portal/agency/{id}/member`
 - **Purpose:** US1.5 — PartnerAdmin invites a `partner_member`. **Role is implicit `partner_member`** — no role parameter; UI never exposes it.
-- **Auth:** `requireFeatures(['prm.agency_member.write'])` + tenant-scope + verify caller is `partner_admin`.
+- **Path note:** the spec originally placed this at `/member/invite`. The shipped route reuses the collection POST verb at `/member` (no `/invite` segment) — same behaviour, simpler URL.
+- **Auth:** `requireFeatures(['prm.agency_member.manage_partner_member'])` + tenant-scope + verify caller is `partner_admin`. (Feature ID `prm.agency_member.write` referenced earlier in the original spec was renamed to `prm.agency_member.manage_partner_member` during T0 ACL design — see §6.1 frozen feature list.)
 - **Guard:** request is rejected if a caller attempts to pass `role_slug: 'partner_admin'` — the `customer_assignable: false` gate in `customer_accounts` would reject it anyway, but PRM fails earlier with `403 role_not_self_assignable` for a clearer UX (decisions log OQ-005 + §2.4 addendum #3).
 - **Request:** same shape as §3.1.5 minus `role_slug` (implicit `partner_member`).
 - **Behavior:** identical to §3.1.5 — invitation + placeholder + email + cooldown, keyed to the portal session's `organization_id`.
 - **Response 201:** `{ agency_member_id, invitation_id, expires_at }`.
 - **Emits:** `prm.agency_member.added`; `prm.agency_member.github_profile_conflict_attempted` on GH conflict.
 
-#### 3.2.5 `PATCH /api/portal/agency/{id}/member/{member_id}`
+#### 3.2.5 `PATCH /api/prm/portal/agency/{id}/member/{member_id}`
 - **Purpose:** US1.5 — edit personal fields or deactivate a `partner_member`; US1.4 — self-profile edit (member edits own row).
 - **Auth:** `requireFeatures(['prm.agency_member.write'])` OR `requireFeatures(['prm.agency_member.self_edit'])` when `member.customer_user_id === session.customer_user_id`.
 - **Guards:**
@@ -280,11 +286,11 @@ Strategic (L-009): the bottleneck being dissolved is Mat's per-agency admin time
 
 | Command | Purpose | Triggered by | Undo |
 |---|---|---|---|
-| `prm.agency.create` | US1.1. Compound: creates `directory.organization` + `prm.agency` + seeds default admin-only flag values. | `POST /api/backend/prm/agency` | `prm.agency.delete` — rejected if dependents exist (invariant #4). Safe to run until first child aggregate attaches. Compensating event `prm.agency.created_reverted` (internal, not in public §1.4.5 list — observability only). |
-| `prm.agency.update` | US1.1 post-create edits, US1.3 flag toggles, US1.7 status transition, US2.1 portal edits. Field-diff-aware: emits the matching domain event(s). | `PATCH /api/backend/prm/agency/{id}`, `PATCH /api/portal/agency/{id}` | `prm.agency.update` replayed with the pre-image. Optimistic concurrency via `updated_at` If-Match; on 409 the caller re-reads. Banner/portal cache-tag invalidation is the observable side effect — reversed by the next `prm.agency.update` carrying the prior values. |
-| `prm.agency.invite_member` | US1.2, US1.5 (portal), US1.5 (backend staff path). Compound across `customer_accounts.createInvitation` + `prm.agency_member` placeholder insert + email enqueue. | `POST /api/backend/prm/agency/{id}/invite`, `POST /api/portal/agency/{id}/member/invite` | `prm.agency.cancel_invite` — deactivates the placeholder (`is_active = false`) and revokes the `CustomerUserInvitation` token via `customer_accounts.revokeInvitation`. Frees the `github_profile` lock. Email is not recallable — acceptable residual side effect (documented in §8). |
+| `prm.agency.create` | US1.1. Compound: creates `directory.organization` + `prm_agencies` row + seeds default admin-only flag values. | `POST /api/prm/agency` | `prm.agency.delete` — rejected if dependents exist (invariant #4). Safe to run until first child aggregate attaches. Compensating event `prm.agency.created_reverted` (internal, not in public §1.4.5 list — observability only). |
+| `prm.agency.update` | US1.1 post-create edits, US1.3 flag toggles, US1.7 status transition, US2.1 portal edits. Field-diff-aware: emits the matching domain event(s). | `PATCH /api/prm/agency/{id}`, `PATCH /api/prm/portal/agency/{id}` | `prm.agency.update` replayed with the pre-image. **Optimistic concurrency via `updated_at` If-Match was specified but NOT IMPLEMENTED in T0** — see §3.1.4 + `POST-MVP-FOLLOW-UPS.md`. Banner/portal cache-tag invalidation is the observable side effect — reversed by the next `prm.agency.update` carrying the prior values. |
+| `prm.agency.invite_member` | US1.2, US1.5 (portal), US1.5 (backend staff path). Compound across `customer_accounts.createInvitation` + `prm_agency_members` placeholder insert + email enqueue. | `POST /api/prm/agency/{id}/invite`, `POST /api/prm/portal/agency/{id}/member` | `prm.agency.cancel_invite` — deactivates the placeholder (`is_active = false`) and revokes the `CustomerUserInvitation` token via `customer_accounts.revokeInvitation`. Frees the `github_profile` lock. Email is not recallable — acceptable residual side effect (documented in §8). |
 | `prm.agency.cancel_invite` | Explicit cancel action (rare; same as deactivating an `Invited` member). | Portal Members UI "Cancel invite", backend B2 Members tab. | Forward-only. Re-invite via `prm.agency.invite_member` (subject to cooldown). |
-| `prm.agency_member.update` | US1.4 self-profile complete, US1.5 edits, US1.6 role reassignment (backend). Field-diff-aware. | `PATCH /api/portal/agency/{id}/member/{member_id}`, `PATCH /api/backend/prm/agency-member/{id}` | `prm.agency_member.update` replayed with pre-image. Role change reversible via another role-change command. |
+| `prm.agency_member.update` | US1.4 self-profile complete, US1.5 edits, US1.6 role reassignment (backend). Field-diff-aware. | `PATCH /api/prm/portal/agency/{id}/member/{member_id}`, `PATCH /api/prm/agency-member/{id}` | `prm.agency_member.update` replayed with pre-image. Role change reversible via another role-change command. |
 | `prm.agency_member.activate` | Internal — fired by the PRM subscriber on `customer_accounts.invitation.accepted`. Links `customer_user_id`, sets `activated_at`, assigns seeded role. | Subscriber `PrmInvitationAcceptedSubscriber`. | Forward-only in v1 (acceptance is a user-driven commitment). Reverse by calling `prm.agency_member.update { is_active: false }` — deactivation path. |
 
 Compound-command boundaries:
@@ -307,7 +313,7 @@ Compound-command boundaries:
 | `prm.agency_member.removed` | `{ agency_id, agency_member_id }` | `prm.agency_member.update` command handler when `is_active` flips true→false, or explicit deactivation. | Cache invalidators as above. | Phase 4 WIC ingest ACL resolution (active-only). |
 | `prm.agency_member.role_changed` | `{ agency_id, agency_member_id, from_role, to_role, changed_by_user_id, changed_at }` | `prm.agency_member.update` command handler when `role_slug` changes (backend only — portal path never reaches here due to `customer_assignable: false`). | Cache invalidators. | None downstream. |
 | `prm.agency_member.github_profile_conflict_attempted` *(telemetry)* | `{ attempted_github_profile, attempted_by_agency_id, attempted_by_customer_user_id, existing_owner_agency_id, attempted_at }` | `prm.agency.invite_member` and `prm.agency_member.update` handlers on UNIQUE-violation catch. Observability-only; does not alter state. | OM staff dashboard (informational); no state subscriber. | None. |
-| `prm.agency.admin_field_access_rejected` *(telemetry)* | `{ agency_id, field_name, customer_user_id, attempted_at, attempted_value? }` | Portal `ApiInterceptor` on `PATCH /api/portal/agency/{id}` when a guarded field is in the request body. Observability-only; does not alter state. | OM staff audit dashboard (informational). | None. |
+| `prm.agency.admin_field_access_rejected` *(telemetry)* | `{ agency_id, field_name, customer_user_id, attempted_at, attempted_value? }` | Portal `ApiInterceptor` on `PATCH /api/prm/portal/agency/{id}` when a guarded field is in the request body. Observability-only; does not alter state. | OM staff audit dashboard (informational). | None. |
 
 ### 4.3 Events consumed
 
@@ -319,9 +325,11 @@ Compound-command boundaries:
 
 ## 5. Data Models
 
-> **Conventions.** All tables live under the `prm` schema (PostgreSQL). All entities include `id uuid PK DEFAULT gen_random_uuid()`, `created_at timestamptz NOT NULL DEFAULT now()`, `updated_at timestamptz NOT NULL DEFAULT now()`. All scoped tables include `tenant_id uuid NOT NULL` and `organization_id uuid NOT NULL` — mandatory tenant isolation per root AGENTS.md. Foreign keys to other modules use **FK IDs only** (no direct ORM relations across module boundaries; queries are composed at the service layer). Singular table names (`agency`, `agency_member`), singular entity class names (`Agency`, `AgencyMember`).
+> **Conventions.** Tables live in the `public` schema with the `prm_` table-name prefix (`prm_agencies`, `prm_agency_members`) per the standalone-app naming convention; the original spec sketched a `prm.` PostgreSQL schema namespace which was discarded during T0 implementation in favour of the prefix. All entities include `id uuid PK DEFAULT gen_random_uuid()`, `created_at timestamptz NOT NULL DEFAULT now()`, `updated_at timestamptz NOT NULL DEFAULT now()`, and a nullable `deleted_at timestamptz` for soft-delete. All scoped tables include `tenant_id uuid NOT NULL` AND `organization_id uuid NOT NULL` — both columns ship together (the original spec named only `tenant_id`); `organization_id` is the FK to `directory.organization` while `tenant_id` is the tenant-isolation scope. Foreign keys to other modules use **FK IDs only** (no direct ORM relations across module boundaries; queries are composed at the service layer). Plural table names with the module prefix (`prm_agencies`, `prm_agency_members`) per AGENTS naming convention; singular entity class names (`Agency`, `AgencyMember`).
 
-### 5.1 `prm.agency`
+### 5.1 `prm_agencies`
+
+> Shipped table name is `prm_agencies` (plural with module prefix). The original spec sketched `prm.agency`.
 
 | Column | Type | Null | Default | Notes / invariant enforcement |
 |---|---|---|---|---|
@@ -336,59 +344,64 @@ Compound-command boundaries:
 | `headquarters_country` | `text` | no | — | ISO-3166-alpha-2. Seeded from `packages/shared/src/lib/location/countries.ts`. |
 | `headquarters_city` | `text` | yes | `NULL` | |
 | `team_size_bucket` | `text` | yes | `NULL` | Enum check: `'1-5','6-20','21-50','51-100','100+'`. |
-| `industries` | `uuid[]` | no | `'{}'` | Dictionary entry FKs (`dictionaries` module). |
-| `services` | `uuid[]` | no | `'{}'` | Dictionary entry FKs. |
-| `tech_capabilities` | `uuid[]` | no | `'{}'` | Dictionary entry FKs. |
+| `industries` | `jsonb` | no | `'[]'` | Dictionary entry IDs (string slugs, NOT uuids — the original spec called for `uuid[]` but T0 ships `jsonb` arrays of dictionary string IDs for portability across MikroORM JSON drivers). |
+| `services` | `jsonb` | no | `'[]'` | Dictionary entry IDs (string). |
+| `tech_capabilities` | `jsonb` | no | `'[]'` | Dictionary entry IDs (string). |
 | `tier` | `text` | no | `'om_agency'` | Enum check: `'om_agency','ai_native','ai_native_expert','ai_native_core'`. **Admin-only (invariant #6).** |
 | `status` | `text` | no | `'active'` | Enum check: `'active','historical'`. **Admin-only (invariant #6).** |
 | `contract_signed` | `boolean` | no | `false` | **Admin-only (invariant #6).** |
 | `nda_signed` | `boolean` | no | `false` | **Admin-only (invariant #6).** |
 | `onboarded` | `boolean` | no | `false` | **Admin-only (invariant #6).** |
 | `created_at` | `timestamptz` | no | `now()` | |
-| `updated_at` | `timestamptz` | no | `now()` | Used as optimistic concurrency token (If-Match). |
+| `updated_at` | `timestamptz` | no | `now()` | Original spec called this the optimistic-concurrency token (If-Match). **NOT IMPLEMENTED in T0** — see §3.1.4 + `POST-MVP-FOLLOW-UPS.md`. |
+| `deleted_at` | `timestamptz` | yes | `NULL` | Soft-delete column shipped on both Agency and AgencyMember (the original spec said hard-delete only on Agency; T0 ships soft-delete for both, and queries filter `deleted_at IS NULL`). |
 
 **Indexes:**
-- `UNIQUE (organization_id)` — invariant #4.
-- `UNIQUE (tenant_id, slug)` — URL uniqueness.
-- `INDEX (tenant_id, status)` — B1 list filter; `historical` sweep.
-- `INDEX (tenant_id, tier)` — B1 list filter.
-- GIN indexes on `industries`, `services`, `tech_capabilities` for Phase 5 RFP matching (added here to avoid later backfill; invariant: indexes are additive).
+- `UNIQUE (organization_id)` — invariant #4 — `prm_agencies_organization_uniq`.
+- `UNIQUE (tenant_id, slug)` — URL uniqueness — `prm_agencies_tenant_slug_uniq`.
+- `INDEX (tenant_id)` — tenant scope.
+- `INDEX (tier)`, `INDEX (status)` — B1 list filter; `historical` sweep.
+- GIN indexes on `industries`, `services`, `tech_capabilities` jsonb columns are NOT shipped in T0 (deferred until Phase 5 RFP matching needs them; queries today are point-id-IN filters, not contains-search).
 
 **Invariant enforcement points:**
 - #4 (one Org per Agency): the `UNIQUE (organization_id)` constraint + the command handler's transactional create. Delete blocked at the aggregate level (§5.4).
-- #6 (admin-only): **DB does not enforce** — enforcement is at the application layer in two places: backend CrudForm ACL (feature `prm.agency.edit_admin_fields`) and the portal `ApiInterceptor` on `PATCH /api/portal/agency/{id}`. Rationale: the column must remain writable from backend; enforcement is contextual (who is writing), not structural.
+- #6 (admin-only): **DB does not enforce** — enforcement is at the application layer in two places: backend CrudForm ACL (feature `prm.agency.edit_admin_fields`) and the portal `ApiInterceptor` on `PATCH /api/prm/portal/agency/{id}`. Rationale: the column must remain writable from backend; enforcement is contextual (who is writing), not structural.
 
-### 5.2 `prm.agency_member`
+### 5.2 `prm_agency_members`
+
+> Shipped table name is `prm_agency_members`. The original spec sketched `prm.agency_member`.
 
 | Column | Type | Null | Default | Notes / invariant enforcement |
 |---|---|---|---|---|
 | `id` | `uuid` | no | `gen_random_uuid()` | PK. |
 | `tenant_id` | `uuid` | no | — | Tenant isolation. |
-| `agency_id` | `uuid` | no | — | FK → `prm.agency.id`. Indexed. |
+| `agency_id` | `uuid` | no | — | FK → `prm_agencies.id`. Indexed. |
 | `customer_user_id` | `uuid` | **yes** | `NULL` | FK → `customer_accounts.customer_user.id`. **NULL between invite and acceptance** (placeholder row, invariant #5 + C6 + L-013). Populated by `PrmInvitationAcceptedSubscriber`. Immutable once set. |
-| `email` | `text` | no | — | Lowercased; the natural key the invitation is sent to. |
+| `invitation_id` | `uuid` | yes | `NULL` | **Shipped column not named in the original spec.** FK back to `customer_accounts.customer_user_invitation.id` — set at placeholder insert; the acceptance subscriber finds the placeholder by `invitation_id` (matching the `customer_accounts.invitation.accepted` payload's `invitationId`). Cleared on cancel/expire if needed. |
+| `email` | `text` | no | — | The natural key the invitation is sent to. Stored as entered (case-preserving); the `email_lookup` mirror handles case-insensitive uniqueness. |
+| `email_lookup` | `text` | no | — | **Shipped column not named in the original spec.** Lowercased mirror of `email` used for the `(agency_id, email_lookup)` UNIQUE constraint (Postgres functional unique was rejected in favour of a maintained mirror to keep MikroORM ORM-side validation simple). Application-maintained — DB-side enforcement only. |
 | `first_name` | `text` | no | — | |
 | `last_name` | `text` | no | — | |
 | `role_in_agency` | `text` | yes | `NULL` | Free-text (e.g. "Lead Engineer"). Not the RBAC role. |
-| `github_profile` | `text` | yes | `NULL` | **GLOBAL UNIQUE where `is_active = true AND github_profile IS NOT NULL`** — partial unique index. Invariant #5. Case-insensitive via `LOWER(github_profile)`. |
+| `github_profile` | `text` | yes | `NULL` | **GLOBAL UNIQUE where `is_active = true AND github_profile IS NOT NULL`** — partial unique index `prm_agency_members_github_profile_active_uniq`. Invariant #5. Case-insensitive via `LOWER(github_profile)`. |
+| `role_slug` | `text` | no | — | **Shipped column not named in the original spec.** Slug of the seeded `customer_accounts.customer_role` assigned at invite time (`partner_admin` \| `partner_member`). Read-only mirror — the canonical source is `customer_user_role` once the invite is accepted. Surfaced on B2/P4 to render role badges without joining `customer_user_role` on every list call. |
 | `is_active` | `boolean` | no | `true` | Set to `true` at invite creation (Vernon C6). Deactivation (`false`) frees the GH lock. |
 | `invited_at` | `timestamptz` | no | `now()` | |
 | `activated_at` | `timestamptz` | yes | `NULL` | Stamped by `PrmInvitationAcceptedSubscriber`. |
-| `agency_status` | `text` | no | `'active'` | Read-model column, denormalized from `prm.agency.status`. Maintained by `AgencyMemberStatusReadModelSubscriber` on `prm.agency.status_changed`. Allows the aggregate to reject new writes without cross-aggregate joins (Vernon C3). |
-
-> **Removed:** the `last_invite_sent_at` column. Re-invite cooldown is enforced via `@open-mercato/shared/lib/ratelimit` (`RateLimiterService.consume`) per PROXY-GATE-RESOLUTIONS.md §Q5 — no PRM-owned schema for this concern.
+| `agency_status` | `text` | no | `'active'` | Read-model column, denormalized from `prm_agencies.status`. Maintained by `AgencyMemberStatusReadModelSubscriber` on `prm.agency.status_changed`. Allows the aggregate to reject new writes without cross-aggregate joins (Vernon C3). |
 | `created_at` | `timestamptz` | no | `now()` | |
 | `updated_at` | `timestamptz` | no | `now()` | |
+| `deleted_at` | `timestamptz` | yes | `NULL` | Soft-delete (mirrors Agency). Queries filter `deleted_at IS NULL`. |
+
+> **Removed:** the `last_invite_sent_at` column. Re-invite cooldown is enforced via `@open-mercato/shared/lib/ratelimit` (`RateLimiterService.consume`) per PROXY-GATE-RESOLUTIONS.md §Q5 — no PRM-owned schema for this concern.
 
 **Indexes:**
-- `UNIQUE INDEX (LOWER(github_profile)) WHERE is_active = true AND github_profile IS NOT NULL` — invariant #5, **global** (no tenant scoping — deliberate; the unique is across the entire partner network, as the business rule requires).
-- `UNIQUE (customer_user_id) WHERE customer_user_id IS NOT NULL` — invariant #5 (1:1 CustomerUser ↔ AgencyMember).
-- `UNIQUE (agency_id, LOWER(email))` — no two members of the same Agency share an email.
-- `INDEX (tenant_id, agency_id)` — P4 / B2 Members tab primary access pattern.
-- `INDEX (tenant_id, is_active)` — operational filters.
+- `UNIQUE INDEX (LOWER(github_profile)) WHERE is_active = true AND github_profile IS NOT NULL` — invariant #5, **global** (no tenant scoping — deliberate; the unique is across the entire partner network, as the business rule requires). Index name `prm_agency_members_github_profile_active_uniq`.
+- `UNIQUE (agency_id, email_lookup)` — `prm_agency_members_agency_email_uniq` — no two members of the same Agency share an email (case-insensitive via the `email_lookup` mirror).
+- `INDEX (tenant_id)`, `INDEX (agency_id)` — P4 / B2 Members tab primary access patterns.
 
 **Invariant enforcement points:**
-- #5 (GH global unique, 1:1 CustomerUser, 1:1 Agency): the three UNIQUE indexes. Constraint violations surface as `UniqueViolationError` caught in the command handler → translated to the L-010 user-visible message without revealing the other Agency.
+- #5 (GH global unique, 1:1 Agency): the partial UNIQUE on `(LOWER(github_profile)) WHERE is_active` and the `(agency_id, email_lookup)` UNIQUE. Constraint violations surface as `UniqueViolationError` caught in the command handler → translated to the L-010 user-visible message without revealing the other Agency.
 - C6 (GH lock from invite time): `is_active` defaults to `true` at placeholder insert; the partial UNIQUE includes the `is_active = true` predicate, so the lock is acquired immediately.
 
 ### 5.3 Cross-module FK references
@@ -432,8 +445,8 @@ All three are additive (create-only — no drops, no renames, no column removals
 | Feature | partner_admin | partner_member | Notes |
 |---|---|---|---|
 | `portal.partner.access` | ✓ | ✓ | Top-level portal shell gate (from `customer_accounts` SPEC-060). |
-| `prm.agency.view` | ✓ | ✓ | Aliased to `prm.agency.read` per app-spec §2.3. Used by `GET /api/portal/agency/{id}`. |
-| `prm.agency.edit` | ✓ | — | Aliased to `prm.agency.update`. Used by `PATCH /api/portal/agency/{id}` for the editable field set. |
+| `prm.agency.view` | ✓ | ✓ | Aliased to `prm.agency.read` per app-spec §2.3. Used by `GET /api/prm/portal/agency/{id}`. |
+| `prm.agency.edit` | ✓ | — | Aliased to `prm.agency.update`. Used by `PATCH /api/prm/portal/agency/{id}` for the editable field set. |
 | `prm.agency.read_admin_fields` | ✓ | ✓ | Enricher gate for the `_prm` block (OQ-020). |
 | `prm.agency_member.read` | ✓ | ✓ | Scoped to own Agency. |
 | `prm.agency_member.manage_partner_member` | ✓ | — | Portal-side write: add, edit, deactivate `partner_member` rows only. Scope boundary enforced by `customer_assignable: false` on `partner_admin` + PRM API guard (§3.2.4). |
@@ -448,26 +461,26 @@ All three are additive (create-only — no drops, no renames, no column removals
 | Feature | OMPartnerOps | OMMarketing | OMAdmin | Routes |
 |---|---|---|---|---|
 | `prm.agency.read` | ✓ | ✓ | ✓ | B1, B2 (GET). |
-| `prm.agency.create` | ✓ | — | ✓ | `POST /api/backend/prm/agency`. |
-| `prm.agency.update_all` | ✓ | — | ✓ | `PATCH /api/backend/prm/agency/{id}` — including admin-only fields. |
+| `prm.agency.create` | ✓ | — | ✓ | `POST /api/prm/agency`. |
+| `prm.agency.update_all` | ✓ | — | ✓ | `PATCH /api/prm/agency/{id}` — including admin-only fields. |
 | `prm.agency.edit_admin_fields` | ✓ | — | ✓ | CrudForm ACL on B2 admin-only field region. |
-| `prm.agency.invite_admin` | ✓ | — | ✓ | `POST /api/backend/prm/agency/{id}/invite`. |
+| `prm.agency.invite_admin` | ✓ | — | ✓ | `POST /api/prm/agency/{id}/invite`. |
 | `prm.agency_member.read_all` | ✓ | — | ✓ | B2 Members tab, B3. |
-| `prm.agency_member.write_all` | ✓ | — | ✓ | `PATCH /api/backend/prm/agency-member/{id}`; includes `partner_admin` role changes (US1.6). |
+| `prm.agency_member.write_all` | ✓ | — | ✓ | `PATCH /api/prm/agency-member/{id}`; includes `partner_admin` role changes (US1.6). |
 
 ### 6.2 Persona-to-route map (Phase 1 surfaces)
 
 | Route | PartnerAdmin | PartnerMember | OMPartnerOps | OMMarketing | OMAdmin |
 |---|---|---|---|---|---|
-| `POST /api/backend/prm/agency` | — | — | ✓ | — | ✓ |
-| `GET /api/backend/prm/agency` | — | — | ✓ | ✓ | ✓ |
-| `PATCH /api/backend/prm/agency/{id}` | — | — | ✓ | — | ✓ |
-| `POST /api/backend/prm/agency/{id}/invite` | — | — | ✓ | — | ✓ |
-| `PATCH /api/backend/prm/agency-member/{id}` | — | — | ✓ | — | ✓ |
-| `GET /api/portal/agency/{id}` | ✓ (own) | ✓ (own) | — | — | — |
-| `PATCH /api/portal/agency/{id}` | ✓ (own, editable fields) | — | — | — | — |
-| `POST /api/portal/agency/{id}/member/invite` | ✓ (own, `partner_member` role only) | — | — | — | — |
-| `PATCH /api/portal/agency/{id}/member/{member_id}` | ✓ (own) | ✓ (self only) | — | — | — |
+| `POST /api/prm/agency` | — | — | ✓ | — | ✓ |
+| `GET /api/prm/agency` | — | — | ✓ | ✓ | ✓ |
+| `PATCH /api/prm/agency/{id}` | — | — | ✓ | — | ✓ |
+| `POST /api/prm/agency/{id}/invite` | — | — | ✓ | — | ✓ |
+| `PATCH /api/prm/agency-member/{id}` | — | — | ✓ | — | ✓ |
+| `GET /api/prm/portal/agency/{id}` | ✓ (own) | ✓ (own) | — | — | — |
+| `PATCH /api/prm/portal/agency/{id}` | ✓ (own, editable fields) | — | — | — | — |
+| `POST /api/prm/portal/agency/{id}/member` | ✓ (own, `partner_member` role only) | — | — | — | — |
+| `PATCH /api/prm/portal/agency/{id}/member/{member_id}` | ✓ (own) | ✓ (self only) | — | — | — |
 
 ### 6.3 Tenant & organization scoping
 
@@ -595,7 +608,7 @@ Every portal route filters by `CustomerUser.organization_id === agency.organizat
 #### R12 — Rate-limit abuse on re-invite endpoint
 - **Scenario:** Attacker bombards the re-invite endpoint to probe email existence.
 - **Severity:** Low.
-- **Affected:** `POST /api/backend/prm/agency/{id}/invite`, `POST /api/portal/agency/{id}/member/invite`.
+- **Affected:** `POST /api/prm/agency/{id}/invite`, `POST /api/prm/portal/agency/{id}/member`.
 - **Mitigation:** Cooldown is enforced per `(agency_id, lower(email))` at 10 minutes via `@open-mercato/shared/lib/ratelimit`. Backend route additionally requires session + feature.
 - **Residual:** None.
 
@@ -603,25 +616,23 @@ Every portal route filters by `CustomerUser.organization_id === agency.organizat
 
 ## 9. Integration Test Coverage
 
-> Playwright scenarios (TypeScript) live under `packages/prm/tests/integration/`. Each scenario is a black-box end-to-end test that spins up the full stack.
+> **Status (2026-05-05 reconciliation):** the six Playwright scenarios originally enumerated here (IT-1..IT-6) are **NOT implemented** in T0 — they require a live Postgres + ESP fixture and the QA team's Playwright runner stand-up. The full enumeration has been moved to `POST-MVP-FOLLOW-UPS.md` under "Playwright integration tests / T0 Agency Foundation"; deleting them from the spec body avoids the impression that they ship with T0. Unit-test coverage shipped in T0 is listed below.
 
-### 9.1 Required scenarios
+### 9.1 Playwright scenarios — deferred
 
-| # | Scenario | Stories | Success criteria |
-|---|---|---|---|
-| IT-1 | **Happy path onboarding.** OMPartnerOps logs into backend → B1 → Create Agency (name, slug, tier, country) → B2 → Invite AgencyAdmin (first, last, email, gh_profile) → assert invitation email intercepted → open invite link in a second browser context → set password → P2 dashboard loads with "Welcome! Complete your profile" banner → P3 → edit `website_url`, `description`, `industries`, `services` → save → reload → fields persist; admin-only badges visible as read-only. | US1.1, US1.2, US1.4, US2.1 | All events asserted: `prm.agency.created`, `prm.agency_member.added`, `prm.agency_member.activated` (after accept). Total wall time ≤ 15 min human simulation (scripted ≤ 30 s). |
-| IT-2 | **Duplicate GH-profile rejection (L-010).** Seed: Agency A has an active AgencyMember with `github_profile = 'alice'`. Test: OMPartnerOps invites a new member on Agency B with `github_profile = 'alice'`. Assert: 409 response with the L-010 message; response body does NOT contain "Agency A" or its id; `prm.agency_member.github_profile_conflict_attempted` emitted; no placeholder row inserted on Agency B. | US1.2, US1.5, invariant #5 | Error envelope exact match; OM-staff dashboard shows the diagnostic event. |
-| IT-3 | **Admin-only field 403 from portal.** PartnerAdmin authenticated. Attempt `PATCH /api/portal/agency/{id}` with body `{ tier: 'ai_native_core' }`. Assert: 403 `admin_only_field`; `prm.agency.admin_field_access_rejected` emitted; no DB write; the backend retains the prior tier. | US1.3, US2.1, invariant #6 | 403 with structured error; audit event captured. |
-| IT-4 | **Lockout recovery (US1.6).** Seed: Agency with one `partner_member` only (last PartnerAdmin was deactivated). Test: OMPartnerOps opens B2 Members tab → picks the PartnerMember → changes role to `partner_admin` via CrudForm → save. Assert: `prm.agency_member.role_changed` emitted; the portal P4 member list shows the updated role badge on next load; the portal can now execute `PATCH /api/portal/agency/{id}/member/{id}` as the promoted user. | US1.6 | Recovery completes in ≤ 1 minute scripted. |
-| IT-5 | **status = historical cascade banner.** Seed: Agency in `active` with a PartnerAdmin and a PartnerMember. Test: OMPartnerOps flips `status: historical`. Assert: `prm.agency.status_changed` emitted; `AgencyMemberStatusReadModelSubscriber` updates both members' `agency_status = 'historical'` within 1 s; P2 dashboard loaded by either member shows the "Your partnership is historical — contact OM Partner Operations" banner; no Phase-2 aggregates exist yet so no further cascade to assert. | US1.7, Vernon C3 | Read-model consistency within 1 s; banner rendered. |
-| IT-6 | **Re-invite cooldown.** OMPartnerOps invites a PartnerAdmin; immediately re-invites the same email. Assert: second call returns 429 `invite_cooldown_active` with `retry_after_seconds > 0`. Advance wall clock 11 minutes → re-invite succeeds. | US1.2 | 429 emitted exactly when expected. |
+See `POST-MVP-FOLLOW-UPS.md` for the IT-1..IT-6 enumeration covering happy-path onboarding, duplicate GH-profile rejection (L-010), admin-only field 403 from portal, lockout recovery (US1.6), `status = historical` cascade banner, and re-invite cooldown. Each scenario is owned by the QA team and tracked individually.
 
-### 9.2 Supporting unit-test coverage (non-exhaustive)
+### 9.2 Unit-test coverage shipped in T0
 
-- `Agency` aggregate delete guard: rejected when AgencyMember exists.
-- Partial UNIQUE index on `github_profile`: case-insensitivity (`'Alice'` vs `'alice'`) rejected.
-- Command replay (update → undo): pre-image restoration yields identical record.
-- `PrmInvitationAcceptedSubscriber` idempotency on double-delivery.
+`src/modules/prm/__tests__/`:
+- `validators.test.ts` — Zod schemas for create / update (backend + portal), admin-only-field rejection.
+- `errors.test.ts` — PRM error envelope translation.
+- `reinviteCooldownService.test.ts` — 10-minute cooldown semantics + per-(agency, email) keying.
+- `agencyService.test.ts` — create, conflict (slug uniqueness, organization uniqueness), L-010 GH-profile path.
+- `invitationAcceptedSubscriber.test.ts` — idempotency on double-delivery; rowcount-zero no-op.
+- `agencyMemberStatusSubscriber.test.ts` — Vernon C3 read-model maintenance on `prm.agency.status_changed`.
+- `adminFieldInterceptor.test.ts` — invariant #6 portal `ApiInterceptor` rejecting admin-only field writes; emits `prm.agency.admin_field_access_rejected`.
+- `safeEmit.test.ts` — non-throwing event-emit wrapper (5 scenarios: happy path, transport failure, container-resolved logger, container without logger, error vs warn level).
 
 ---
 
@@ -759,3 +770,20 @@ After dual review the T0 commit was blocked on five issues. All are now fixed in
 5. **H2 (partial) — `as any` casts in backend pages.** Typed the `DataTable` column arrays in `backend/page.tsx` and `backend/agency-members/page.tsx` as `ColumnDef<RowType>[]` from `@tanstack/react-table` and the `CrudForm` `initialValues` in `backend/[id]/page.tsx` against the zod-derived `UpdateValues` — removing 7 casts. Left `em.create({...} as any)` and `em.persistAndFlush(...)` chains for a future cleanup pass; they don't block merge and chasing them risks regressions in the MikroORM DI integration.
 
 **Quality gates (post-fix, from a clean working tree):** `yarn typecheck` PASS, `yarn test src/modules/prm` PASS (32 tests), `yarn mercato db generate` clean, `yarn generate` clean, `yarn build` PASS.
+
+### 2026-05-05 — Spec reconciliation pass
+
+Reconciled the spec body against the shipped T0 implementation (commits `39786d1` baseline, `b551d50`/`e086120`/`5cf0970`/`5c3ce05`/`61ea902`/`d7e0f66` fix series, plus this reconciliation pass). Drift fixed:
+
+1. **§3.1 backend route paths** — `/api/backend/prm/...` → `/api/prm/...` (the standalone-app convention drops the `/backend/` segment).
+2. **§3.1 pagination** — cursor/keyset → `page` + `pageSize` offset-based, capped at 100. Shipped routes use `findAndCountWithDecryption(em, ..., { limit, offset })`.
+3. **§3.1 response envelope** — `{ items, nextCursor }` → `{ ok, items, page, pageSize, total, totalPages }`.
+4. **§3.1.2-§3.1.4 cache invalidator subscribers** — declared as deferred (not wired in T0). Tracked in `POST-MVP-FOLLOW-UPS.md`.
+5. **§3.1.4 optimistic concurrency** — `updated_at` If-Match was specified but NOT IMPLEMENTED in T0. T2 ships the version-token reference on `LicenseDeal.version`. Tracked in `POST-MVP-FOLLOW-UPS.md`.
+6. **§3.2 portal route paths** — `/api/portal/...` → `/api/prm/portal/...`. The members POST endpoint shipped at `/member` (not `/member/invite`); the GET members route ships flat `{ ok, items }` (no pagination shipped — the original `cursor` / `nextCursor` was deferred when own-agency member counts proved small enough).
+7. **§5 entity columns** — both `tenant_id` AND `organization_id` ship together; `industries` / `services` / `tech_capabilities` are `jsonb` arrays of dictionary string IDs (not `uuid[]`); both Agency and AgencyMember ship `deleted_at` for soft-delete (the spec said hard-delete only). AgencyMember additionally ships `email_lookup`, `invitation_id`, `agency_status`, `role_slug` columns the original spec did not name.
+8. **§6.1 portal feature ID** — `prm.agency_member.write` → `prm.agency_member.manage_partner_member` (the actual frozen ID). The §6.1 feature table already used the correct name; the §3.2.4 prose was the stale reference.
+9. **§9 integration tests** — IT-1..IT-6 enumeration moved to `POST-MVP-FOLLOW-UPS.md`; spec body now lists shipped unit tests under `__tests__/`.
+10. **§11 changelog** — entry added (this section).
+
+The shipped feature catalogue, event IDs, role slugs, table names, and index names are FROZEN per the cross-spec contract listed in the original 2026-05-05 T0 entry above.
