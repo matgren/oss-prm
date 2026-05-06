@@ -318,4 +318,114 @@ test.describe('TC-PRM-T3-001: WIC ingestion happy path + security guards', () =>
       await deleteAgencyIfExists(request, token, agencyId)
     }
   })
+
+  test('B10 — audit-log GET + POST resolve round-trip (US6.4)', async ({ request }) => {
+    const token = await getAuthToken(request, 'admin')
+    const suffix = Date.now().toString(36)
+    const agencyId = await createAgencyFixture(request, token, {
+      name: `WIC B10 ${suffix}`,
+      slug: `wic-b10-${suffix}`,
+      tier: 'om_agency',
+      headquartersCountry: 'US',
+    })
+    try {
+      await patchAgencyOnboarded(request, token, agencyId)
+
+      // Create an audit log row by POSTing a batch with an unresolvable github_profile.
+      const batchId = uuidv4()
+      const importResponse = await wicServicePost(
+        request,
+        'POST',
+        `/api/prm/service/wic/imports/${batchId}`,
+        {
+          headers: {
+            'X-Om-Import-Secret': WIC_SECRET,
+            'X-Om-Request-Timestamp': nowIso(),
+            'X-Om-Idempotency-Key': uuidv4(),
+          },
+          data: {
+            script_version: '1.0-agent',
+            month: '2026-03',
+            rows: [
+              {
+                row_index: 0,
+                github_profile: `b10-ghost-${suffix}`,
+                contribution_month: '2026-03-01',
+                wic_level: 'L1',
+                wic_score: 1,
+                computed_at: '2026-04-02T08:30:00Z',
+              },
+            ],
+          },
+        },
+      )
+      expect(importResponse.status()).toBe(200)
+      const importBody = await readJsonSafe<{
+        per_row?: Array<{ status: string; audit_log_id?: string }>
+      }>(importResponse)
+      const auditLogId = importBody?.per_row?.[0]?.audit_log_id
+      expect(auditLogId, 'audit log id must be returned for rejected row').toBeTruthy()
+
+      // GET /api/prm/wic/audit-log — default filter (resolved=false).
+      const listResponse = await apiRequest(request, 'GET', '/api/prm/wic/audit-log', { token })
+      expect(listResponse.status()).toBe(200)
+      const listBody = await readJsonSafe<{
+        items?: Array<{ id: string; rejectionReason: string; resolvedAt: string | null }>
+      }>(listResponse)
+      const ourRow = listBody?.items?.find((r) => r.id === auditLogId)
+      expect(ourRow, 'rejected row must appear in default open-issues view').toBeTruthy()
+      expect(ourRow?.rejectionReason).toBe('unknown_github_profile')
+      expect(ourRow?.resolvedAt).toBeNull()
+
+      // POST resolve.
+      const resolveResponse = await apiRequest(
+        request,
+        'POST',
+        `/api/prm/wic/audit-log/${auditLogId}/resolve`,
+        {
+          token,
+          data: { action: 'accepted_after_fix', note: 'Backfilled member offline' },
+        },
+      )
+      expect(resolveResponse.status()).toBe(200)
+      const resolveBody = await readJsonSafe<{
+        auditLog?: { resolutionAction?: string; resolvedAt?: string }
+      }>(resolveResponse)
+      expect(resolveBody?.auditLog?.resolutionAction).toBe('accepted_after_fix')
+      expect(resolveBody?.auditLog?.resolvedAt).toBeTruthy()
+
+      // Re-resolving must 409.
+      const reResolve = await apiRequest(
+        request,
+        'POST',
+        `/api/prm/wic/audit-log/${auditLogId}/resolve`,
+        {
+          token,
+          data: { action: 'ignored' },
+        },
+      )
+      expect(reResolve.status()).toBe(409)
+
+      // After resolution: default open-issues view must NOT show the row.
+      const listAfter = await apiRequest(request, 'GET', '/api/prm/wic/audit-log', { token })
+      const afterBody = await readJsonSafe<{ items?: Array<{ id: string }> }>(listAfter)
+      const afterMatch = afterBody?.items?.find((r) => r.id === auditLogId)
+      expect(afterMatch, 'resolved row must not appear in default open-issues view').toBeFalsy()
+
+      // resolved=true filter must include it.
+      const resolvedListResponse = await apiRequest(
+        request,
+        'GET',
+        '/api/prm/wic/audit-log?resolved=true',
+        { token },
+      )
+      const resolvedListBody = await readJsonSafe<{
+        items?: Array<{ id: string; resolutionAction: string }>
+      }>(resolvedListResponse)
+      const resolvedMatch = resolvedListBody?.items?.find((r) => r.id === auditLogId)
+      expect(resolvedMatch?.resolutionAction).toBe('accepted_after_fix')
+    } finally {
+      await deleteAgencyIfExists(request, token, agencyId)
+    }
+  })
 })
