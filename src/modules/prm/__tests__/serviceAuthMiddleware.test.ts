@@ -90,6 +90,20 @@ class FakeEm {
   async flush() {
     /* no-op */
   }
+  /**
+   * Forked EM shares the parent's `stored` array so test assertions can read what the
+   * forked persist wrote. In production code the fork has its own UoW; for unit tests
+   * we collapse that distinction since we do not need to test MikroORM's transaction
+   * scoping (only our use of `fork()` to insulate the parent from idempotency-key
+   * UNIQUE collisions). Tests that need to observe a flush failure swap the fork's
+   * `flush` for a throwing stub.
+   */
+  fork(_opts?: unknown): FakeEm {
+    const child = new FakeEm()
+    child.stored = this.stored
+    child.agencies = this.agencies
+    return child
+  }
 }
 
 describe('ServiceAuthMiddleware (Spec #4 §3.1)', () => {
@@ -487,5 +501,78 @@ describe('ServiceAuthMiddleware (Spec #4 §3.1)', () => {
     expect(em.stored[0]?.responseStatus).toBe(200)
     expect(em.stored[0]?.responseBody).toMatchObject({ accepted_count: 3 })
     expect(em.stored[0]?.tenantId).toBe(TENANT)
+  })
+
+  it('persistIdempotency runs on a forked EM (UNIQUE collision swallowed; non-collision errors surface)', async () => {
+    // Set up an EM whose fork() throws on flush. We assert two things:
+    //   (a) UNIQUE-PK collision (modeled by an isUniqueViolation-shaped error) is logged
+    //       + swallowed — caller sees no exception, but no row is recorded as ours.
+    //   (b) Any OTHER error (e.g. connection drop) re-throws so operators can observe it.
+    const buildEmWithFlushError = (err: unknown) => {
+      const em = new FakeEm()
+      const realFork = em.fork.bind(em)
+      em.fork = (opts?: unknown) => {
+        const child = realFork(opts)
+        child.flush = async () => {
+          throw err
+        }
+        return child
+      }
+      return em
+    }
+
+    const buildAuthForEm = async (em: FakeEm) => {
+      const req = buildRequest({
+        method: 'POST',
+        headers: {
+          'x-om-import-secret': SECRET,
+          'x-om-request-timestamp': NOW_ISO,
+          'x-om-idempotency-key': VALID_KEY,
+        },
+        body: '{"y":2}',
+      })
+      const result = await authenticateServiceRequest(req, {
+        endpoint: ENDPOINT,
+        em: em as any,
+        bodyText: '{"y":2}',
+        now: () => FIXED_NOW,
+      })
+      if (!result.ok) throw new Error(`expected ok, got ${result.response.status}`)
+      return result
+    }
+
+    // (a) UNIQUE-PK collision is swallowed.
+    const uniqueError: any = new Error('duplicate key value violates unique constraint')
+    uniqueError.code = '23505'
+    const emCollision = buildEmWithFlushError(uniqueError)
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const auth = await buildAuthForEm(emCollision)
+      await auth.persistIdempotency!({
+        em: emCollision as any,
+        responseStatus: 200,
+        responseBody: { import_batch_id: 'collision', accepted_count: 1 },
+      })
+      // The forked flush threw, so the row was never committed.
+      // No assertion on stored.length (FakeEm appends synchronously in persist before
+      // flush throws). The key invariant is that the parent EM did not throw.
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('idempotency PK collision'),
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
+
+    // (b) Other errors bubble up.
+    _resetServiceAuthSingletonCache()
+    const emCrash = buildEmWithFlushError(new Error('connection refused'))
+    const auth = await buildAuthForEm(emCrash)
+    await expect(
+      auth.persistIdempotency!({
+        em: emCrash as any,
+        responseStatus: 200,
+        responseBody: { import_batch_id: 'crash', accepted_count: 1 },
+      }),
+    ).rejects.toThrow('connection refused')
   })
 })

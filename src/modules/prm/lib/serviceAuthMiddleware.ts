@@ -6,6 +6,7 @@ import {
   findWithDecryption,
 } from '@open-mercato/shared/lib/encryption/find'
 import { Agency, ServiceIdempotencyKey } from '../data/entities'
+import { isUniqueViolation } from './errors'
 
 let cachedSingletonContext: { tenantId: string; organizationId: string } | null = null
 
@@ -363,29 +364,50 @@ export async function authenticateServiceRequest(
       responseStatus,
       responseBody,
     }) => {
-      // Idempotency rows are write-once at first commit. Re-runs that hit this path mean
-      // a parallel POST won the race; the second writer's INSERT will collide on the PK
-      // and the route can fall back to a re-read. We rely on the unique PK constraint to
-      // serialize, so a swallowed conflict here is correct (the replay path on the next
-      // retry will return the winning response).
+      // Idempotency rows are write-once at first commit. Persistence runs on a **forked
+      // EM** (independent UoW) for two reasons:
+      //
+      //   1. The route-level EM has already flushed its business rows (e.g.
+      //      WIC contributions) before this callback runs. A UNIQUE-PK collision
+      //      here MUST NOT poison that EM. A forked EM gives us its own UoW that
+      //      can throw without affecting the parent.
+      //
+      //   2. A parallel POST may have won the race and committed first; the second
+      //      writer's INSERT will then collide on `(endpoint, idempotency_key)`. We
+      //      log + swallow that specific case (the next retry will see the winner's
+      //      row and replay correctly). Any *other* error is logged and surfaced —
+      //      we no longer silently drop unknown failures.
+      const forked = em.fork({ clear: true, freshEventManager: true })
+      const responseHash = hashPayload(JSON.stringify(responseBody))
+      const row = forked.create(ServiceIdempotencyKey, {
+        endpoint: options.endpoint,
+        idempotencyKey,
+        tenantId,
+        organizationId,
+        payloadHash,
+        responseHash,
+        responseStatus,
+        responseBody: responseBody as Record<string, unknown>,
+        createdAt: new Date(),
+      } as any)
+      forked.persist(row)
       try {
-        const responseHash = hashPayload(JSON.stringify(responseBody))
-        const row = em.create(ServiceIdempotencyKey, {
-          endpoint: options.endpoint,
-          idempotencyKey,
-          tenantId,
-          organizationId,
-          payloadHash,
-          responseHash,
-          responseStatus,
-          responseBody: responseBody as Record<string, unknown>,
-          createdAt: new Date(),
-        } as any)
-        em.persist(row)
-        await em.flush()
-      } catch {
-        // Conflict on (endpoint, idempotencyKey) PK — another writer beat us. The retry
-        // will see their row and replay. Acceptable.
+        await forked.flush()
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          // Another writer beat us; their row is the source of truth. Acceptable.
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[wic.service-auth] idempotency PK collision on ${options.endpoint} key=${idempotencyKey} — accepting peer's row`,
+          )
+          return
+        }
+        // Surface anything else — the response was already returned to the caller,
+        // but operators need to know if persistence is broken (e.g. DB down,
+        // serialization failure). The throw bubbles to the route's catch() if the
+        // route is awaiting persistIdempotency(), or is unhandled-rejection-logged
+        // by the runtime if not awaited.
+        throw err
       }
     }
 
