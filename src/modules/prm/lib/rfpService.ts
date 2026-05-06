@@ -7,9 +7,12 @@ import {
   RfpBroadcast,
   RfpResponse,
 } from '../data/entities'
+import { createHash } from 'node:crypto'
 import {
   type CreateRfpDraftInput,
+  type DraftRfpResponseInput,
   type UpdateRfpDraftInput,
+  RFP_PORTAL_VISIBLE_STATUSES,
 } from '../data/validators'
 import { PRM_ERROR_CODES, PrmDomainError } from './errors'
 import { safeEmit } from './safeEmit'
@@ -390,6 +393,105 @@ export class RfpService {
     return { stamped: true }
   }
 
+  /**
+   * Portal-side: upsert a draft response for `(rfp_id, agency_id)`.
+   *
+   * Creates the row on first call (stamping `submitted_by_member_id` with the
+   * authoring AgencyMember). Subsequent calls update text fields in place; the
+   * authoring member is FROZEN — invariant for §6.2 PartnerMember author-scope
+   * (M1's draft, M2's submit → 403).
+   *
+   * R7 dedupe (auto-save storm): emits `prm.rfp_response.draft_saved` only when
+   * the canonical content hash changes. Same-text re-saves are silent.
+   */
+  async upsertResponseDraft(
+    rfpId: string,
+    agencyId: string,
+    memberId: string,
+    input: DraftRfpResponseInput,
+    scope: { organizationId: string },
+  ): Promise<{ response: RfpResponse; emitted: boolean }> {
+    const rfp = await this.em.findOne(
+      Rfp,
+      { id: rfpId, organizationId: scope.organizationId, deletedAt: null } as any,
+    )
+    if (!rfp) {
+      throw new PrmDomainError(PRM_ERROR_CODES.NOT_FOUND, 'RFP not found', 404)
+    }
+    if (!(RFP_PORTAL_VISIBLE_STATUSES as readonly string[]).includes(rfp.status)) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        `Cannot edit response — RFP status is "${rfp.status}"`,
+        409,
+      )
+    }
+    const existing = await this.em.findOne(
+      RfpResponse,
+      { rfpId, agencyId, organizationId: scope.organizationId } as any,
+    )
+    let response: RfpResponse
+    if (existing) {
+      // Editing an already-submitted response is a separate code path (Spec #6
+      // challenge round). For v1, refuse here — the form lock state machine on
+      // P10 should already block this; defence-in-depth.
+      if (existing.status !== 'draft') {
+        throw new PrmDomainError(
+          PRM_ERROR_CODES.VALIDATION_FAILED,
+          `Cannot edit response — already submitted (status="${existing.status}")`,
+          409,
+        )
+      }
+      response = existing
+    } else {
+      response = this.em.create(RfpResponse, {
+        id: randomUUID(),
+        organizationId: scope.organizationId,
+        rfpId,
+        agencyId,
+        submittedByMemberId: memberId,
+        status: 'draft',
+        techExperience: null,
+        domainExperience: null,
+        differentiators: null,
+        attachedCaseStudyIds: [],
+        firstSubmittedAt: null,
+        lastUpdatedAt: new Date(),
+        createdAt: new Date(),
+      } as any)
+    }
+
+    const previousHash = hashResponseContent(response)
+    if (input.tech_experience !== undefined) {
+      response.techExperience = input.tech_experience ?? null
+    }
+    if (input.domain_experience !== undefined) {
+      response.domainExperience = input.domain_experience ?? null
+    }
+    if (input.differentiators !== undefined) {
+      response.differentiators = input.differentiators ?? null
+    }
+    if (input.attached_case_study_ids !== undefined) {
+      response.attachedCaseStudyIds = input.attached_case_study_ids
+    }
+    response.lastUpdatedAt = new Date()
+    this.em.persist(response)
+    await this.em.flush()
+
+    const newHash = hashResponseContent(response)
+    let emitted = false
+    if (newHash !== previousHash) {
+      await safeEmit('prm.rfp_response.draft_saved', {
+        rfp_response_id: response.id,
+        rfp_id: rfpId,
+        agency_id: agencyId,
+        member_id: memberId,
+      })
+      emitted = true
+    }
+
+    return { response, emitted }
+  }
+
   private async loadRfpForWrite(rfpId: string, organizationId: string): Promise<Rfp> {
     const rfp = await this.em.findOne(Rfp, { id: rfpId, organizationId, deletedAt: null } as any)
     if (!rfp) {
@@ -397,6 +499,17 @@ export class RfpService {
     }
     return rfp
   }
+}
+
+/** Canonical content hash for dedupe (R7). Stable across re-runs of the same payload. */
+function hashResponseContent(response: RfpResponse): string {
+  const canonical = JSON.stringify({
+    tech: response.techExperience ?? '',
+    domain: response.domainExperience ?? '',
+    diff: response.differentiators ?? '',
+    cs: [...(response.attachedCaseStudyIds ?? [])].sort(),
+  })
+  return createHash('sha256').update(canonical).digest('hex')
 }
 
 function sameSet(a: string[], b: string[]): boolean {

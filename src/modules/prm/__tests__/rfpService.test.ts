@@ -48,6 +48,16 @@ class FakeEm {
         ) ?? null
       )
     }
+    if (ctorName === 'RfpResponse') {
+      return (
+        this.responses.find(
+          (r) =>
+            (where.rfpId === undefined || r.rfpId === where.rfpId) &&
+            (where.agencyId === undefined || r.agencyId === where.agencyId) &&
+            (where.organizationId === undefined || r.organizationId === where.organizationId),
+        ) ?? null
+      )
+    }
     return null
   }
 
@@ -365,5 +375,121 @@ describe('RfpService.unpublish', () => {
     await expect(
       service.unpublish('not-a-real-id', { reason: 'x' }, { organizationId: ORG, userId: USER }),
     ).rejects.toMatchObject({ status: 404 })
+  })
+})
+
+describe('RfpService.upsertResponseDraft', () => {
+  async function setupPublishedRfp(): Promise<{
+    em: FakeEm
+    service: RfpService
+    rfpId: string
+  }> {
+    const em = new FakeEm()
+    seedAgency(em, 'agency-A', 'ai_native')
+    const service = new RfpService(em as any)
+    const created = await service.createDraft(makeCreateInput(), {
+      tenantId: TENANT,
+      organizationId: ORG,
+      userId: USER,
+    })
+    await service.publish(
+      created.id,
+      {},
+      { tenantId: TENANT, organizationId: ORG, userId: USER },
+    )
+    return { em, service, rfpId: created.id }
+  }
+
+  it('creates the response on first call and stamps submitted_by_member_id', async () => {
+    const { em, service, rfpId } = await setupPublishedRfp()
+    const result = await service.upsertResponseDraft(
+      rfpId,
+      'agency-A',
+      'member-M1',
+      { tech_experience: 'React @ Acme', attached_case_study_ids: [] },
+      { organizationId: ORG },
+    )
+    expect(result.response.status).toBe('draft')
+    expect(result.response.submittedByMemberId).toBe('member-M1')
+    expect(result.response.techExperience).toBe('React @ Acme')
+    expect(em.responses).toHaveLength(1)
+    expect(result.emitted).toBe(true)
+  })
+
+  it('updates the same row on subsequent calls without re-stamping the member id', async () => {
+    const { service, rfpId } = await setupPublishedRfp()
+    const first = await service.upsertResponseDraft(
+      rfpId,
+      'agency-A',
+      'member-M1',
+      { tech_experience: 'first take', attached_case_study_ids: [] },
+      { organizationId: ORG },
+    )
+    const second = await service.upsertResponseDraft(
+      rfpId,
+      'agency-A',
+      // M2 cannot retroactively become the author — service preserves M1.
+      'member-M2',
+      { tech_experience: 'edited copy', attached_case_study_ids: [] },
+      { organizationId: ORG },
+    )
+    expect(second.response.id).toBe(first.response.id)
+    expect(second.response.submittedByMemberId).toBe('member-M1')
+    expect(second.response.techExperience).toBe('edited copy')
+  })
+
+  it('R7: skips event emission when content hash is unchanged', async () => {
+    const { service, rfpId } = await setupPublishedRfp()
+    const first = await service.upsertResponseDraft(
+      rfpId,
+      'agency-A',
+      'member-M1',
+      { tech_experience: 'identical', attached_case_study_ids: [] },
+      { organizationId: ORG },
+    )
+    const second = await service.upsertResponseDraft(
+      rfpId,
+      'agency-A',
+      'member-M1',
+      { tech_experience: 'identical', attached_case_study_ids: [] },
+      { organizationId: ORG },
+    )
+    expect(first.emitted).toBe(true)
+    expect(second.emitted).toBe(false)
+  })
+
+  it('rejects edits when RFP status is no longer portal-visible', async () => {
+    const { em, service, rfpId } = await setupPublishedRfp()
+    em.rfps[0]!.status = 'closed'
+    await expect(
+      service.upsertResponseDraft(
+        rfpId,
+        'agency-A',
+        'member-M1',
+        { tech_experience: 'late entry', attached_case_study_ids: [] },
+        { organizationId: ORG },
+      ),
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('rejects edits when the response is already submitted (defence-in-depth)', async () => {
+    const { em, service, rfpId } = await setupPublishedRfp()
+    await service.upsertResponseDraft(
+      rfpId,
+      'agency-A',
+      'member-M1',
+      { tech_experience: 'first', attached_case_study_ids: [] },
+      { organizationId: ORG },
+    )
+    em.responses[0]!.status = 'submitted'
+    await expect(
+      service.upsertResponseDraft(
+        rfpId,
+        'agency-A',
+        'member-M1',
+        { tech_experience: 'late edit', attached_case_study_ids: [] },
+        { organizationId: ORG },
+      ),
+    ).rejects.toMatchObject({ status: 409 })
   })
 })

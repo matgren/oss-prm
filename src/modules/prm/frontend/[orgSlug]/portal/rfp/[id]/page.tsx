@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
@@ -276,7 +277,121 @@ export default function PortalRfpDetailPage() {
       </section>
 
       {!declined && isViewable ? (
-        <section className="space-y-3 rounded-md border p-4">
+        <ResponseSection
+          rfpId={rfp.id}
+          initialResponse={data.response}
+          isResponseable={isResponseable}
+          onChange={(next) => setData((prev) => (prev ? { ...prev, response: next } : prev))}
+        />
+      ) : null}
+
+      {!declined && isViewable ? (
+        <section className="rounded-md border p-4 text-sm" data-testid="rfp-decline-section">
+          <Button
+            type="button"
+            variant="outline"
+            disabled
+            data-testid="rfp-decline-cta"
+            title={
+              isResponseable
+                ? undefined
+                : t('prm.portal.rfp.detail.cta.declineDisabled', 'Decline (locked)')
+            }
+          >
+            {t('prm.portal.rfp.detail.cta.decline', 'Decline this RFP')}
+          </Button>
+        </section>
+      ) : null}
+    </div>
+  )
+}
+
+const AUTO_SAVE_DEBOUNCE_MS = 500
+
+type DraftRouteResponse =
+  | { ok: true; id: string; status: 'draft' | 'submitted'; lastUpdatedAt: string; emitted: boolean }
+  | { ok: false; error: string | { code: string; message: string } }
+
+type ResponseSectionProps = {
+  rfpId: string
+  initialResponse: Response | null
+  isResponseable: boolean
+  onChange: (next: Response | null) => void
+}
+
+function ResponseSection({ rfpId, initialResponse, isResponseable, onChange }: ResponseSectionProps) {
+  const t = useT()
+  const [tech, setTech] = React.useState(initialResponse?.techExperience ?? '')
+  const [domain, setDomain] = React.useState(initialResponse?.domainExperience ?? '')
+  const [diff, setDiff] = React.useState(initialResponse?.differentiators ?? '')
+  const [savingState, setSavingState] = React.useState<'idle' | 'saving' | 'saved' | 'error'>(
+    'idle',
+  )
+  const [savedAt, setSavedAt] = React.useState<string | null>(initialResponse?.lastUpdatedAt ?? null)
+  const [errorLabel, setErrorLabel] = React.useState<string | null>(null)
+
+  const submitted = initialResponse?.status === 'submitted'
+  const editable = isResponseable && !submitted
+  const lastSentRef = React.useRef<string>(
+    serializeDraft(
+      initialResponse?.techExperience ?? '',
+      initialResponse?.domainExperience ?? '',
+      initialResponse?.differentiators ?? '',
+    ),
+  )
+
+  React.useEffect(() => {
+    if (!editable) return
+    const next = serializeDraft(tech, domain, diff)
+    if (next === lastSentRef.current) return
+    setSavingState('saving')
+    const handle = window.setTimeout(() => {
+      void persistDraft(rfpId, { tech, domain, diff })
+        .then((res) => {
+          if (!res.ok || !('id' in res)) {
+            const message =
+              typeof res.error === 'string'
+                ? res.error
+                : res.error?.message ?? t('prm.portal.rfp.response.draftError', 'Auto-save failed.')
+            setErrorLabel(message)
+            setSavingState('error')
+            return
+          }
+          lastSentRef.current = next
+          setSavedAt(res.lastUpdatedAt)
+          setSavingState('saved')
+          setErrorLabel(null)
+          onChange({
+            id: res.id,
+            status: res.status,
+            techExperience: tech,
+            domainExperience: domain,
+            differentiators: diff,
+            attachedCaseStudyIds: initialResponse?.attachedCaseStudyIds ?? [],
+            firstSubmittedAt: initialResponse?.firstSubmittedAt ?? null,
+            lastUpdatedAt: res.lastUpdatedAt,
+          })
+        })
+        .catch(() => {
+          setErrorLabel(
+            t('prm.portal.rfp.response.draftError', 'Auto-save failed.'),
+          )
+          setSavingState('error')
+        })
+    }, AUTO_SAVE_DEBOUNCE_MS)
+    return () => window.clearTimeout(handle)
+  }, [tech, domain, diff, rfpId, editable, t, initialResponse, onChange])
+
+  const savedAtLabel = savedAt
+    ? t('prm.portal.rfp.response.savedAt', 'Last saved {time}', {
+        time: new Date(savedAt).toLocaleTimeString(),
+      })
+    : null
+
+  return (
+    <section className="space-y-3 rounded-md border p-4" data-testid="rfp-response-section">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
           <h2 className="text-lg font-medium">{t('prm.portal.rfp.response.title', 'Your response')}</h2>
           <p className="text-sm text-muted-foreground">
             {t(
@@ -284,36 +399,138 @@ export default function PortalRfpDetailPage() {
               'Drafts auto-save every few seconds. Submit when ready.',
             )}
           </p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled data-testid="rfp-respond-cta">
-              {isResponseable
-                ? t('prm.portal.rfp.detail.cta.respond', 'Open response form')
-                : t('prm.portal.rfp.detail.cta.respondLocked', 'Respond (locked)')}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled
-              data-testid="rfp-decline-cta"
-              title={
-                isResponseable
-                  ? undefined
-                  : t('prm.portal.rfp.detail.cta.declineDisabled', 'Decline (locked)')
-              }
-            >
-              {t('prm.portal.rfp.detail.cta.decline', 'Decline this RFP')}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'prm.portal.rfp.response.caseStudy.deferred',
-              'Case study attachments will be available when the Case Studies module ships.',
-            )}
-          </p>
-        </section>
+        </div>
+        <div className="text-xs text-muted-foreground" data-testid="rfp-save-state">
+          {savingState === 'saving'
+            ? t('prm.portal.rfp.response.saving', 'Saving…')
+            : savingState === 'error'
+              ? (errorLabel ?? t('prm.portal.rfp.response.draftError', 'Auto-save failed.'))
+              : savedAtLabel}
+        </div>
+      </header>
+
+      {!editable && submitted ? (
+        <div
+          className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground"
+          data-testid="rfp-response-locked"
+        >
+          {t('prm.portal.rfp.response.locked.submitted', 'Submitted on {date}. Withdraw before the deadline if you need to edit.', {
+            date: initialResponse?.firstSubmittedAt
+              ? new Date(initialResponse.firstSubmittedAt).toLocaleString()
+              : '—',
+          })}
+        </div>
       ) : null}
-    </div>
+
+      <DraftField
+        labelKey="prm.portal.rfp.response.field.tech"
+        labelFallback="Technical experience"
+        helpKey="prm.portal.rfp.response.field.tech.help"
+        helpFallback="Named-client evidence > generic claims. Markdown supported."
+        value={tech}
+        onChange={setTech}
+        disabled={!editable}
+        testId="rfp-field-tech"
+      />
+      <DraftField
+        labelKey="prm.portal.rfp.response.field.domain"
+        labelFallback="Domain experience"
+        helpKey="prm.portal.rfp.response.field.domain.help"
+        helpFallback="Markdown supported."
+        value={domain}
+        onChange={setDomain}
+        disabled={!editable}
+        testId="rfp-field-domain"
+      />
+      <DraftField
+        labelKey="prm.portal.rfp.response.field.differentiators"
+        labelFallback="Differentiators (optional)"
+        helpKey="prm.portal.rfp.response.field.differentiators.help"
+        helpFallback="Optional. Markdown supported."
+        value={diff}
+        onChange={setDiff}
+        disabled={!editable}
+        testId="rfp-field-differentiators"
+      />
+
+      <p className="text-xs text-muted-foreground">
+        {t(
+          'prm.portal.rfp.response.caseStudy.deferred',
+          'Case study attachments will be available when the Case Studies module ships.',
+        )}
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" disabled data-testid="rfp-submit-cta">
+          {t('prm.portal.rfp.response.submit', 'Submit response')}
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            'prm.portal.rfp.response.requiredHint',
+            'Technical and domain experience are required to submit.',
+          )}
+        </p>
+      </div>
+    </section>
   )
+}
+
+function DraftField({
+  labelKey,
+  labelFallback,
+  helpKey,
+  helpFallback,
+  value,
+  onChange,
+  disabled,
+  testId,
+}: {
+  labelKey: string
+  labelFallback: string
+  helpKey: string
+  helpFallback: string
+  value: string
+  onChange: (value: string) => void
+  disabled: boolean
+  testId: string
+}) {
+  const t = useT()
+  return (
+    <label className="flex flex-col gap-1 text-sm">
+      <span className="font-medium">{t(labelKey, labelFallback)}</span>
+      <Textarea
+        className="min-h-32 font-mono"
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        data-testid={testId}
+      />
+      <span className="text-xs text-muted-foreground">{t(helpKey, helpFallback)}</span>
+    </label>
+  )
+}
+
+function serializeDraft(tech: string, domain: string, diff: string): string {
+  return JSON.stringify({ tech, domain, diff })
+}
+
+async function persistDraft(
+  rfpId: string,
+  values: { tech: string; domain: string; diff: string },
+): Promise<DraftRouteResponse> {
+  const res = await apiCall<DraftRouteResponse>(`/api/prm/portal/rfp/${rfpId}/response/draft`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tech_experience: values.tech,
+      domain_experience: values.domain,
+      differentiators: values.diff,
+    }),
+  })
+  if (!res.ok || !res.result) {
+    return { ok: false, error: 'Failed to save draft.' }
+  }
+  return res.result
 }
 
 function BackLink({ t }: { t: ReturnType<typeof useT> }) {
