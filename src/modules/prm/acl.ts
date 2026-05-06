@@ -50,6 +50,11 @@ export const features = [
   { id: 'prm.license_deal.write', title: 'Create/edit/attribute license deals (B5)', module: 'prm' },
   { id: 'prm.license_deal.reassign', title: 'Status unreverse (US4.4b — scoped bypass)', module: 'prm' },
   { id: 'prm.min.read_own_agency', title: 'Read own-agency MIN widget data', module: 'prm' },
+
+  // WIC ingestion (Spec #4 — wic-ingestion). B10 audit-log triage.
+  // Cross-spec contract (FROZEN). Backend-only. Service routes under /api/prm/service/wic/*
+  // are auth'd by shared secret + timestamp + idempotency-key headers — no ACL feature.
+  { id: 'prm.wic.resolve', title: 'Triage WIC import audit log (B10)', module: 'prm' },
 ] as const
 
 export type PrmFeatureId = (typeof features)[number]['id']

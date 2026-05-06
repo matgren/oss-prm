@@ -468,3 +468,239 @@ export class LicenseDeal {
   @Property({ type: 'integer', default: 1 })
   version: number = 1
 }
+
+/**
+ * PRM `WICContribution` aggregate (Spec #4 — wic-ingestion).
+ *
+ * One row per `(agency_member_id, contribution_month)` accepted import. Supersession is
+ * idempotent (invariant #3): re-importing the same member-month flips the previous row's
+ * `superseded_by_id` + `archived_at` and inserts a new active row. Attribution is snapshotted
+ * at import time (invariant #13): both `agency_id` and `github_profile` are frozen on the row.
+ *
+ * Cross-spec contract (Spec #2 portal dashboard reads):
+ *   - Table: `prm_wic_contributions`.
+ *   - Active-row predicate: `superseded_by_id IS NULL AND archived_at IS NULL`.
+ *   - Sum-by-(agency_id, month) is the WIC widget's read shape.
+ *
+ * `wic_level` is L-002: stored & displayed only. PRM never branches business logic on it.
+ *
+ * Note: spec §5.1 names the table `wic_contributions` (no prefix); we use the `prm_` prefix
+ * to match the existing PRM module convention (every other table — `prm_agencies`,
+ * `prm_prospects`, `prm_license_deals` — already does so).
+ */
+@Entity({ tableName: 'prm_wic_contributions' })
+@Unique({
+  properties: ['importBatchId', 'rowIndex'],
+  name: 'prm_wic_contributions_batch_row_uniq',
+})
+export class WICContribution {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Index()
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  /** SNAPSHOT — invariant #13. Frozen at import; survives future GH-profile reassignment. */
+  @Index()
+  @Property({ name: 'agency_id', type: 'uuid' })
+  agencyId!: string
+
+  @Index()
+  @Property({ name: 'agency_member_id', type: 'uuid' })
+  agencyMemberId!: string
+
+  /** SNAPSHOT — invariant #13. Stored as the GitHub handle (no leading `@`). */
+  @Property({ name: 'github_profile', type: 'text' })
+  githubProfile!: string
+
+  /** Normalized YYYY-MM-01 (first-of-month). DB CHECK enforces day = 1. */
+  @Index()
+  @Property({ name: 'contribution_month', type: 'date' })
+  contributionMonth!: Date
+
+  /** Enum check (DB-side): 'L1' | 'L2' | 'L3' | 'L4'. NULL legal for zero-score months. */
+  @Property({ name: 'wic_level', type: 'text', nullable: true })
+  wicLevel?: string | null
+
+  /** Decimal-string in DB (numeric(12,4)). Service-layer parses to number for math. */
+  @Property({ name: 'wic_score', type: 'decimal', precision: 12, scale: 4 })
+  wicScore!: string
+
+  @Property({ name: 'contribution_count', type: 'integer', default: 0 })
+  contributionCount: number = 0
+
+  @Property({ name: 'bounty_bonus', type: 'decimal', precision: 12, scale: 4, default: '0' })
+  bountyBonus: string = '0'
+
+  @Property({ name: 'why_bonus', type: 'text', nullable: true })
+  whyBonus?: string | null
+
+  @Property({ name: 'what_included', type: 'text', nullable: true })
+  whatIncluded?: string | null
+
+  @Property({ name: 'what_excluded', type: 'text', nullable: true })
+  whatExcluded?: string | null
+
+  @Property({ name: 'script_version', type: 'text' })
+  scriptVersion!: string
+
+  @Index()
+  @Property({ name: 'import_batch_id', type: 'uuid' })
+  importBatchId!: string
+
+  @Property({ name: 'row_index', type: 'integer' })
+  rowIndex!: number
+
+  @Property({ name: 'computed_at', type: Date })
+  computedAt!: Date
+
+  @Property({ name: 'imported_at', type: Date, onCreate: () => new Date() })
+  importedAt: Date = new Date()
+
+  /** When set, this row has been superseded by a newer import for the same member-month. */
+  @Index()
+  @Property({ name: 'superseded_by_id', type: 'uuid', nullable: true })
+  supersededById?: string | null
+
+  /** Set alongside `superseded_by_id`. Indexed-where on the active-row predicate (see migration). */
+  @Property({ name: 'archived_at', type: Date, nullable: true })
+  archivedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+/**
+ * PRM `WICImportAuditLog` (Spec #4 — wic-ingestion).
+ *
+ * One row per rejected import row. Resolved by OM PartnerOps via B10. Resolution lifecycle
+ * is captured on the same row (no separate resolution events table). The row is never deleted;
+ * `resolved_at` flips when an action is taken.
+ *
+ * Note on rejection_reason enum: spec §10.5 records that the App Spec §1.4.6 form
+ * (`unknown_github_profile`) is the persisted value, while the Technical Approach prose
+ * uses `profile_not_found` as the human-facing alias surfaced in B10 copy.
+ */
+@Entity({ tableName: 'prm_wic_import_audit_log' })
+@Unique({
+  properties: ['importBatchId', 'rowIndex'],
+  name: 'prm_wic_import_audit_log_batch_row_uniq',
+})
+export class WICImportAuditLog {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Index()
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Index()
+  @Property({ name: 'import_batch_id', type: 'uuid' })
+  importBatchId!: string
+
+  @Property({ name: 'row_index', type: 'integer' })
+  rowIndex!: number
+
+  /** Original n8n row, verbatim. */
+  @Property({ name: 'raw_payload', type: 'json' })
+  rawPayload!: Record<string, unknown>
+
+  /**
+   * Enum check (DB-side):
+   *   'unknown_github_profile' | 'ambiguous_github_profile' | 'malformed_month' |
+   *   'unknown_level' | 'invalid_payload'.
+   */
+  @Index()
+  @Property({ name: 'rejection_reason', type: 'text' })
+  rejectionReason!: string
+
+  @Property({ name: 'rejection_detail', type: 'text', nullable: true })
+  rejectionDetail?: string | null
+
+  /** Best-effort agency resolution at import time. NULL if profile was unresolvable. */
+  @Index()
+  @Property({ name: 'resolved_agency_id', type: 'uuid', nullable: true })
+  resolvedAgencyId?: string | null
+
+  @Property({ name: 'script_version', type: 'text' })
+  scriptVersion!: string
+
+  /** YYYY-MM (envelope month — for quick filtering). */
+  @Property({ name: 'month', type: 'text' })
+  month!: string
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  /** Set when an OM PartnerOps user clicks one of the three resolve actions on B10. */
+  @Index()
+  @Property({ name: 'resolved_at', type: Date, nullable: true })
+  resolvedAt?: Date | null
+
+  @Property({ name: 'resolved_by_user_id', type: 'uuid', nullable: true })
+  resolvedByUserId?: string | null
+
+  /** Enum check (DB-side): 'accepted_after_fix' | 'rolled_back' | 'ignored'. */
+  @Property({ name: 'resolution_action', type: 'text', nullable: true })
+  resolutionAction?: string | null
+
+  @Property({ name: 'resolution_note', type: 'text', nullable: true })
+  resolutionNote?: string | null
+}
+
+/**
+ * PRM `ServiceIdempotencyKey` — auth infrastructure side table for `ServiceAuthMiddleware`.
+ *
+ * NOT a PRM domain entity. Lives here in v1 because PRM is the only consumer; lift to a
+ * shared module when a second service-identity surface adopts the pattern.
+ *
+ * Composite PK `(endpoint, idempotency_key)` makes the dedupe lookup a single index hit.
+ * Tenant context is the singleton PRM tenant resolved from env config (spec §6.1) — service
+ * requests have no tenant in the request itself.
+ */
+@Entity({ tableName: 'prm_service_idempotency_key' })
+export class ServiceIdempotencyKey {
+  @PrimaryKey({ name: 'endpoint', type: 'text' })
+  endpoint!: string
+
+  @PrimaryKey({ name: 'idempotency_key', type: 'uuid' })
+  idempotencyKey!: string
+
+  @Index()
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  /** sha256 of canonical request body. Used for "same key + same payload → replay". */
+  @Property({ name: 'payload_hash', type: 'text' })
+  payloadHash!: string
+
+  /** sha256 of response body. Tracked for invariant: response was deterministic at first commit. */
+  @Property({ name: 'response_hash', type: 'text' })
+  responseHash!: string
+
+  @Property({ name: 'response_status', type: 'integer' })
+  responseStatus!: number
+
+  /** Replayed verbatim on idempotent retry. */
+  @Property({ name: 'response_body', type: 'json' })
+  responseBody!: Record<string, unknown>
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+}
