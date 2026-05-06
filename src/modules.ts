@@ -14,7 +14,7 @@ export const enabledModules: ModuleEntry[] = [
   // PRM-direct dependencies (declared in src/modules/prm/index.ts `requires`
   // and/or imported in PRM source).
   { id: 'auth', from: '@open-mercato/core' },
-  { id: 'customers', from: '@open-mercato/core' },     // ephemeral test runner readiness probe + dashboards/seed/analytics.ts
+  { id: 'customers', from: '@open-mercato/core' },        // required by mercato test:integration readiness probe (GET /api/customers/people)
   { id: 'customer_accounts', from: '@open-mercato/core' },
   { id: 'directory', from: '@open-mercato/core' },
   { id: 'events', from: '@open-mercato/events' },

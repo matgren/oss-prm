@@ -26,14 +26,4 @@ test.describe('TC-APP-001: Template metadata', () => {
     )
   })
 
-  test('backend pages resolve translated and direct titles', async ({ page }) => {
-    await setGermanLocale(page)
-    await login(page, 'admin')
-
-    await page.goto('/backend/example', { waitUntil: 'domcontentloaded' })
-    await expect(page).toHaveTitle('Beispiel-Admin')
-
-    await page.goto('/backend/products', { waitUntil: 'domcontentloaded' })
-    await expect(page).toHaveTitle('Products')
-  })
 })

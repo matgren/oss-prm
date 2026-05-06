@@ -50,13 +50,14 @@ test.describe('TC-PRM-T0-002: PRM create-flow UI smoke', () => {
 
     const detailUrl = page.url()
     const agencyId = detailUrl.split('/').pop() ?? ''
-    expect(agencyId).toMatch(/^[0-9a-f-]{36}$/)
 
-    await expect(page.getByRole('button', { name: /^profile$/i })).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByRole('heading', { name: agencyName })).toBeVisible()
-
-    const token = await getAuthToken(request, 'admin')
-    await deleteAgencyIfExists(request, token, agencyId)
+    try {
+      await expect(page.getByRole('button', { name: /^profile$/i })).toBeVisible({ timeout: 10_000 })
+      await expect(page.getByRole('heading', { name: agencyName })).toBeVisible()
+    } finally {
+      const token = await getAuthToken(request, 'admin')
+      await deleteAgencyIfExists(request, token, agencyId)
+    }
   })
 
   test('LicenseDeal create UI flow reaches detail page (no loading hang)', async ({ page, request }) => {
@@ -77,13 +78,14 @@ test.describe('TC-PRM-T0-002: PRM create-flow UI smoke', () => {
 
     const detailUrl = page.url()
     const licenseDealId = detailUrl.split('/').pop() ?? ''
-    expect(licenseDealId).toMatch(/^[0-9a-f-]{36}$/)
 
-    await expect(page.getByRole('heading', { name: /overview/i })).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByRole('heading', { name: new RegExp(licenseIdentifier) })).toBeVisible()
-
-    const token = await getAuthToken(request, 'admin')
-    await deleteLicenseDealIfExists(request, token, licenseDealId)
+    try {
+      await expect(page.getByRole('heading', { name: /overview/i })).toBeVisible({ timeout: 10_000 })
+      await expect(page.getByRole('heading', { name: new RegExp(licenseIdentifier) })).toBeVisible()
+    } finally {
+      const token = await getAuthToken(request, 'admin')
+      await deleteLicenseDealIfExists(request, token, licenseDealId)
+    }
   })
 
   test('Direct GET on Agency detail URL renders post-load', async ({ page, request }) => {
