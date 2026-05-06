@@ -207,11 +207,11 @@ Commit: `docs: trim POST-MVP follow-ups now covered by smoke suite`
 
 ### Phase 1: Restructure PRM backend folders
 
-- [ ] 1.1 git mv five top-level folders under backend/prm/
-- [ ] 1.2 Remove empty backend/agencies/ directory
-- [ ] 1.3 yarn generate + verify all 10 /backend/prm/... URLs
-- [ ] 1.4 Grep for stale /backend/<segment> path references
-- [ ] 1.5 yarn typecheck + yarn jest src/modules/prm green
+- [x] 1.1 git mv five top-level folders under backend/prm/ — 87d5c12
+- [x] 1.2 Remove empty backend/agencies/ directory — 87d5c12
+- [x] 1.3 yarn generate + verify all 9 /backend/prm/... URLs (no /prospects/[id] backend route — portal-only) — 87d5c12
+- [x] 1.4 Grep for stale /backend/<segment> path references — 87d5c12 (zero stale refs)
+- [x] 1.5 yarn typecheck + yarn jest src/modules/prm green (133/133, 17 suites) — 87d5c12
 
 ### Phase 2: PRM Playwright helpers
 
