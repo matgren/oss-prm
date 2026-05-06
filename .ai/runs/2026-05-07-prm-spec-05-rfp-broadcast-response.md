@@ -168,18 +168,18 @@ Commit: `docs(runs): close prm-spec-05 run plan; spec implementation status; tri
 
 ### Commit 1: Entities + backend B7 + publish + notification seed
 
-- [ ] 1.1 Entities (Rfp, RfpBroadcast, RfpResponse)
-- [ ] 1.2 Migration (base + `_indexes` companion)
-- [ ] 1.3 Validators
-- [ ] 1.4 ACL features (prm.rfp.create, prm.rfp.publish)
+- [x] 1.1 Entities (Rfp, RfpBroadcast, RfpResponse) — foundation commit
+- [x] 1.2 Migration (base + `_indexes` companion) — foundation commit
+- [x] 1.3 Validators — foundation commit
+- [x] 1.4 ACL features (prm.rfp.create, prm.rfp.publish) — foundation commit
 - [ ] 1.5 RfpService + eligibility evaluator
 - [ ] 1.6 Backend routes (CRUD + publish/unpublish)
 - [ ] 1.7 NotificationTypeDefinition + subscriber
 - [ ] 1.8 6 events added to events.ts
 - [ ] 1.9 Unit tests (eligibility + service)
 - [ ] 1.10 Integration tests §9.1
-- [ ] 1.11 DI proxy guardrail test (POST-MVP bundled)
-- [ ] 1.12 typecheck + jest + generate green
+- [x] 1.11 DI proxy guardrail test (POST-MVP bundled) — 8710362
+- [x] 1.12 typecheck + jest 135/135 + generate green (foundation level)
 
 ### Commit 2: P9 portal inbox
 
