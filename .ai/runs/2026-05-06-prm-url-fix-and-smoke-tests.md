@@ -230,10 +230,20 @@ Commit: `docs: trim POST-MVP follow-ups now covered by smoke suite`
 - [x] 2.4 TC-PRM-SMOKE-001-fixtures.spec.ts SHIPPED but `test.describe.fixme()` — see "Surfaced bug" below — 628938c
 - [x] 2.5 Pre-existing fix: replace `__dirname` with ESM shim in playwright.config.ts (config never worked under "type": "module") — 3d126f2
 - [x] 2.6 Add ephemeral runner state files to .gitignore — 3d126f2
+- [x] 2.7 Resume 2026-05-06: diagnose surfaced bug — widened POST catch to surface stderr; smoke run #1 against ephemeral Postgres surfaced two distinct root causes (see below)
+- [x] 2.8 Resume 2026-05-06: fix root cause #1 — chain `.proxy()` on PRM scoped DI registrations so destructured factory params receive `em` under `InjectionMode.CLASSIC` — d0141c2
+- [x] 2.9 Resume 2026-05-06: fix root cause #2 — pre-generate Organization UUID in `agencyService` so `Agency.organizationId` is set before flush (Organization PK uses `defaultRaw: 'gen_random_uuid()'`, deferred to DB) — c488dbb
+- [x] 2.10 Resume 2026-05-06: remove `test.describe.fixme()` from TC-PRM-SMOKE-001-fixtures.spec.ts — 2be2900
+- [x] 2.11 Resume 2026-05-06: confirm smoke green twice in a row via `yarn test:integration:ephemeral --filter TC-PRM-SMOKE-001-fixtures` — runs #4 (2 passed, 0 failed) and #5 (2 passed, 0 failed) — 2be2900
 
-**Surfaced bug (Phase 2.4):** Both `POST /api/prm/agency` and `POST /api/prm/license-deal` return HTTP 500 with empty body in the ephemeral integration environment. Token + ACL are correct (admin has `prm.*`); fixtures + GET endpoints work. Failure is server-side in the POST handlers' service-call path (catch only handles `PrmDomainError`, re-throws other errors as 500). Server stderr is captured by the ephemeral runner but not surfaced through stdout, so the 500 body is empty. Smoke is `test.describe.fixme` so the suite stays green; remove `.fixme` and re-run once the bug is diagnosed.
+**Surfaced bug (Phase 2.4) — RESOLVED 2026-05-06.** Both `POST /api/prm/agency` and `POST /api/prm/license-deal` returned HTTP 500 with empty body in the ephemeral integration environment. Two distinct root causes, masked behind one symptom:
 
-**Phases 3/4/5 dropped from this PR.** Phase 3 (T0 happy path) depended on Phase 2 fixtures green. Phase 4/5 additionally need a customer-portal auth helper that doesn't ship in `@open-mercato/core/testing/integration`. Both blocked on the Phase 2.4 bug + portal-auth helper. Tracked as POST-MVP follow-ups.
+1. **DI:** PRM `di.ts` registered services via `asFunction(({ em }) => new Service(em)).scoped()` without `.proxy()`. The shared request container uses `InjectionMode.CLASSIC` (per `node_modules/@open-mercato/shared/src/lib/di/container.ts`), under which destructured factory params do not receive named dependencies — `em` arrived undefined and the first `findOneWithDecryption` call threw `TypeError: Cannot read properties of undefined (reading 'findOne')`. Canonical fix is `.proxy()` per the data_sync module pattern.
+2. **Persistence ordering:** `agencyService.createAgencyWithOrganization` read `(organization as any).id` before `em.flush()`. Organization PK uses `defaultRaw: 'gen_random_uuid()'` (DB-side default), so the value was undefined at create-time — MikroORM rejected the Agency insert with `ValidationError: Value for Agency.organizationId is required, 'undefined' found`. Fix is to call `randomUUID()` inside the service and reuse the value for both the Organization create and the Agency `organizationId` FK.
+
+Both fixes are server-side; the HTTP contract for `POST /api/prm/agency` is unchanged.
+
+**Phases 3/4/5 still dropped from this PR.** Phase 3 (T0 happy-path UI Playwright spec) is a separate piece of work — the fixture-level smoke (TC-PRM-SMOKE-001-fixtures, now green) covers the API surface and is what gates this resume. Phase 4/5 still need the customer-portal auth helper that doesn't ship in `@open-mercato/core/testing/integration`. Tracked as POST-MVP follow-ups.
 
 ### Phase 3: T0 smoke (Agency happy path)
 
