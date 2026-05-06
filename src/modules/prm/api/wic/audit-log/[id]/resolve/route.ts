@@ -53,6 +53,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
+  // Tenant-only scope — see comment in `audit-log/route.ts` for rationale.
+  // WIC audit-log is tenant-wide by design (Spec §6.1) and adding an
+  // `organizationId` filter here would break staff users whose `auth.orgId`
+  // (staff org) does not match the audit-log row's `organizationId` (the
+  // singleton-resolved Agency org).
   const row = await findOneWithDecryption<WicImportAuditLog>(
     em,
     WicImportAuditLog,

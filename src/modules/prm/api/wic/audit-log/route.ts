@@ -64,6 +64,15 @@ export async function GET(req: Request) {
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
+  // WIC audit-log is **tenant-wide** by design. Per Spec §6.1 WIC ingestion is
+  // tenant-scoped (one tenant context per service-identity request); the
+  // `organization_id` column on `prm_wic_import_audit_logs` is informational —
+  // it captures whichever Agency Organization the singleton resolver pinned at
+  // import time. Filtering reads by `organizationId` here would (a) hide rows
+  // from staff users in tenants where the pinned Org differs from the staff Org,
+  // and (b) diverge from the established PRM convention — `agency`, `prospects`,
+  // and `license-deal` list routes all scope by `tenantId` only. Staff users see
+  // every audit-log entry in their tenant; no cross-tenant leak.
   const where: Record<string, unknown> = { tenantId: auth.tenantId }
   if (resolved === 'false') where.resolvedAt = null
   else if (resolved === 'true') where.resolvedAt = { $ne: null }

@@ -193,6 +193,32 @@ describe('GET /api/prm/wic/audit-log (B10 list)', () => {
     expect(res.status).toBe(400)
   })
 
+  it('rows in same tenant but different organization ARE visible (tenant-wide design — Spec §6.1)', async () => {
+    // Regression guard: the original PR #4 review proposed adding an
+    // `organizationId` filter to this route. That would have broken multi-org-
+    // same-tenant deployments AND staff users (whose auth.orgId is a staff org,
+    // never matching the audit-log row's pinned-Agency org). WIC audit-log is
+    // tenant-wide by design — see route comment.
+    seedAuditLog({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1' })
+    em.rows.push({
+      ...em.rows[0],
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+      tenantId: em.tenantId,
+      organizationId: 'ffffffff-ffff-4fff-8fff-ffffffffffff', // different Agency Org, same tenant
+    } as any)
+    getAuthMock.mockResolvedValue(makeAuth())
+    const { GET } = await loadListHandler()
+    const res = await GET(new Request('http://test.local/api/prm/wic/audit-log'))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.items).toHaveLength(2)
+    const ids = json.items.map((row: { id: string }) => row.id).sort()
+    expect(ids).toEqual([
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+    ])
+  })
+
   it('cross-tenant rows are filtered out by the tenantId where-clause', async () => {
     seedAuditLog({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1' })
     em.rows.push({
