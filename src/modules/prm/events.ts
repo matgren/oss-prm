@@ -48,6 +48,17 @@ const events = [
   { id: 'prm.license_deal.reversal_started', label: 'License deal reversal started', entity: 'license_deal', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.license_deal.reversed', label: 'License deal attribution reversed', entity: 'license_deal', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.license_deal.status_unreversed', label: 'License deal status unreversed (US4.4b)', entity: 'license_deal', category: 'system' },
+
+  // WIC ingestion (Spec #4 — wic-ingestion).
+  // Cross-spec contract (FROZEN): Spec #2's portal dashboard cache invalidator subscribes to
+  // `prm.wic.contribution_recorded` + `prm.wic.contribution_superseded`. The
+  // `prm.wic_import.batch_completed` event is the per-month rollup signal — emitted only on
+  // clean batch completion so downstream consumers never see partial-import state.
+  { id: 'prm.wic.contribution_recorded', label: 'WIC contribution recorded', entity: 'wic_contribution', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.wic.contribution_superseded', label: 'WIC contribution superseded by re-import', entity: 'wic_contribution', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.wic_import.row_rejected', label: 'WIC import row rejected (Anti-Corruption Layer)', entity: 'wic_import', category: 'system' },
+  { id: 'prm.wic_import.batch_completed', label: 'WIC import batch completed', entity: 'wic_import', category: 'lifecycle', clientBroadcast: true },
+  { id: 'prm.wic_import.resolved', label: 'WIC import audit-log row resolved (B10)', entity: 'wic_import', category: 'system' },
 ] as const
 
 export const eventsConfig = createModuleEvents({

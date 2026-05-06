@@ -1,7 +1,29 @@
 import { NextResponse } from 'next/server'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { ServiceIdempotencyKey } from '../data/entities'
+import { Agency, ServiceIdempotencyKey } from '../data/entities'
+
+let cachedSingletonContext: { tenantId: string; organizationId: string } | null = null
+
+async function resolveSingletonTenantContext(
+  em: EntityManager | undefined,
+): Promise<{ tenantId: string; organizationId: string } | null> {
+  if (cachedSingletonContext) return cachedSingletonContext
+  if (!em) return null
+  const first = await em.findOne(
+    Agency,
+    { deletedAt: null } as any,
+    { orderBy: { createdAt: 'asc' } } as any,
+  )
+  if (!first) return null
+  cachedSingletonContext = { tenantId: first.tenantId, organizationId: first.organizationId }
+  return cachedSingletonContext
+}
+
+/** @internal Used only by tests that need to clear the cache between runs. */
+export function _resetServiceAuthSingletonCache(): void {
+  cachedSingletonContext = null
+}
 
 /**
  * Service-identity auth middleware for `/api/prm/service/wic/*` (Spec #4 §3.1).
@@ -32,6 +54,10 @@ export type ServiceIdentity = {
   clientId: 'n8n-wic'
   requestId: string
   idempotencyKey: string | null
+  /** Resolved by middleware (env first, runtime fallback to first PRM Agency). Routes should use
+   *  this rather than re-reading env so the singleton-tenant contract stays in one place. */
+  tenantId: string | null
+  organizationId: string | null
 }
 
 export type ServiceAuthOk = {
@@ -206,10 +232,25 @@ export async function authenticateServiceRequest(
   // GET: header is ignored if present.
 
   const requestId = headers.get('x-om-request-id') ?? crypto.randomUUID()
+  // Resolve tenant context up-front so both GET and POST routes can read it from `identity`
+  // without re-implementing the env-vs-fallback fork. For POST it's also used for the
+  // idempotency persist below.
+  let tenantId = process.env.OM_PRM_WIC_TENANT_ID ?? null
+  let organizationId = process.env.OM_PRM_WIC_ORG_ID ?? null
+  if ((!tenantId || !organizationId) && options.em) {
+    const fallback = await resolveSingletonTenantContext(options.em)
+    if (fallback) {
+      tenantId = fallback.tenantId
+      organizationId = fallback.organizationId
+    }
+  }
+
   const identity: ServiceIdentity = {
     clientId: 'n8n-wic',
     requestId,
     idempotencyKey,
+    tenantId,
+    organizationId,
   }
 
   // POST: idempotency lookup
@@ -232,14 +273,13 @@ export async function authenticateServiceRequest(
         }),
       }
     }
-    const tenantId = process.env.OM_PRM_WIC_TENANT_ID
-    const organizationId = process.env.OM_PRM_WIC_ORG_ID
     if (!tenantId || !organizationId) {
       return {
         ok: false,
         response: jsonResponse(503, {
           ok: false,
-          error: 'WIC tenant context not configured (OM_PRM_WIC_TENANT_ID / OM_PRM_WIC_ORG_ID)',
+          error:
+            'WIC tenant context not configured (set OM_PRM_WIC_TENANT_ID + OM_PRM_WIC_ORG_ID, or seed at least one PRM Agency)',
         }),
       }
     }

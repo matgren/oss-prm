@@ -8,7 +8,7 @@ import { Entity, PrimaryKey, Property, Index, Unique } from '@mikro-orm/core'
  * write-guarded at the application layer (invariant #6 — backend ACL + portal ApiInterceptor).
  *
  * **Cross-spec contract:** every downstream PRM aggregate (Prospect, LicenseDeal, RFP, CaseStudy,
- * MarketingMaterial, WICContribution) FK-references `agency.id`. This schema is FROZEN.
+ * MarketingMaterial, WicContribution) FK-references `agency.id`. This schema is FROZEN.
  */
 @Entity({ tableName: 'prm_agencies' })
 @Unique({ properties: ['organizationId'], name: 'prm_agencies_organization_uniq' })
@@ -470,7 +470,7 @@ export class LicenseDeal {
 }
 
 /**
- * PRM `WICContribution` aggregate (Spec #4 — wic-ingestion).
+ * PRM `WicContribution` aggregate (Spec #4 — wic-ingestion).
  *
  * One row per `(agency_member_id, contribution_month)` accepted import. Supersession is
  * idempotent (invariant #3): re-importing the same member-month flips the previous row's
@@ -493,7 +493,7 @@ export class LicenseDeal {
   properties: ['importBatchId', 'rowIndex'],
   name: 'prm_wic_contributions_batch_row_uniq',
 })
-export class WICContribution {
+export class WicContribution {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
 
@@ -579,7 +579,7 @@ export class WICContribution {
 }
 
 /**
- * PRM `WICImportAuditLog` (Spec #4 — wic-ingestion).
+ * PRM `WicImportAuditLog` (Spec #4 — wic-ingestion).
  *
  * One row per rejected import row. Resolved by OM PartnerOps via B10. Resolution lifecycle
  * is captured on the same row (no separate resolution events table). The row is never deleted;
@@ -594,7 +594,7 @@ export class WICContribution {
   properties: ['importBatchId', 'rowIndex'],
   name: 'prm_wic_import_audit_log_batch_row_uniq',
 })
-export class WICImportAuditLog {
+export class WicImportAuditLog {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
 
@@ -666,16 +666,29 @@ export class WICImportAuditLog {
  * NOT a PRM domain entity. Lives here in v1 because PRM is the only consumer; lift to a
  * shared module when a second service-identity surface adopts the pattern.
  *
- * Composite PK `(endpoint, idempotency_key)` makes the dedupe lookup a single index hit.
- * Tenant context is the singleton PRM tenant resolved from env config (spec §6.1) — service
- * requests have no tenant in the request itself.
+ * The natural key is `(endpoint, idempotency_key)` — exposed as a composite UNIQUE.
+ * The PK is a synthetic UUID `id` because the OM core query_index reindexer hardcodes
+ * `b.id` as the partition / pagination column (`reindexer.ts:179,332,336`); without an
+ * `id` column `yarn initialize` fails on the reindex pass. Same workaround pattern as
+ * `ProspectCandidateIndex` (T1 spec §11).
+ *
+ * Tenant context is the singleton PRM tenant resolved from env config (spec §6.1) with
+ * runtime fallback to the first PRM Agency. Service requests have no tenant in the
+ * request itself.
  */
 @Entity({ tableName: 'prm_service_idempotency_key' })
+@Unique({
+  properties: ['endpoint', 'idempotencyKey'],
+  name: 'prm_service_idempotency_key_endpoint_key_uniq',
+})
 export class ServiceIdempotencyKey {
-  @PrimaryKey({ name: 'endpoint', type: 'text' })
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'endpoint', type: 'text' })
   endpoint!: string
 
-  @PrimaryKey({ name: 'idempotency_key', type: 'uuid' })
+  @Property({ name: 'idempotency_key', type: 'uuid' })
   idempotencyKey!: string
 
   @Index()
