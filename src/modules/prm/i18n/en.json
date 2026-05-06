@@ -325,5 +325,8 @@
   "prm.min.col.value": "Annual value (USD)",
   "prm.min.col.status": "Status",
   "prm.min.summary.count": "Attributed deals",
-  "prm.min.summary.total": "Total annual value (USD)"
+  "prm.min.summary.total": "Total annual value (USD)",
+
+  "prm.notifications.rfp.broadcast_invitation.title": "New RFP: {{rfp_title}}",
+  "prm.notifications.rfp.broadcast_invitation.body": "{{client_name}} is looking for an agency. Deadline: {{deadline}}. Open to respond."
 }
