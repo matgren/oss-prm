@@ -456,3 +456,120 @@ export function licenseDealCorrelationKey(
 export function isAttributionFrozen(status: string): boolean {
   return (LICENSE_DEAL_FROZEN_STATUSES as readonly string[]).includes(status)
 }
+
+/* ------------------------------------------------------------------ *
+ * RFP broadcast & response (Spec #5)                                  *
+ * ------------------------------------------------------------------ */
+
+export const RFP_STATUSES = ['draft', 'published', 'scoring', 'selection_made', 'closed'] as const
+export type RfpStatus = (typeof RFP_STATUSES)[number]
+
+export const RFP_ELIGIBILITY_FILTERS = ['all_active', 'by_min_tier', 'explicit'] as const
+export type RfpEligibilityFilter = (typeof RFP_ELIGIBILITY_FILTERS)[number]
+
+export const RFP_BUDGET_BUCKETS = ['<50k', '50k-250k', '250k-1m', '1m+', 'unknown'] as const
+export type RfpBudgetBucket = (typeof RFP_BUDGET_BUCKETS)[number]
+
+export const RFP_TIMELINE_BUCKETS = ['0-3m', '3-6m', '6-12m', '12m+', 'unknown'] as const
+export type RfpTimelineBucket = (typeof RFP_TIMELINE_BUCKETS)[number]
+
+export const RFP_RESPONSE_STATUSES = ['draft', 'submitted'] as const
+export type RfpResponseStatus = (typeof RFP_RESPONSE_STATUSES)[number]
+
+/** Statuses on which a portal CustomerUser may see the RFP at all (invariant #15). */
+export const RFP_PORTAL_VISIBLE_STATUSES = ['published', 'scoring', 'selection_made'] as const
+
+/** Internal shape for create + update — refined externally. */
+const rfpDraftBase = z.object({
+  title: z.string().min(1).max(200),
+  received_from: z.string().min(1).max(200),
+  received_at: z.coerce.date(),
+  description: z.string().min(1),
+  tech_requirements: z.string().min(1),
+  domain_requirements: z.string().min(1),
+  industry: z.string().nullable().optional(),
+  budget_bucket: z.enum(RFP_BUDGET_BUCKETS).nullable().optional(),
+  timeline_bucket: z.enum(RFP_TIMELINE_BUCKETS).nullable().optional(),
+  required_capabilities: z.array(z.string()).default([]),
+  additional_criterion_name: z.string().max(120).nullable().optional(),
+  deadline_to_respond: z.coerce.date().nullable().optional(),
+  eligibility_filter: z.enum(RFP_ELIGIBILITY_FILTERS),
+  min_tier: z.enum(AGENCY_TIERS).nullable().optional(),
+  explicit_agency_ids: z.array(z.string().uuid()).nullable().optional(),
+  notes: z.string().max(8_000).nullable().optional(),
+})
+
+/** Backend create-draft payload (US5.1). */
+export const createRfpDraftSchema = rfpDraftBase
+  .superRefine((v, ctx) => {
+    if (v.eligibility_filter === 'by_min_tier' && !v.min_tier) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['min_tier'],
+        message: 'min_tier is required when eligibility_filter = by_min_tier',
+      })
+    }
+    if (
+      v.eligibility_filter === 'explicit' &&
+      (!v.explicit_agency_ids || v.explicit_agency_ids.length === 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['explicit_agency_ids'],
+        message: 'explicit_agency_ids must be non-empty when eligibility_filter = explicit',
+      })
+    }
+  })
+
+export type CreateRfpDraftInput = z.infer<typeof createRfpDraftSchema>
+
+/** Backend update-draft payload — every field optional. */
+export const updateRfpDraftSchema = rfpDraftBase.partial()
+
+export type UpdateRfpDraftInput = z.infer<typeof updateRfpDraftSchema>
+
+/** Backend publish payload (US5.2) — optional confirmation list lets the UI guard against drift. */
+export const publishRfpSchema = z.object({
+  confirmedAgencyIds: z.array(z.string().uuid()).optional(),
+})
+
+export type PublishRfpInput = z.infer<typeof publishRfpSchema>
+
+/** Backend unpublish payload — reason mandatory per §3.3 idempotency table. */
+export const unpublishRfpSchema = z.object({
+  reason: z.string().min(1).max(2_000),
+})
+
+export type UnpublishRfpInput = z.infer<typeof unpublishRfpSchema>
+
+/** Portal P10 draft auto-save payload — every field optional (submit enforces required set). */
+export const draftRfpResponseSchema = z.object({
+  tech_experience: z.string().max(40_000).nullable().optional(),
+  domain_experience: z.string().max(40_000).nullable().optional(),
+  differentiators: z.string().max(40_000).nullable().optional(),
+  attached_case_study_ids: z.array(z.string().uuid()).max(5).default([]),
+})
+
+export type DraftRfpResponseInput = z.infer<typeof draftRfpResponseSchema>
+
+/** Portal P10 decline payload (US5.5). */
+export const declineRfpBroadcastSchema = z.object({
+  decline_reason: z.string().max(2_000).nullable().optional(),
+})
+
+export type DeclineRfpBroadcastInput = z.infer<typeof declineRfpBroadcastSchema>
+
+/** Backend list query (B6). */
+export const listRfpsBackendSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  status: z.enum(RFP_STATUSES).optional(),
+  q: z.string().trim().min(1).max(120).optional(),
+})
+
+/** Portal inbox query (P9 / US5.3). */
+export const listRfpsPortalSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  tab: z.enum(['unread', 'responded', 'declined', 'all']).default('all'),
+})

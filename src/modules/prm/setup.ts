@@ -235,6 +235,9 @@ export const setup: ModuleSetupConfig = {
       'prm.prospect.read_cross_agency',
       // Spec #3: extend employee with read access to LicenseDeals (B5 staff view).
       'prm.license_deal.read',
+      // Spec #5: OM PartnerOps owns RFP authoring + broadcast.
+      'prm.rfp.create',
+      'prm.rfp.publish',
     ],
   },
 

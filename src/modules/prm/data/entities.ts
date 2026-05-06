@@ -468,3 +468,263 @@ export class LicenseDeal {
   @Property({ type: 'integer', default: 1 })
   version: number = 1
 }
+
+/**
+ * PRM `Rfp` aggregate (Spec #5 — rfp-broadcast-response).
+ *
+ * State machine (invariant #16, FROZEN):
+ *   `draft → published → scoring → (selection_made | closed)`.
+ *   Spec #6 owns the `scoring → selection_made → closed` transitions.
+ *
+ * Cross-spec contract (FROZEN):
+ *   - Table: `prm_rfps`.
+ *   - Status enum: `draft` / `published` / `scoring` / `selection_made` / `closed`.
+ *   - `is_path_b_locked` is a read-model column; this spec declares + defaults
+ *     it `false`. Spec #3 writes via `RfpPathBLockSubscriber` on
+ *     `prm.license_deal.status_changed`. Spec #6 reads it for the re-open guard.
+ *   - `eligibility_filter` enum: `all_active` / `by_min_tier` / `explicit`,
+ *     companion columns `min_tier` (text) and `explicit_agency_ids` (uuid[]).
+ *
+ * App-Spec column names win over the Technical Approach's tri-field shape
+ * (per spec §2.1). Hence `tech_requirements` / `domain_requirements` here
+ * (RFP authoring), and `tech_experience` / `domain_experience` /
+ * `differentiators` on RfpResponse (agency response). The naming matches
+ * the scoring rubric's "named-client evidence > generic claims" lens.
+ */
+@Entity({ tableName: 'prm_rfps' })
+export class Rfp {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ type: 'text' })
+  title!: string
+
+  @Property({ name: 'received_from', type: 'text' })
+  receivedFrom!: string
+
+  @Property({ name: 'received_at', type: Date })
+  receivedAt!: Date
+
+  /** Markdown. */
+  @Property({ type: 'text' })
+  description!: string
+
+  /** Markdown. */
+  @Property({ name: 'tech_requirements', type: 'text' })
+  techRequirements!: string
+
+  /** Markdown. */
+  @Property({ name: 'domain_requirements', type: 'text' })
+  domainRequirements!: string
+
+  /** Dictionary slug. NULL for "no specific industry" RFPs. */
+  @Property({ type: 'text', nullable: true })
+  industry?: string | null
+
+  /** Enum check (DB-side): '<50k' / '50k-250k' / '250k-1m' / '1m+' / 'unknown'. */
+  @Property({ name: 'budget_bucket', type: 'text', nullable: true })
+  budgetBucket?: string | null
+
+  /** Enum check (DB-side): '0-3m' / '3-6m' / '6-12m' / '12m+' / 'unknown'. */
+  @Property({ name: 'timeline_bucket', type: 'text', nullable: true })
+  timelineBucket?: string | null
+
+  /** Dictionary slugs (technologies). */
+  @Property({ name: 'required_capabilities', type: 'json', nullable: false, default: '[]' })
+  requiredCapabilities: string[] = []
+
+  @Property({ name: 'additional_criterion_name', type: 'text', nullable: true })
+  additionalCriterionName?: string | null
+
+  @Property({ name: 'deadline_to_respond', type: Date, nullable: true })
+  deadlineToRespond?: Date | null
+
+  /**
+   * Enum check (DB-side): 'all_active' / 'by_min_tier' / 'explicit'. Companion
+   * columns `min_tier` and `explicit_agency_ids` are app-level required iff
+   * filter is `by_min_tier` / `explicit` respectively.
+   */
+  @Property({ name: 'eligibility_filter', type: 'text' })
+  eligibilityFilter!: string
+
+  /** Required iff `eligibility_filter = 'by_min_tier'`. */
+  @Property({ name: 'min_tier', type: 'text', nullable: true })
+  minTier?: string | null
+
+  /** Required iff `eligibility_filter = 'explicit'`. UUIDs of explicitly-targeted Agencies. */
+  @Property({ name: 'explicit_agency_ids', type: 'json', nullable: true })
+  explicitAgencyIds?: string[] | null
+
+  /** Enum check (DB-side): 'draft' / 'published' / 'scoring' / 'selection_made' / 'closed'. */
+  @Index()
+  @Property({ type: 'text', default: 'draft' })
+  status: string = 'draft'
+
+  /** Set by Spec #6's selection action. */
+  @Property({ name: 'selected_agency_id', type: 'uuid', nullable: true })
+  selectedAgencyId?: string | null
+
+  @Property({ name: 'selection_decided_at', type: Date, nullable: true })
+  selectionDecidedAt?: Date | null
+
+  @Property({ name: 'selection_decided_by_user_id', type: 'uuid', nullable: true })
+  selectionDecidedByUserId?: string | null
+
+  @Property({ name: 'selection_reasoning', type: 'text', nullable: true })
+  selectionReasoning?: string | null
+
+  /**
+   * Read-model column. WRITTEN by Spec #3's `RfpPathBLockSubscriber` on
+   * `prm.license_deal.status_changed`. READ by Spec #6's re-open guard
+   * (invariant #17). Default `false` is the safe-pre-Spec-#3 state.
+   */
+  @Property({ name: 'is_path_b_locked', type: 'boolean', default: false })
+  isPathBLocked: boolean = false
+
+  @Property({ type: 'text', nullable: true })
+  notes?: string | null
+
+  @Property({ name: 'created_by_user_id', type: 'uuid' })
+  createdByUserId!: string
+
+  @Property({ name: 'published_at', type: Date, nullable: true })
+  publishedAt?: Date | null
+
+  /** Stamped by Spec #6 on `closed` transition. */
+  @Property({ name: 'closed_at', type: Date, nullable: true })
+  closedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+/**
+ * PRM `RfpBroadcast` (Spec #5).
+ *
+ * One row per (RFP, Agency) eligible at publish time. UNIQUE `(rfp_id, agency_id)`
+ * is invariant #15's source of truth for the visibility gate (silent 404).
+ *
+ * Lifecycle:
+ *   - Created by `RfpService.publish` for every Agency the eligibility evaluator returns.
+ *   - `first_opened_at` stamped exactly once on first portal P10 GET. Side effect emits
+ *     `prm.rfp_broadcast.first_opened`.
+ *   - `declined_at` + `decline_reason` set by `DeclineRFPBroadcastCommand`
+ *     (cleared by `Undecline` while RFP is still `published`).
+ */
+@Entity({ tableName: 'prm_rfp_broadcasts' })
+@Unique({ properties: ['rfpId', 'agencyId'], name: 'prm_rfp_broadcasts_rfp_agency_uniq' })
+export class RfpBroadcast {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Index()
+  @Property({ name: 'rfp_id', type: 'uuid' })
+  rfpId!: string
+
+  @Index()
+  @Property({ name: 'agency_id', type: 'uuid' })
+  agencyId!: string
+
+  @Property({ name: 'broadcast_at', type: Date, onCreate: () => new Date() })
+  broadcastAt: Date = new Date()
+
+  @Property({ name: 'first_opened_at', type: Date, nullable: true })
+  firstOpenedAt?: Date | null
+
+  @Property({ name: 'declined_at', type: Date, nullable: true })
+  declinedAt?: Date | null
+
+  @Property({ name: 'decline_reason', type: 'text', nullable: true })
+  declineReason?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+/**
+ * PRM `RfpResponse` (Spec #5).
+ *
+ * One agency's response to one RFP. Lifecycle: `draft → submitted` (this spec).
+ * Spec #6 derives `scored / selected / not_selected` as views over
+ * `RfpResponseScore` + `Rfp.selected_agency_id`; those values are NOT persisted
+ * here.
+ *
+ * Authoring rules (per §6.2):
+ *   - PartnerAdmin: any draft in the Agency.
+ *   - PartnerMember: only own draft (`submitted_by_member_id = self`).
+ *   - Decline is an Agency-level decision (PartnerAdmin only) — see RfpBroadcast.
+ *
+ * `submitted_by_member_id` is stamped on first draft save with the creating
+ * AgencyMember; reused at submit time.
+ */
+@Entity({ tableName: 'prm_rfp_responses' })
+@Unique({ properties: ['rfpId', 'agencyId'], name: 'prm_rfp_responses_rfp_agency_uniq' })
+export class RfpResponse {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Index()
+  @Property({ name: 'rfp_id', type: 'uuid' })
+  rfpId!: string
+
+  @Index()
+  @Property({ name: 'agency_id', type: 'uuid' })
+  agencyId!: string
+
+  @Property({ name: 'submitted_by_member_id', type: 'uuid' })
+  submittedByMemberId!: string
+
+  /** Enum check (DB-side): 'draft' / 'submitted'. */
+  @Property({ type: 'text', default: 'draft' })
+  status: string = 'draft'
+
+  /** Markdown. NULL while in `draft` is allowed; required at submit time (app-level). */
+  @Property({ name: 'tech_experience', type: 'text', nullable: true })
+  techExperience?: string | null
+
+  /** Markdown. */
+  @Property({ name: 'domain_experience', type: 'text', nullable: true })
+  domainExperience?: string | null
+
+  /** Markdown. Optional even at submit time (per §3.2). */
+  @Property({ type: 'text', nullable: true })
+  differentiators?: string | null
+
+  @Property({ name: 'attached_case_study_ids', type: 'json', nullable: false, default: '[]' })
+  attachedCaseStudyIds: string[] = []
+
+  /** Stamped on first `draft → submitted`. */
+  @Property({ name: 'first_submitted_at', type: Date, nullable: true })
+  firstSubmittedAt?: Date | null
+
+  @Property({ name: 'last_updated_at', type: Date, onUpdate: () => new Date() })
+  lastUpdatedAt: Date = new Date()
+
+  /** Stamped by Spec #6 on challenge-round resubmits (out of scope here). */
+  @Property({ name: 'challenge_round_updated_at', type: Date, nullable: true })
+  challengeRoundUpdatedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+}
