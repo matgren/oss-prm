@@ -11,20 +11,7 @@ import {
   deleteLicenseDealIfExists,
 } from '@/modules/prm/testing/integration'
 
-// TODO bug: POST /api/prm/agency and POST /api/prm/license-deal both return
-// HTTP 500 with empty body in the ephemeral integration environment. The
-// fixtures + GET path are correct (verified by typecheck + spec discovery),
-// and the staff `admin` token from getAuthToken() carries `prm.*` per
-// src/modules/prm/setup.ts defaultRoleFeatures, so this is a server-side
-// failure in the POST handlers — likely raised after schema validation, in
-// the agencyService.createAgencyWithOrganization / licenseDealService.create
-// path, where the catch only handles PrmDomainError and re-throws other
-// errors as 500. Server stderr is captured by the ephemeral runner but not
-// surfaced through stdout, which is why the 500 has no body. This block is
-// `describe.fixme` so the suite green-bars; remove the .fixme and re-run
-// `yarn test:integration:ephemeral --filter TC-PRM-SMOKE-001-fixtures` once
-// the underlying bug is diagnosed and fixed.
-test.describe.fixme('TC-PRM-SMOKE-001: PRM fixture wire-up', () => {
+test.describe('TC-PRM-SMOKE-001: PRM fixture wire-up', () => {
   test('createAgencyFixture seeds an Agency that GET returns', async ({ request }) => {
     const token = await getAuthToken(request, 'admin')
     const uniqueSuffix = Date.now().toString(36)
