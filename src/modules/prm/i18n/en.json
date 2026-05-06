@@ -356,5 +356,8 @@
   "prm.wicIssues.filter.resolved.true": "Resolved",
   "prm.wicIssues.filter.resolved.all": "All",
   "prm.wicIssues.filter.reason.label": "Reason",
-  "prm.wicIssues.filter.reason.all": "All reasons"
+  "prm.wicIssues.filter.reason.all": "All reasons",
+  "prm.wicIssues.error.title": "Could not load WIC audit log",
+  "prm.wicIssues.empty.title": "No open WIC import issues",
+  "prm.wicIssues.empty.description": "The classifier has not flagged anything since the last sweep. New rejections will appear here automatically."
 }

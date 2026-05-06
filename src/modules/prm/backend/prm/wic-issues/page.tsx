@@ -3,10 +3,14 @@ import * as React from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
+import { EmptyState } from '@open-mercato/ui/backend/EmptyState'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Alert, AlertDescription, AlertTitle } from '@open-mercato/ui/primitives/alert'
+import { StatusBadge } from '@open-mercato/ui/primitives/status-badge'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { CheckCircle2 } from 'lucide-react'
 
 type AuditRow = {
   id: string
@@ -172,13 +176,16 @@ export default function WicIssuesBackendPage() {
         header: t('prm.wicIssues.col.status', 'Status'),
         cell: ({ row }) =>
           row.original.resolvedAt ? (
-            <span className="rounded-full border px-2 py-0.5 text-xs">
-              {t(`prm.wicIssues.action.${row.original.resolutionAction}`, row.original.resolutionAction ?? 'resolved')}
-            </span>
+            <StatusBadge variant="neutral">
+              {t(
+                `prm.wicIssues.action.${row.original.resolutionAction}`,
+                row.original.resolutionAction ?? 'resolved',
+              )}
+            </StatusBadge>
           ) : (
-            <span className="rounded-full border border-amber-300 px-2 py-0.5 text-xs">
+            <StatusBadge variant="warning" dot>
               {t('prm.wicIssues.status.open', 'Open')}
-            </span>
+            </StatusBadge>
           ),
       },
       {
@@ -272,13 +279,28 @@ export default function WicIssuesBackendPage() {
           </div>
         </div>
 
-        {error ? <div className="text-sm text-destructive">{error}</div> : null}
+        {error ? (
+          <Alert variant="destructive">
+            <AlertTitle>{t('prm.wicIssues.error.title', 'Could not load WIC audit log')}</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <DataTable<AuditRow>
           entityId="prm.wic_import_audit_log"
           columns={columns}
           data={items}
           isLoading={loading}
+          emptyState={
+            <EmptyState
+              icon={<CheckCircle2 className="h-6 w-6 text-status-success-icon" aria-hidden />}
+              title={t('prm.wicIssues.empty.title', 'No open WIC import issues')}
+              description={t(
+                'prm.wicIssues.empty.description',
+                'The classifier has not flagged anything since the last sweep. New rejections will appear here automatically.',
+              )}
+            />
+          }
           pagination={{
             page,
             pageSize,
