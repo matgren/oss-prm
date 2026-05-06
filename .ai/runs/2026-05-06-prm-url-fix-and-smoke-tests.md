@@ -5,9 +5,25 @@ date: 2026-05-06
 branch: fix/prm-url-fix-and-smoke-tests
 author: matgren
 input_plan: .ai/plans/2026-05-06-prm-url-fix-and-smoke-tests.md
+status: closed
+closed_date: 2026-05-06
+closed_by: PR #1 (merged 77e5178)
 ---
 
 # Run plan — PRM URL restructure + Playwright smoke tests
+
+## Closed — 2026-05-06
+
+This run is closed. PR #1 (merge commit `77e5178`) shipped Phases 1, 2, 6, 7. Phases 3/4/5 were explicitly descoped at PR time and have been superseded:
+
+- **Phase 3 (T0 happy path)** — replaced by `TC-PRM-T0-002-create-flow-ui` shipped in `6407e4c` + `8aa3914`. Original `TC-PRM-T0-001-agency-happy-path` filename was abandoned; the equivalent backend create-flow coverage now lives at `.ai/qa/tests/integration/TC-PRM-T0-002-create-flow-ui.spec.ts`.
+- **Phase 4 (T1 prospect smoke)** — still owed; blocked on a customer-portal auth helper that is not yet shipped in `@open-mercato/core/testing/integration`. Tracked in `.ai/specs/POST-MVP-FOLLOW-UPS.md` (IT-9.1 wip-scoreboard entry).
+- **Phase 5 (T2 attribution smoke)** — still owed; same portal-auth blocker. Tracked in `POST-MVP-FOLLOW-UPS.md` (IT-9.1 attribution-loop entry).
+- **Phase 6 mandate (CRITICAL rule #6)** — relaxed in `36d0606` from MUST-ship to recommended after the rule proved heavy-handed for non-API/UI phases. The `.ai/skills/integration-tests` skill remains the source of truth for HOW; the WHEN is now driven by spec §9 + phase scope.
+
+The `mvp-beta-t2` tag is owed once T1+T2 smokes land; not gated on this run anymore.
+
+Do not re-open this file. Open a new dated run for the remaining T1/T2 smoke work when the portal-auth helper ships.
 
 ## Goal
 
@@ -245,23 +261,34 @@ Both fixes are server-side; the HTTP contract for `POST /api/prm/agency` is unch
 
 **Phases 3/4/5 still dropped from this PR.** Phase 3 (T0 happy-path UI Playwright spec) is a separate piece of work — the fixture-level smoke (TC-PRM-SMOKE-001-fixtures, now green) covers the API surface and is what gates this resume. Phase 4/5 still need the customer-portal auth helper that doesn't ship in `@open-mercato/core/testing/integration`. Tracked as POST-MVP follow-ups.
 
-### Phase 3: T0 smoke (Agency happy path)
+### Phase 3: T0 smoke (Agency happy path) — SUPERSEDED
 
-- [ ] 3.1 Create TC-PRM-T0-001-agency-happy-path.spec.ts — DROPPED THIS PR (blocked on Phase 2.4 bug)
-- [ ] 3.2 Run twice — green both times — DROPPED
-- [ ] 3.3 Address any surfaced bug or document as TODO bug — DROPPED
+> Superseded post-merge by `TC-PRM-T0-002-create-flow-ui` (commits `6407e4c` + `8aa3914`).
+> The original `TC-PRM-T0-001-agency-happy-path` filename was abandoned in favour of the
+> backend create-flow UI smoke that better matched the user-reported "loading hang" symptom.
 
-### Phase 4: T1 smoke (Prospect happy path)
+- [x] 3.1 Create TC-PRM-T0-001-agency-happy-path.spec.ts — SUPERSEDED by TC-PRM-T0-002-create-flow-ui (6407e4c)
+- [x] 3.2 Run twice — green both times — SUPERSEDED (T0-002 verified 2× green in 8aa3914 verification gate)
+- [x] 3.3 Address any surfaced bug or document as TODO bug — DONE (BUG-PRM-UI-001 + BUG-PRM-UI-002 documented in 6407e4c, fixed in 211eef2)
 
-- [ ] 4.1 Implement seedAgencyForTesting() — DROPPED THIS PR (needs portal token + Phase 2.4 fix)
-- [ ] 4.2 Implement loginAsPartnerAdmin() — DROPPED (no shipped customer-portal auth helper)
-- [ ] 4.3 Create TC-PRM-T1-001-prospect-happy-path.spec.ts — DROPPED
-- [ ] 4.4 Run twice — green both times — DROPPED
+### Phase 4: T1 smoke (Prospect happy path) — DESCOPED
 
-### Phase 5: T2 smoke (Attribution Path A + MIN)
+> Descoped: blocked on a customer-portal auth helper that is not shipped in
+> `@open-mercato/core/testing/integration`. Owed work tracked in
+> `.ai/specs/POST-MVP-FOLLOW-UPS.md` (IT-9.1 wip-scoreboard entry).
 
-- [ ] 5.1 Create TC-PRM-T2-001-attribution-happy-path.spec.ts — DROPPED THIS PR
-- [ ] 5.2 Saga completes within 30s — DROPPED
+- [x] 4.1 Implement seedAgencyForTesting() — DESCOPED (tracked in POST-MVP-FOLLOW-UPS.md)
+- [x] 4.2 Implement loginAsPartnerAdmin() — DESCOPED (no shipped customer-portal auth helper)
+- [x] 4.3 Create TC-PRM-T1-001-prospect-happy-path.spec.ts — DESCOPED
+- [x] 4.4 Run twice — green both times — DESCOPED
+
+### Phase 5: T2 smoke (Attribution Path A + MIN) — DESCOPED
+
+> Descoped: same portal-auth blocker as Phase 4. Owed work tracked in
+> `.ai/specs/POST-MVP-FOLLOW-UPS.md` (IT-9.1 attribution-loop entry).
+
+- [x] 5.1 Create TC-PRM-T2-001-attribution-happy-path.spec.ts — DESCOPED (tracked in POST-MVP-FOLLOW-UPS.md)
+- [x] 5.2 Saga completes within 30s — DESCOPED
 
 ### Phase 6: Update om-implement-spec gate
 
