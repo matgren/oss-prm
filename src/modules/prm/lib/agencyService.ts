@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { Organization, Tenant } from '@open-mercato/core/modules/directory/data/entities'
@@ -55,7 +56,17 @@ export class AgencyService {
     }
 
     // Create paired Organization. Slug is mirrored from Agency for human-friendly URLs.
+    // Pre-generate the Organization UUID in-process so the Agency insert in the same
+    // flush has a non-null organizationId. The Organization PK uses
+    // `defaultRaw: 'gen_random_uuid()'` (DB-side default), so MikroORM does not
+    // populate `organization.id` until after flush — reading it before flush yields
+    // `undefined`, and MikroORM rejects the Agency insert with
+    // `Value for Agency.organizationId is required, 'undefined' found`. The HTTP
+    // contract is unchanged (POST /api/prm/agency body still does not carry an
+    // organizationId); this UUID never leaves the service.
+    const organizationId = randomUUID()
     const organization = this.em.create(Organization, {
+      id: organizationId,
       tenant,
       name: input.name,
       slug: input.slug,
@@ -66,7 +77,7 @@ export class AgencyService {
 
     const agency = this.em.create(Agency, {
       tenantId: scope.tenantId,
-      organizationId: (organization as any).id,
+      organizationId,
       name: input.name,
       slug: input.slug,
       headquartersCountry: input.headquartersCountry,
