@@ -60,20 +60,14 @@ For every new feature/function implemented in the phase:
 - Mock external dependencies (DI services, data engine)
 - Verify tests pass: `yarn test`
 
-### Step 4 — Integration Tests (MANDATORY for §9 happy path)
+### Step 4 — Integration Tests
 
-Every spec lists scenarios in §9. The §9 **happy-path smoke MUST ship** with the implementation phase that introduces the API/UI surface — it is a quality gate, not optional. Marking §9 scenarios "deferred to QA team" is **not acceptable**.
-
-For each phase that introduces API or UI behavior:
-- Identify the §9 happy-path scenario (typically IT-1 or IT-9.1).
-- Use shipped OM fixtures from `@open-mercato/core/testing/integration` for seeding (`getAuthToken`, `apiRequest`, `deleteEntityByPathIfExists`, plus the per-domain `create*Fixture` exports). If your module needs its own fixtures, place them at `src/modules/<module>/testing/integration/{index,fixtures}.ts` mirroring the `crmFixtures.ts` shape — never write raw SQL or local helpers/auth files.
-- Place specs at `.ai/qa/tests/integration/TC-<MODULE>-<SPEC>-<ID>-<desc>.spec.ts` (canonical home, auto-discovered by `.ai/qa/tests/playwright.config.ts`). The legacy `src/modules/<module>/__integration__/TC-{CATEGORY}-{XXX}.spec.ts` location is also discovered, but only use it when a test is intrinsically module-internal (e.g. exercises a private CLI command).
-- Tests MUST be self-contained: create fixtures in setup, clean up in teardown.
-- Tests MUST NOT rely on seeded/demo data.
-- Run and verify via the ephemeral runner: `yarn test:integration:ephemeral --filter TC-<...>`.
-- Re-run the test twice in a row — the second run must pass (idempotency check).
-
-Edge-case scenarios beyond the happy path (§9 IT-2, IT-3, …) MAY be deferred to POST-MVP **only if** explicitly tracked in `.ai/specs/POST-MVP-FOLLOW-UPS.md` with an owner and effort estimate. The happy path itself cannot be deferred.
+If the spec defines integration test scenarios (or the phase adds API endpoints / UI flows):
+- Follow the `integration-tests` skill workflow (`.ai/skills/integration-tests/SKILL.md`)
+- Place tests in `src/modules/<module>/__integration__/TC-{CATEGORY}-{XXX}.spec.ts`
+- Tests MUST be self-contained: create fixtures in setup, clean up in teardown
+- Tests MUST NOT rely on seeded/demo data
+- Run and verify: `npx playwright test --config .ai/qa/tests/playwright.config.ts <path> --retries=0`
 
 If the spec does not explicitly list integration scenarios but the phase adds significant API or UI behavior, propose test scenarios to the user before writing them.
 
@@ -159,8 +153,7 @@ Report results to the user. If any check fails, fix and re-verify.
 - MUST update the spec with implementation progress after each phase
 - MUST run `yarn build` after final phase to verify no build breaks
 - MUST create unit tests for all new behavioral code
-- MUST ship the §9 happy-path Playwright smoke in the implementation phase that introduces the API or UI surface — listing §9 scenarios as "deferred to QA team" without writing them is not acceptable
-- MUST place new smoke specs at `.ai/qa/tests/integration/TC-<MODULE>-<SPEC>-<ID>-<desc>.spec.ts`, run via `yarn test:integration:ephemeral`, and use shipped fixtures from `@open-mercato/core/testing/integration` (or module-owned fixtures at `src/modules/<module>/testing/integration/`) — never raw SQL or local helpers/auth files
+- MUST create or propose integration tests for phases with API endpoints or UI flows
 - MUST NOT skip the self-review step — it is the quality gate
 - MUST NOT introduce `any` types, hardcoded strings, raw `fetch`, or other anti-patterns
 - MUST keep subagents focused — one task per subagent, clear boundaries

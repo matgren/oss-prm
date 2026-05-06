@@ -133,7 +133,6 @@ Register in `src/modules.ts`: `{ id: '<id>', from: '@app' }`
    - Only then proceed to implementation
    - If your task matches multiple rows, load ALL listed files
    - **Do NOT skip this step.** The guides contain canonical import paths, required patterns, and conventions that CANNOT be reliably inferred from existing code alone. Skipping leads to wrong imports, missing conventions, and rework.
-6. **§9 happy-path Playwright smoke MUST ship with every spec** — every spec lists integration scenarios in §9; the happy path (typically IT-1 or IT-9.1) is implemented as a Playwright spec at `.ai/qa/tests/integration/TC-<MODULE>-<SPEC>-<ID>-<desc>.spec.ts` in the same phase that introduces the API/UI surface. Run via `yarn test:integration:ephemeral`. Use shipped fixtures from `@open-mercato/core/testing/integration` and module-owned fixtures at `src/modules/<module>/testing/integration/`. Listing scenarios as "deferred to QA team" is not acceptable. Edge cases (IT-2 onward) may be deferred only when explicitly tracked in `.ai/specs/POST-MVP-FOLLOW-UPS.md` with owner + effort.
 
 ## Additional Conventions
 
