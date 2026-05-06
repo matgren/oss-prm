@@ -48,10 +48,27 @@ function emitWithContainer(
  *   - Idempotency replay (also middleware).
  *   - Envelope-level Zod (route handler does this; envelope failures are 422s).
  *
- * Spec deviation from §4.1 "undoable" command pattern: v1 wraps the batch in a single
- * transaction at the route layer. If the txn rolls back, no rows persist — equivalent
- * to executing `undo()` on every recorded contribution. The aspirational
- * `RecordWicContributionCommand.undo` for selective abort-recovery is deferred to v2.
+ * Commit semantics — per-row, NOT batch-transactional (Spec §3.3 R2):
+ *
+ *   `processWicBatch` calls `processWicRow` for each row in turn, and each call
+ *   runs `em.flush()` once it has decided accept/reject/supersede. A mid-batch
+ *   crash therefore leaves rows 0..N-1 committed without
+ *   `prm.wic_import.batch_completed` having fired.
+ *
+ *   This is the design, not a bug. The `(import_batch_id, row_index)` UNIQUE on
+ *   both `prm_wic_contributions` and `prm_wic_import_audit_logs` makes a retry
+ *   with the same `import_batch_id` deterministic — already-committed rows are
+ *   no-ops on the second pass. The same `X-Om-Idempotency-Key` keeps the
+ *   service-auth replay layer aligned (see `serviceAuthMiddleware.ts`).
+ *
+ *   Downstream subscribers MUST treat `prm.wic_import.batch_completed` (not
+ *   `contribution_recorded`) as the "batch is done" signal. Cache invalidation
+ *   tied to the latter is fine because each row's invalidation is independent
+ *   and observing rows 0..N-1 before N is consistent with the n8n contract.
+ *
+ *   Aspirational `RecordWicContributionCommand.undo` for selective abort-
+ *   recovery (Spec §4.1) is deferred to v2; with the per-row + UNIQUE replay
+ *   design, it is not required for v1 correctness.
  */
 
 export type WicAcceptedRow = {

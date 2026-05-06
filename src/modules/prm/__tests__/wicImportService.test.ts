@@ -1,4 +1,4 @@
-import { processWicRow } from '../lib/wicImportService'
+import { processWicBatch, processWicRow } from '../lib/wicImportService'
 import type { AgencyMember, WicContribution, WicImportAuditLog } from '../data/entities'
 
 let nextId = 1
@@ -219,5 +219,60 @@ describe('WIC ACL — processWicRow (Spec #4 §1.4.6)', () => {
     expect(result.status).toBe('accepted')
     const inserted = em.inserted.find((i) => i.kind === 'WicContribution')
     expect(inserted?.row.agencyId).toBe('snapshot-agency') // From resolved member, not from payload.
+  })
+})
+
+describe('WIC batch — per-row commit semantics (Spec §3.3 R2)', () => {
+  it('row N+1 failure does NOT roll back rows 0..N (per-row commit + UNIQUE replay design)', async () => {
+    // Setup: a happy row 0 + a row 1 that will throw mid-flush.
+    const em = new FakeEm()
+    em.members.push({
+      id: 'member-1',
+      tenantId: TENANT,
+      githubProfile: 'octocat',
+      agencyId: 'agency-1',
+      isActive: true,
+      deletedAt: null,
+    } as any)
+
+    let flushCalls = 0
+    const originalFlush = em.flush.bind(em)
+    em.flush = async function () {
+      flushCalls += 1
+      if (flushCalls === 2) {
+        // Simulate a database failure on the second flush (row 1).
+        throw new Error('simulated DB connection drop on row 1')
+      }
+      return originalFlush()
+    }
+
+    const rows = [
+      { ...VALID_ROW, row_index: 0, github_profile: 'octocat' },
+      { ...VALID_ROW, row_index: 1, github_profile: 'octocat' }, // would supersede row 0
+    ]
+
+    let caughtError: unknown = null
+    try {
+      await processWicBatch(em as any, {
+        importBatchId: BATCH,
+        envelopeMonth: '2026-03',
+        scriptVersion: '1.0-test',
+        rawRows: rows,
+        tenantId: TENANT,
+        organizationId: ORG,
+      })
+    } catch (err) {
+      caughtError = err
+    }
+
+    // Row 0 succeeded BEFORE row 1's failure — and stays committed.
+    expect(caughtError).toBeTruthy()
+    const contributions = em.inserted.filter((i) => i.kind === 'WicContribution')
+    expect(contributions.length).toBeGreaterThanOrEqual(1)
+    expect(contributions[0].row.rowIndex).toBe(0)
+    expect(contributions[0].row.importBatchId).toBe(BATCH)
+    // Row 0's audit-log assertion would also hold; the key invariant is "earlier rows
+    // are NOT rolled back". Retry with the same import_batch_id is a no-op on row 0
+    // (UNIQUE (import_batch_id, row_index)) and resumes at row 1.
   })
 })
