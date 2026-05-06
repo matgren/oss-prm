@@ -37,6 +37,11 @@ export const PRM_ERROR_CODES = {
   GOLDEN_RULE_DEFAULT_MISMATCH: 'golden_rule_default_mismatch',
   CHURNED_IS_TERMINAL: 'churned_is_terminal',
   STATUS_CHANGE_NOT_ALLOWED: 'status_change_not_allowed',
+  // Spec #5 — rfp-broadcast-response. FROZEN once shipped.
+  RFP_NOT_FOUND: 'rfp_not_found',
+  RFP_BROADCAST_NOT_FOUND: 'rfp_broadcast_not_found',
+  RFP_RESPONSE_NOT_FOUND: 'rfp_response_not_found',
+  NOT_FOUND: 'not_found',
 } as const
 
 export type PrmErrorCode = (typeof PRM_ERROR_CODES)[keyof typeof PRM_ERROR_CODES]
