@@ -215,10 +215,12 @@ Commit: `docs: trim POST-MVP follow-ups now covered by smoke suite`
 
 ### Phase 2: PRM Playwright helpers
 
-- [ ] 2.1 Create helpers/auth.ts (loginAsAdmin)
-- [ ] 2.2 Create helpers/db.ts (resetPRMState)
-- [ ] 2.3 Verify pg dep available
-- [ ] 2.4 Trivial smoke TC-PRM-SMOKE-001-helpers.spec.ts runs green
+- [x] 2.1 Auth helper — REUSED `login(page, role)` from `@open-mercato/core/helpers/integration/auth` (no new helper needed) — 3d126f2
+- [x] 2.2 Create helpers/prm.ts (resetPRMState + seedAgencyForTesting stub) — 3d126f2
+- [x] 2.3 Verify pg dep available (resolves cleanly via @open-mercato/core) — 3d126f2
+- [x] 2.4 TC-PRM-SMOKE-001-helpers.spec.ts runs green via ephemeral runner (2 passed, 3.3s) — 3d126f2
+- [x] 2.5 Pre-existing fix: replace `__dirname` with ESM shim in playwright.config.ts (config never worked under "type": "module") — 3d126f2
+- [x] 2.6 Add ephemeral runner state files to .gitignore — 3d126f2
 
 ### Phase 3: T0 smoke (Agency happy path)
 
