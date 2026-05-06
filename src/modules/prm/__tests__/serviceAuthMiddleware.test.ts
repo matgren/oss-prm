@@ -385,6 +385,51 @@ describe('ServiceAuthMiddleware (Spec #4 §3.1)', () => {
     expect(body.error).toMatch(/ambiguous/i)
   })
 
+  it('POST accepts multi-Agency same-tenant fallback (each Agency has its own paired Organization)', async () => {
+    // Regression: prior to the tenant-only ambiguity check, the resolver fail-closed
+    // whenever 2+ Agencies in the SAME tenant had different `organizationId`s — but
+    // every Agency in PRM creates its own paired Organization via
+    // `agencyService.createAgencyWithOrganization`, so a tenant with N Agencies has
+    // N+ Organizations. WIC ingestion is per-tenant; multi-org within the same
+    // tenant must resolve to a singleton tenant context (organizationId pinned to
+    // the first Agency's Organization for backwards compat with the cache shape).
+    setEnv({ OM_PRM_WIC_TENANT_ID: undefined, OM_PRM_WIC_ORG_ID: undefined })
+    const em = new FakeEm()
+    em.agencies.push({
+      id: 'agency-1',
+      tenantId: TENANT,
+      organizationId: ORG,
+      deletedAt: null,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    })
+    em.agencies.push({
+      id: 'agency-2',
+      tenantId: TENANT,
+      organizationId: 'ffffffff-9999-8888-7777-666666666666',
+      deletedAt: null,
+      createdAt: new Date('2026-02-01T00:00:00Z'),
+    })
+    const req = buildRequest({
+      method: 'POST',
+      headers: {
+        'x-om-import-secret': SECRET,
+        'x-om-request-timestamp': NOW_ISO,
+        'x-om-idempotency-key': VALID_KEY,
+      },
+      body: '{}',
+    })
+    const result = await authenticateServiceRequest(req, {
+      endpoint: ENDPOINT,
+      em: em as any,
+      bodyText: '{}',
+      now: () => FIXED_NOW,
+    })
+    if (!result.ok) throw new Error(`expected ok, got ${result.response.status}`)
+    expect(result.identity.tenantId).toBe(TENANT)
+    // organizationId is pinned to the first (oldest) Agency's Organization.
+    expect(result.identity.organizationId).toBe(ORG)
+  })
+
   it('POST falls back to the lone PRM Agency when env unset and only one tenant exists', async () => {
     setEnv({ OM_PRM_WIC_TENANT_ID: undefined, OM_PRM_WIC_ORG_ID: undefined })
     const em = new FakeEm()

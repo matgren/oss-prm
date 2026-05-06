@@ -13,9 +13,15 @@ let cachedSingletonContext: { tenantId: string; organizationId: string } | null 
  * Singleton-PRM-tenant fallback. Used only when env (`OM_PRM_WIC_TENANT_ID` +
  * `OM_PRM_WIC_ORG_ID`) is unset.
  *
- * Fail-closed in multi-tenant deployments: if more than one PRM Agency exists across
- * tenants, refuse rather than guess. Spec §6.1 requires explicit env in production;
- * the fallback is a dev/test convenience for the single-tenant case only.
+ * Ambiguity is **tenant-scoped**: WIC ingestion is per-tenant per Spec §6.1. Multiple
+ * Organizations within the same tenant is the normal pattern — every Agency creates its
+ * own paired Organization via `agencyService.createAgencyWithOrganization`, so a tenant
+ * with N Agencies has N+ Organizations. The fallback fail-closes only when two Agencies
+ * span different *tenants* (a true multi-tenant deployment that needs explicit env).
+ *
+ * `organizationId` is informational on the WIC writes (the FK is on `tenant_id`); we
+ * pin it to the first Agency's Organization for backwards compatibility with the
+ * existing fixture-cache shape but it is NOT a tenant-isolation boundary.
  */
 async function resolveSingletonTenantContext(
   em: EntityManager | undefined,
@@ -39,7 +45,7 @@ async function resolveSingletonTenantContext(
   const first = rows[0]!
   if (rows.length > 1) {
     const second = rows[1]!
-    if (second.tenantId !== first.tenantId || second.organizationId !== first.organizationId) {
+    if (second.tenantId !== first.tenantId) {
       return { ok: false, reason: 'ambiguous' }
     }
   }

@@ -54,12 +54,17 @@ export async function listActiveProfiles(
   // Two-step query (no cross-module ORM relations per AGENTS rule).
   // 1. Fetch active onboarded agencies for the resolved tenant.
   // 2. Fetch active members with github_profile non-null whose agencyId is in step 1.
+  //
+  // WHERE filters are **tenant-scoped only** — every PRM Agency creates its own paired
+  // Organization, so filtering by `organizationId` here would drop all Agencies except
+  // the one whose Organization was pinned by the singleton resolver. Spec §6.1 contracts
+  // WIC ingestion as per-tenant. The decryption-helper still receives `organizationId`
+  // for the encryption-key context (informational; tenant is the authoritative isolation).
   const agencies = await findWithDecryption<Agency>(
     em,
     Agency,
     {
       tenantId: scope.tenantId,
-      organizationId: scope.organizationId,
       status: 'active',
       onboarded: true,
       deletedAt: null,
