@@ -183,10 +183,10 @@ Commit: `docs(runs): close prm-spec-05 run plan; spec implementation status; tri
 
 ### Commit 2: P9 portal inbox
 
-- [ ] 2.1 Visibility helper assertBroadcastedOrNotFound
-- [ ] 2.2 Portal API routes (list + detail)
+- [x] 2.1 Visibility helper assertBroadcastedOrNotFound — silent-404 helper + RfpVisibilityNotFoundError + rfpNotFoundResponse
+- [x] 2.2 Portal API routes (list + detail) — list with tab filter; detail stamps first_opened_at idempotently via RfpService.markBroadcastFirstOpened
 - [ ] 2.3 Portal page (custom React list)
-- [ ] 2.4 Integration tests §9.2 (byte-identical 404)
+- [ ] 2.4 Integration tests §9.2 (byte-identical 404) — gated on customer-portal Playwright auth helper (carry-over from Spec #4 fixtures.ts comment)
 
 ### Commits 3a-3d: P10
 

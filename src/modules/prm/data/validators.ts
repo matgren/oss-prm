@@ -542,6 +542,19 @@ export const unpublishRfpSchema = z.object({
 
 export type UnpublishRfpInput = z.infer<typeof unpublishRfpSchema>
 
+/** Portal P9 inbox tab filter (US5.3). */
+export const RFP_PORTAL_INBOX_TABS = ['unread', 'responded', 'declined', 'all'] as const
+export type RfpPortalInboxTab = (typeof RFP_PORTAL_INBOX_TABS)[number]
+
+/** Portal P9 inbox list query — paginated; tab maps to a server-side filter combo. */
+export const listRfpPortalInboxSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  tab: z.enum(RFP_PORTAL_INBOX_TABS).default('all'),
+})
+
+export type ListRfpPortalInboxInput = z.infer<typeof listRfpPortalInboxSchema>
+
 /** Portal P10 draft auto-save payload — every field optional (submit enforces required set). */
 export const draftRfpResponseSchema = z.object({
   tech_experience: z.string().max(40_000).nullable().optional(),

@@ -350,6 +350,46 @@ export class RfpService {
     return rfp
   }
 
+  /**
+   * Idempotent first-open side-effect for the portal P10 GET (US5.3 §3.3).
+   *
+   * Stamps `RfpBroadcast.first_opened_at = now()` only on the first call
+   * (`first_opened_at IS NULL`); subsequent calls are no-ops. Emits
+   * `prm.rfp_broadcast.first_opened` exactly once per broadcast row.
+   *
+   * Race-safety: uses `nativeUpdate` with a `firstOpenedAt = null` predicate
+   * so concurrent stamps degrade to "first writer wins"; the affected-row
+   * count gates the event emission so we never double-emit.
+   */
+  async markBroadcastFirstOpened(
+    broadcast: RfpBroadcast,
+    scope: { organizationId: string },
+  ): Promise<{ stamped: boolean }> {
+    if (broadcast.firstOpenedAt) return { stamped: false }
+    const now = new Date()
+    const affected = await this.em.nativeUpdate(
+      RfpBroadcast,
+      {
+        id: broadcast.id,
+        organizationId: scope.organizationId,
+        firstOpenedAt: null,
+      } as any,
+      { firstOpenedAt: now, updatedAt: now } as any,
+    )
+    if (affected === 0) return { stamped: false }
+    // Reflect the change locally so the same EM doesn't return a stale view.
+    broadcast.firstOpenedAt = now
+    broadcast.updatedAt = now
+
+    await safeEmit('prm.rfp_broadcast.first_opened', {
+      broadcast_id: broadcast.id,
+      rfp_id: broadcast.rfpId,
+      agency_id: broadcast.agencyId,
+      first_opened_at: now.toISOString(),
+    })
+    return { stamped: true }
+  }
+
   private async loadRfpForWrite(rfpId: string, organizationId: string): Promise<Rfp> {
     const rfp = await this.em.findOne(Rfp, { id: rfpId, organizationId, deletedAt: null } as any)
     if (!rfp) {
