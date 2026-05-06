@@ -26,14 +26,20 @@ import {
  */
 export function register(container: AppContainer): void {
   container.register({
-    agencyService: asFunction(({ em }: { em: EntityManager }) => new AgencyService(em)).scoped(),
+    // `.proxy()` forces PROXY injection mode for this registration — required because
+    // the request container is built with `InjectionMode.CLASSIC` (see
+    // `@open-mercato/shared/lib/di/container.ts`), under which destructured factory
+    // params do NOT receive named dependencies. Without this, `em` arrives as
+    // undefined and the first ORM call throws `Cannot read properties of undefined
+    // (reading 'findOne')`. Mirrors the canonical pattern used in `data_sync/di.ts`.
+    agencyService: asFunction(({ em }: { em: EntityManager }) => new AgencyService(em)).scoped().proxy(),
     agencyMemberService: asFunction(
       ({ em }: { em: EntityManager }) => new AgencyMemberService(em),
-    ).scoped(),
-    prospectService: asFunction(({ em }: { em: EntityManager }) => new ProspectService(em)).scoped(),
+    ).scoped().proxy(),
+    prospectService: asFunction(({ em }: { em: EntityManager }) => new ProspectService(em)).scoped().proxy(),
     licenseDealService: asFunction(
       ({ em }: { em: EntityManager }) => new LicenseDealService(em),
-    ).scoped(),
+    ).scoped().proxy(),
     reinviteCooldownService: asFunction(() => new ReinviteCooldownService()).singleton(),
     // Convenience: bag of admin-only field names so interceptors and enrichers
     // share one source of truth.
