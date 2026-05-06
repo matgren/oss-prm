@@ -255,14 +255,14 @@ Commit: `docs: trim POST-MVP follow-ups now covered by smoke suite`
 
 ### Phase 6: Update om-implement-spec gate
 
-- [ ] 6.1 Update .ai/skills/implement-spec/SKILL.md checklist
-- [ ] 6.2 Remove deferred-to-QA language
-- [ ] 6.3 Update AGENTS.md Quality & Process section
-- [ ] 6.4 Grep verification — no remaining loophole language
+- [x] 6.1 Update .ai/skills/implement-spec/SKILL.md Step 4 + Rules — aabe358
+- [x] 6.2 No exact "deferred to QA team" loophole language existed in the skill itself; the historical phrase appears only in T0/T1/T2 §11 frozen changelogs (left alone — describes what shipped at tag) and in this PR's own plan files (intentional)
+- [x] 6.3 Add CRITICAL rule #6 to AGENTS.md mandating §9 happy-path smoke per spec — aabe358
+- [x] 6.4 Grep verification done — only frozen historical changelog references remain — aabe358
 
 ### Phase 7: Prep tag (agent STOPS before tag)
 
-- [ ] 7.1 Full validation gate green
-- [ ] 7.2 Trim POST-MVP-FOLLOW-UPS.md (remove smoke-covered entries)
-- [ ] 7.3 Commit POST-MVP update
-- [ ] 7.4 PR body notes TAG PENDING USER APPROVAL — agent does NOT run git tag
+- [x] 7.1 Full validation gate green (typecheck, jest, build) — see PR comment
+- [x] 7.2 POST-MVP-FOLLOW-UPS.md NOT trimmed — the IT-1, IT-9.1 entries remain owed since the corresponding smoke tests are not green this PR (Phase 2 surfaced bug; Phases 3/4/5 dropped). The entries continue to track the work owed.
+- [x] 7.3 No POST-MVP commit needed (no trimming).
+- [x] 7.4 PR body notes "TAG PENDING USER APPROVAL — agent does NOT run git tag". Tag is owed once Phase 2.4 bug is fixed and at least the T0 smoke is green.
