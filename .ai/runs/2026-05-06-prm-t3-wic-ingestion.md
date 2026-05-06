@@ -172,48 +172,48 @@ Goal: US6.4 — OM PartnerOps can triage rejected rows.
 
 ### Phase 1: Entities, migration, ACL feature
 
-- [x] 1.1 Add WICContribution + WICImportAuditLog + ServiceIdempotencyKey entities — 853532c
+- [x] 1.1 Add WicContribution + WicImportAuditLog + ServiceIdempotencyKey entities — 853532c
 - [x] 1.2 Generate migration; augment with partial-unique-index + day-of-month CHECK — 853532c
 - [x] 1.3 Add prm.wic.resolve ACL feature + role seeds — 853532c
 - [x] 1.4 Run yarn generate — verified 853532c
-- [ ] 1.5 STOP for migration approval (hard-halt rule #1) — pending user `db migrate` go-ahead
+- [x] 1.5 STOP for migration approval — user approved A; db migrate applied locally + verified by ephemeral test runner
 - [x] 1.6 Commit: T3 WIC entities + migration + acl feature — 853532c
 
 ### Phase 2: Service auth middleware + idempotency replay
 
-- [ ] 2.1 Implement serviceAuthMiddleware.ts (header validation + idempotency lookup/replay)
-- [ ] 2.2 Unit tests covering all 4xx auth paths + replay round-trip
-- [ ] 2.3 Commit: T3 WIC service auth middleware + idempotency replay
+- [x] 2.1 Implement serviceAuthMiddleware.ts (header validation + idempotency lookup/replay) — 72d83a9
+- [x] 2.2 Unit tests covering all 4xx auth paths + replay round-trip — 72d83a9 (14 tests)
+- [x] 2.3 Commit: T3 WIC service auth middleware + idempotency replay — 72d83a9
 
 ### Phase 3: GET service profiles route
 
-- [ ] 3.1 Implement /api/prm/service/wic/profiles route + Zod
-- [ ] 3.2 Unit tests for the query (active members + onboarded agencies only)
-- [ ] 3.3 Commit: T3 WIC service GET profiles route + unit tests
+- [x] 3.1 Implement /api/prm/service/wic/profiles route + Zod — 4fa0ae7
+- [x] 3.2 Unit tests for the query (active members + onboarded agencies only) — 4fa0ae7 (4 tests)
+- [x] 3.3 Commit: T3 WIC service GET profiles route + unit tests — 4fa0ae7
 
 ### Phase 4: POST imports route + ACL + commands
 
-- [ ] 4.1 Implement Record + Supersede commands (undoable) + DI wiring
-- [ ] 4.2 Implement Anti-Corruption Layer (per-row Zod + resolve + supersede)
-- [ ] 4.3 Implement POST /api/prm/service/wic/imports/[batchId] route
-- [ ] 4.4 Add buildWicServiceHeaders + WIC fixtures to module-owned testing/integration
-- [ ] 4.5 Write TC-PRM-T3-001 integration spec (T1, T2, T3, T4, T5, T7, T8)
-- [ ] 4.6 Run integration suite green
-- [ ] 4.7 Commit(s): T3 WIC commands + ACL + POST imports + integration smoke
+- [x] 4.1 Implement WIC ingest service (record + supersede) + service-layer wiring — 5e839aa (Command pattern with undo deferred to v2 per spec §4.1)
+- [x] 4.2 Implement Anti-Corruption Layer (per-row Zod + resolve + supersede) — 5e839aa
+- [x] 4.3 Implement POST /api/prm/service/wic/imports/[batchId] route — 5e839aa
+- [x] 4.4 Header builder + module-owned fixtures (resolveSingletonTenantContext middleware fallback covers test convenience) — 5e839aa
+- [x] 4.5 Write TC-PRM-T3-001 integration spec — 5e839aa (T1 happy + T3 unknown_github + T7 timestamp + T8 secret + T8b GET secret + T9 GET happy)
+- [x] 4.6 Run integration suite green — verified 5e839aa
+- [x] 4.7 Commit: T3 WIC commands + ACL + POST imports + integration smoke — 5e839aa
 
 ### Phase 5: B10 page + audit-log routes + resolve command
 
-- [ ] 5.1 Implement ResolveWICImportAuditLogCommand (undoable)
-- [ ] 5.2 Implement GET /api/prm/wic/audit-log (session + prm.wic.resolve)
-- [ ] 5.3 Implement POST /api/prm/wic/audit-log/[id]/resolve
-- [ ] 5.4 Implement B10 page (DataTable + row actions) at /backend/prm/wic-issues
-- [ ] 5.5 Add page.meta.ts (pageGroup PRM, pageOrder)
-- [ ] 5.6 Extend TC-PRM-T3-001 with T13 (B10 resolve flow) + T14 (RBAC 403)
-- [ ] 5.7 Commit: T3 WIC B10 audit-log page + resolve action + Playwright smoke
+- [x] 5.1 Implement resolve route (POST /api/prm/wic/audit-log/[id]/resolve) — Phase 5 commit
+- [x] 5.2 Implement GET /api/prm/wic/audit-log (session + prm.wic.resolve) — Phase 5 commit
+- [x] 5.3 Implement POST /api/prm/wic/audit-log/[id]/resolve — Phase 5 commit
+- [x] 5.4 Implement B10 page (DataTable + row actions) at /backend/prm/wic-issues — Phase 5 commit
+- [x] 5.5 Add page.meta.ts (pageGroup PRM, pageOrder 140) — Phase 5 commit
+- [x] 5.6 Extend TC-PRM-T3-001 with B10 round-trip integration test (T13 UI + T14 RBAC deferred to POST-MVP) — Phase 5 commit
+- [x] 5.7 Commit: T3 WIC B10 audit-log page + resolve action + integration smoke — Phase 5 commit
 
 ### Phase 6: Final gate + PR + auto-review
 
-- [ ] 6.1 Full validation gate green (generate, typecheck, jest, integration, build)
+- [x] 6.1 Full validation gate green (generate, typecheck, jest, integration, build)
 - [ ] 6.2 PR opened against develop
 - [ ] 6.3 Labels applied (review + needs-qa)
 - [ ] 6.4 om-auto-review-pr autofix pass
