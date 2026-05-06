@@ -69,6 +69,14 @@ src/generated/
 .events/
 .queue
 
+# integration test ephemeral runner state (.ai/qa/*)
+.ai/qa/ephemeral-build-cache.json
+.ai/qa/ephemeral-env.json
+.ai/qa/ephemeral-env.lock
+.ai/qa/ephemeral-runtime.lock
+.ai/qa/test-results/
+.ai/tmp/
+
 # uploads and app data
 public/uploads/*
 storage/
