@@ -227,3 +227,45 @@ Goal: US6.4 — OM PartnerOps can triage rejected rows.
 ## Changelog
 
 - 2026-05-06 — Plan drafted by Claude (om-auto-create-pr) on behalf of user. Spec #4 first commit pending after migration approval gate.
+
+---
+
+## Post-PR-#4 close-out fixes (loop iterations on `feat/prm-t3-wic-ingestion`)
+
+### Iter 1 — singleton tenant ambiguity over-rejected ✅ 0443baa
+- `serviceAuthMiddleware.ts` ambiguity check is tenant-only (multi-org same-tenant is valid).
+- `profiles/route.ts` agency WHERE drops `organizationId` filter (tenant scope only).
+- jest: 187/187 (+1 positive test). integration: 14/14 (was 4 failing).
+
+
+### Iter 2 — B10 audit-log tenant-wide design (revised) ✅ 3cedd72
+- Original review flagged "cross-org leak"; investigation showed the proposed fix would break staff users (auth.orgId = staff org ≠ Agency org) and diverge from sibling PRM convention. Tenant-only filter is correct.
+- Added explanatory comments to both routes + regression test.
+
+
+### Iter 3 — per-row commit semantics clarified ✅ 2fff39a
+- Updated wicImportService.ts header comment to match implementation. Per-row commit + (import_batch_id, row_index) UNIQUE replay = correct design per §3.3 R2.
+- Added test verifying row N+1 failure does NOT roll back rows 0..N.
+
+
+### Iter 4 — idempotency persist on forked EM ✅ f5dcdf8
+- persistIdempotency now uses `em.fork({ clear: true, freshEventManager: true })`.
+- UNIQUE-PK collision logged + swallowed; non-collision errors re-thrown so operators see them.
+- Test verifies both paths.
+
+
+### Iter 5 — B10 DS compliance ✅ 14586a5
+- StatusBadge replaces amber/neutral hand-rolled pills.
+- Alert primitive replaces inline error div.
+- EmptyState wired into DataTable for steady-state zero-row case.
+- Raw `<select>` retained — no Select primitive in OM 0.4.x; tracked in POST-MVP-FOLLOW-UPS sibling entry.
+
+
+### Iter 6 — Final verification gate ✅
+- yarn typecheck (0)
+- yarn jest src/modules/prm: 190/190 across 23 suites
+- yarn test:integration:ephemeral: 14/14 (1 skipped TC-CLI-001 unrelated)
+- yarn build: green
+
+PR #4 is merge-ready. Loop complete.
+
