@@ -172,14 +172,14 @@ Commit: `docs(runs): close prm-spec-05 run plan; spec implementation status; tri
 - [x] 1.2 Migration (base + `_indexes` companion) — foundation commit
 - [x] 1.3 Validators — foundation commit
 - [x] 1.4 ACL features (prm.rfp.create, prm.rfp.publish) — foundation commit
-- [ ] 1.5 RfpService + eligibility evaluator
-- [ ] 1.6 Backend routes (CRUD + publish/unpublish)
-- [ ] 1.7 NotificationTypeDefinition + subscriber
-- [ ] 1.8 6 events added to events.ts
-- [ ] 1.9 Unit tests (eligibility + service)
-- [ ] 1.10 Integration tests §9.1
+- [x] 1.5 RfpService + eligibility evaluator (lib/rfpEligibility.ts pure-function)
+- [x] 1.6 Backend routes (CRUD + publish/unpublish)
+- [x] 1.7 NotificationTypeDefinition + subscriber (rfp-broadcast-invitation)
+- [x] 1.8 11 events added to events.ts (over-delivered — includes broadcast.first_opened/declined/undeclined and rfp_response.* used in C2/C3/C4)
+- [x] 1.9 Unit tests — rfpEligibility 14/14 + rfpService 12/12 (jest 161/161 across 20 suites)
+- [ ] 1.10 Integration tests §9.1 (Playwright)
 - [x] 1.11 DI proxy guardrail test (POST-MVP bundled) — 8710362
-- [x] 1.12 typecheck + jest 135/135 + generate green (foundation level)
+- [x] 1.12 typecheck + jest 161/161 + generate green
 
 ### Commit 2: P9 portal inbox
 
