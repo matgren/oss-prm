@@ -159,3 +159,145 @@ export async function deleteProspectIfExists(
 ): Promise<void> {
   return
 }
+
+/**
+ * PATCH an Agency into the `status='active' AND onboarded=true` state required
+ * to make it eligible for RFP broadcast (Spec #5 §2 — eligibility evaluator
+ * filters `status='active' AND onboarded=true` in SQL).
+ *
+ * `tier` is also patchable here so a single helper covers the §9.1 #1 setup
+ * shape (3 agencies, distinct tiers).
+ */
+export async function setAgencyOnboardedFixture(
+  request: APIRequestContext,
+  token: string,
+  agencyId: string,
+  input: {
+    tier?: 'om_agency' | 'ai_native' | 'ai_native_expert' | 'ai_native_core'
+    onboarded?: boolean
+    status?: 'active' | 'inactive' | 'historical'
+  } = {},
+): Promise<void> {
+  const data: Record<string, unknown> = {
+    onboarded: input.onboarded ?? true,
+  }
+  if (input.tier !== undefined) data.tier = input.tier
+  if (input.status !== undefined) data.status = input.status
+  const response = await apiRequest(request, 'PATCH', `/api/prm/agency/${agencyId}`, {
+    token,
+    data,
+  })
+  expect(
+    response.status(),
+    `PATCH /api/prm/agency/${agencyId} should return 200; got ${response.status()}`,
+  ).toBe(200)
+}
+
+/**
+ * RFP draft creation fixture — Spec #5 §3.1 `POST /api/prm/rfp`.
+ *
+ * Returns the new RFP id. Defaults are tuned to satisfy `createRfpDraftSchema`
+ * with a minimum-viable payload; callers override `eligibility_filter`,
+ * `min_tier`, or `explicit_agency_ids` to drive the §9.1 cases.
+ */
+export async function createRfpDraftFixture(
+  request: APIRequestContext,
+  token: string,
+  input: {
+    title?: string
+    received_from?: string
+    received_at?: string
+    description?: string
+    tech_requirements?: string
+    domain_requirements?: string
+    eligibility_filter: 'all_active' | 'by_min_tier' | 'explicit'
+    min_tier?: 'om_agency' | 'ai_native' | 'ai_native_expert' | 'ai_native_core'
+    explicit_agency_ids?: string[]
+    deadline_to_respond?: string
+  },
+): Promise<string> {
+  const data: Record<string, unknown> = {
+    title: input.title ?? `Test RFP ${Date.now().toString(36)}`,
+    received_from: input.received_from ?? 'Test Client',
+    received_at: input.received_at ?? new Date().toISOString(),
+    description: input.description ?? 'Test RFP description.',
+    tech_requirements: input.tech_requirements ?? 'Test tech requirements.',
+    domain_requirements: input.domain_requirements ?? 'Test domain requirements.',
+    eligibility_filter: input.eligibility_filter,
+  }
+  if (input.min_tier !== undefined) data.min_tier = input.min_tier
+  if (input.explicit_agency_ids !== undefined) data.explicit_agency_ids = input.explicit_agency_ids
+  if (input.deadline_to_respond !== undefined) data.deadline_to_respond = input.deadline_to_respond
+
+  const response = await apiRequest(request, 'POST', '/api/prm/rfp', { token, data })
+  const body = await readJsonSafe<{ ok: true; id?: string; rfp?: { id?: string } }>(response)
+  expect(
+    response.status(),
+    `POST /api/prm/rfp should return 201; got ${response.status()} body=${JSON.stringify(body)}`,
+  ).toBe(201)
+  return expectId(body?.id ?? body?.rfp?.id, 'RFP creation response should include id')
+}
+
+/**
+ * Publish an RFP via `POST /api/prm/rfp/{id}/publish`. Returns the response
+ * body envelope so callers can assert `broadcastAgencyIds` / `status`.
+ */
+export async function publishRfpFixture(
+  request: APIRequestContext,
+  token: string,
+  rfpId: string,
+  body: { confirmedAgencyIds?: string[] } = {},
+): Promise<{
+  status: number
+  body: {
+    ok?: boolean
+    id?: string
+    status?: string
+    broadcastAgencyIds?: string[]
+    error?: { code: string; message: string; details?: Record<string, unknown> }
+  } | null
+}> {
+  const response = await apiRequest(request, 'POST', `/api/prm/rfp/${rfpId}/publish`, {
+    token,
+    data: body,
+  })
+  const json = await readJsonSafe<{
+    ok?: boolean
+    id?: string
+    status?: string
+    broadcastAgencyIds?: string[]
+    error?: { code: string; message: string; details?: Record<string, unknown> }
+  }>(response)
+  return { status: response.status(), body: json }
+}
+
+/**
+ * Unpublish an RFP via `POST /api/prm/rfp/{id}/unpublish`. `reason` is
+ * mandatory per §3.3 idempotency table.
+ */
+export async function unpublishRfpFixture(
+  request: APIRequestContext,
+  token: string,
+  rfpId: string,
+  reason: string,
+): Promise<{
+  status: number
+  body: {
+    ok?: boolean
+    id?: string
+    status?: string
+    error?: { code: string; message: string; details?: Record<string, unknown> }
+  } | null
+}> {
+  const response = await apiRequest(request, 'POST', `/api/prm/rfp/${rfpId}/unpublish`, {
+    token,
+    data: { reason },
+  })
+  const json = await readJsonSafe<{
+    ok?: boolean
+    id?: string
+    status?: string
+    error?: { code: string; message: string; details?: Record<string, unknown> }
+  }>(response)
+  return { status: response.status(), body: json }
+}

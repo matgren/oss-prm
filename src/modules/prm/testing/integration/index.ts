@@ -19,8 +19,12 @@
 export {
   createAgencyFixture,
   deleteAgencyIfExists,
+  setAgencyOnboardedFixture,
   createLicenseDealFixture,
   deleteLicenseDealIfExists,
   createProspectFixture,
   deleteProspectIfExists,
+  createRfpDraftFixture,
+  publishRfpFixture,
+  unpublishRfpFixture,
 } from './fixtures'

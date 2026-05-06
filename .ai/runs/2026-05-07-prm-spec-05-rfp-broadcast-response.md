@@ -177,7 +177,7 @@ Commit: `docs(runs): close prm-spec-05 run plan; spec implementation status; tri
 - [x] 1.7 NotificationTypeDefinition + subscriber (rfp-broadcast-invitation)
 - [x] 1.8 11 events added to events.ts (over-delivered — includes broadcast.first_opened/declined/undeclined and rfp_response.* used in C2/C3/C4)
 - [x] 1.9 Unit tests — rfpEligibility 14/14 + rfpService 12/12 (jest 161/161 across 20 suites)
-- [ ] 1.10 Integration tests §9.1 (Playwright)
+- [x] 1.10 Integration tests §9.1 (Playwright) — TC-PRM-T5-001 covers #1, #2, #3, #5; #4 (DB-error injection) + #6 (needs C2 first_open stamp) deferred
 - [x] 1.11 DI proxy guardrail test (POST-MVP bundled) — 8710362
 - [x] 1.12 typecheck + jest 161/161 + generate green
 
