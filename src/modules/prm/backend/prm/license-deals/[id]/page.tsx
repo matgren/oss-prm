@@ -64,11 +64,27 @@ type CandidatesResponse = { ok: true; candidates: Candidate[] }
  *   - Path B (RFP) + Path C (Direct) tabs.
  *   - Status transition + reverse + unreverse-status actions.
  */
+function resolveDynamicId(params: Record<string, unknown> | null): string | undefined {
+  // OM framework routes module pages through a catch-all `/backend/[...slug]`.
+  // For `/backend/prm/license-deals/<uuid>` params arrive as
+  // `slug = ['prm', 'license-deals', 'uuid']`; only when Next.js routes the
+  // page directly do we get `params.id`. Cover both shapes.
+  const slug = (params as { slug?: unknown } | null)?.slug
+  if (Array.isArray(slug) && slug.length > 0) {
+    const last = slug[slug.length - 1]
+    if (typeof last === 'string') return last
+  }
+  const id = (params as { id?: unknown } | null)?.id
+  if (Array.isArray(id) && id.length > 0 && typeof id[0] === 'string') return id[0]
+  if (typeof id === 'string') return id
+  return undefined
+}
+
 export default function LicenseDealDetailPage() {
   const t = useT()
   const router = useRouter()
-  const params = useParams<{ id?: string | string[] }>()
-  const id = Array.isArray(params?.id) ? params!.id[0] : (params?.id as string | undefined)
+  const params = useParams() as Record<string, unknown> | null
+  const id = resolveDynamicId(params)
 
   const [deal, setDeal] = React.useState<LicenseDeal | null>(null)
   const [loading, setLoading] = React.useState(true)

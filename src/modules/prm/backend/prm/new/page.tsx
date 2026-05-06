@@ -21,6 +21,13 @@ const createSchema = z.object({
 
 type CreateValues = z.infer<typeof createSchema>
 
+const INITIAL: CreateValues = {
+  name: '',
+  slug: '',
+  tier: 'om_agency',
+  headquartersCountry: '',
+}
+
 export default function CreateAgencyPage() {
   const t = useT()
   const router = useRouter()
@@ -30,6 +37,7 @@ export default function CreateAgencyPage() {
       <PageBody>
         <CrudForm<CreateValues>
           schema={createSchema}
+          initialValues={INITIAL}
           fields={[
             { id: 'name', label: t('prm.agencies.fields.name', 'Name'), type: 'text', required: true, layout: 'half' },
             {
