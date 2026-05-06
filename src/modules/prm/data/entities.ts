@@ -678,8 +678,8 @@ export class WicImportAuditLog {
  */
 @Entity({ tableName: 'prm_service_idempotency_key' })
 @Unique({
-  properties: ['endpoint', 'idempotencyKey'],
-  name: 'prm_service_idempotency_key_endpoint_key_uniq',
+  properties: ['tenantId', 'endpoint', 'idempotencyKey'],
+  name: 'prm_service_idempotency_key_tenant_endpoint_key_uniq',
 })
 export class ServiceIdempotencyKey {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })

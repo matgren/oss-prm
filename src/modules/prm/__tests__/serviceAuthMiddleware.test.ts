@@ -1,4 +1,5 @@
 import {
+  _resetServiceAuthSingletonCache,
   authenticateServiceRequest,
   hashPayload,
 } from '../lib/serviceAuthMiddleware'
@@ -36,14 +37,48 @@ function buildRequest({
   })
 }
 
+type FakeAgencyRow = {
+  id: string
+  tenantId: string
+  organizationId: string
+  deletedAt: Date | null
+  createdAt: Date
+}
+
 class FakeEm {
   public stored: Array<Partial<ServiceIdempotencyKey>> = []
-  async findOne(_cls: unknown, where: { endpoint: string; idempotencyKey: string }) {
-    return (
-      this.stored.find(
-        (row) => row.endpoint === where.endpoint && row.idempotencyKey === where.idempotencyKey,
-      ) ?? null
-    )
+  /**
+   * Optional Agency rows used by the singleton-tenant fallback path. Tests that exercise
+   * the fallback (env unset) seed this; tests that pin env to TENANT/ORG can ignore it.
+   */
+  public agencies: FakeAgencyRow[] = []
+  async findOne(
+    cls: unknown,
+    where: Partial<ServiceIdempotencyKey> & { tenantId?: string },
+  ) {
+    const name = (cls as { name?: string })?.name
+    if (name === 'ServiceIdempotencyKey') {
+      return (
+        this.stored.find(
+          (row) =>
+            row.endpoint === where.endpoint &&
+            row.idempotencyKey === where.idempotencyKey &&
+            (where.tenantId === undefined || row.tenantId === where.tenantId),
+        ) ?? null
+      )
+    }
+    return null
+  }
+  async find(cls: unknown, _where: unknown, opts?: { limit?: number }) {
+    const name = (cls as { name?: string })?.name
+    if (name === 'Agency') {
+      const sorted = [...this.agencies].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      )
+      const limited = opts?.limit ? sorted.slice(0, opts.limit) : sorted
+      return limited
+    }
+    return []
   }
   create(_cls: unknown, data: Partial<ServiceIdempotencyKey>) {
     return data
@@ -67,6 +102,7 @@ describe('ServiceAuthMiddleware (Spec #4 §3.1)', () => {
       OM_PRM_WIC_TENANT_ID: TENANT,
       OM_PRM_WIC_ORG_ID: ORG,
     })
+    _resetServiceAuthSingletonCache()
   })
 
   afterAll(() => {
@@ -229,6 +265,7 @@ describe('ServiceAuthMiddleware (Spec #4 §3.1)', () => {
   it('POST replay with same key + same payload returns cached response with Idempotent-Replay header', async () => {
     const em = new FakeEm()
     em.stored.push({
+      tenantId: TENANT,
       endpoint: ENDPOINT,
       idempotencyKey: VALID_KEY,
       payloadHash: hashPayload('{"x":1}'),
@@ -261,6 +298,7 @@ describe('ServiceAuthMiddleware (Spec #4 §3.1)', () => {
   it('POST replay with same key + different payload returns 409', async () => {
     const em = new FakeEm()
     em.stored.push({
+      tenantId: TENANT,
       endpoint: ENDPOINT,
       idempotencyKey: VALID_KEY,
       payloadHash: hashPayload('{"x":1}'),
@@ -307,6 +345,74 @@ describe('ServiceAuthMiddleware (Spec #4 §3.1)', () => {
     })
     if (result.ok) throw new Error('expected error')
     expect(result.response.status).toBe(503)
+  })
+
+  it('POST refuses with 503 when env unset and multiple PRM Agencies span tenants (fail-closed singleton fallback)', async () => {
+    setEnv({ OM_PRM_WIC_TENANT_ID: undefined, OM_PRM_WIC_ORG_ID: undefined })
+    const em = new FakeEm()
+    em.agencies.push({
+      id: 'agency-1',
+      tenantId: TENANT,
+      organizationId: ORG,
+      deletedAt: null,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    })
+    em.agencies.push({
+      id: 'agency-2',
+      tenantId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      organizationId: 'ffffffff-9999-8888-7777-666666666666',
+      deletedAt: null,
+      createdAt: new Date('2026-02-01T00:00:00Z'),
+    })
+    const req = buildRequest({
+      method: 'POST',
+      headers: {
+        'x-om-import-secret': SECRET,
+        'x-om-request-timestamp': NOW_ISO,
+        'x-om-idempotency-key': VALID_KEY,
+      },
+      body: '{}',
+    })
+    const result = await authenticateServiceRequest(req, {
+      endpoint: ENDPOINT,
+      em: em as any,
+      bodyText: '{}',
+      now: () => FIXED_NOW,
+    })
+    if (result.ok) throw new Error('expected error')
+    expect(result.response.status).toBe(503)
+    const body = await result.response.json()
+    expect(body.error).toMatch(/ambiguous/i)
+  })
+
+  it('POST falls back to the lone PRM Agency when env unset and only one tenant exists', async () => {
+    setEnv({ OM_PRM_WIC_TENANT_ID: undefined, OM_PRM_WIC_ORG_ID: undefined })
+    const em = new FakeEm()
+    em.agencies.push({
+      id: 'agency-1',
+      tenantId: TENANT,
+      organizationId: ORG,
+      deletedAt: null,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    })
+    const req = buildRequest({
+      method: 'POST',
+      headers: {
+        'x-om-import-secret': SECRET,
+        'x-om-request-timestamp': NOW_ISO,
+        'x-om-idempotency-key': VALID_KEY,
+      },
+      body: '{}',
+    })
+    const result = await authenticateServiceRequest(req, {
+      endpoint: ENDPOINT,
+      em: em as any,
+      bodyText: '{}',
+      now: () => FIXED_NOW,
+    })
+    if (!result.ok) throw new Error(`expected ok, got ${result.response.status}`)
+    expect(result.identity.tenantId).toBe(TENANT)
+    expect(result.identity.organizationId).toBe(ORG)
   })
 
   it('persistIdempotency stores the response for later replay', async () => {

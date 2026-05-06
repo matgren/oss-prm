@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import type { EntityManager } from '@mikro-orm/postgresql'
+import type { EntityManager, FilterQuery } from '@mikro-orm/postgresql'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { WicImportAuditLog } from '../../../../../data/entities'
 import { WIC_RESOLUTION_ACTIONS } from '../../../../../data/validators'
@@ -52,7 +53,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  const row = await em.findOne(WicImportAuditLog, { id, tenantId: auth.tenantId } as any)
+  const row = await findOneWithDecryption<WicImportAuditLog>(
+    em,
+    WicImportAuditLog,
+    { id, tenantId: auth.tenantId } as FilterQuery<WicImportAuditLog>,
+    undefined,
+    { tenantId: auth.tenantId, organizationId: auth.orgId ?? null },
+  )
   if (!row) {
     return NextResponse.json({ ok: false, error: 'Audit log row not found' }, { status: 404 })
   }

@@ -18,7 +18,10 @@ export class Migration20260506183815_prm_wic extends Migration {
     this.addSql(`create table "prm_service_idempotency_key" ("id" uuid not null default gen_random_uuid(), "endpoint" text not null, "idempotency_key" uuid not null, "tenant_id" uuid not null, "organization_id" uuid not null, "payload_hash" text not null, "response_hash" text not null, "response_status" int not null, "response_body" jsonb not null, "created_at" timestamptz not null, constraint "prm_service_idempotency_key_pkey" primary key ("id"));`);
     this.addSql(`create index "prm_service_idempotency_key_tenant_id_index" on "prm_service_idempotency_key" ("tenant_id");`);
     this.addSql(`create index "prm_service_idempotency_key_organization_id_index" on "prm_service_idempotency_key" ("organization_id");`);
-    this.addSql(`alter table "prm_service_idempotency_key" add constraint "prm_service_idempotency_key_endpoint_key_uniq" unique ("endpoint", "idempotency_key");`);
+    // Tenant-scoped: same idempotency key can co-exist across tenants. Lookup query in
+    // serviceAuthMiddleware.ts always filters by tenant_id, so cross-tenant replay is
+    // impossible by both contract and constraint.
+    this.addSql(`alter table "prm_service_idempotency_key" add constraint "prm_service_idempotency_key_tenant_endpoint_key_uniq" unique ("tenant_id", "endpoint", "idempotency_key");`);
 
     this.addSql(`create table "prm_wic_contributions" ("id" uuid not null default gen_random_uuid(), "tenant_id" uuid not null, "organization_id" uuid not null, "agency_id" uuid not null, "agency_member_id" uuid not null, "github_profile" text not null, "contribution_month" date not null, "wic_level" text null, "wic_score" numeric(12,4) not null, "contribution_count" int not null default 0, "bounty_bonus" numeric(12,4) not null default '0', "why_bonus" text null, "what_included" text null, "what_excluded" text null, "script_version" text not null, "import_batch_id" uuid not null, "row_index" int not null, "computed_at" timestamptz not null, "imported_at" timestamptz not null, "superseded_by_id" uuid null, "archived_at" timestamptz null, "created_at" timestamptz not null, "updated_at" timestamptz not null, constraint "prm_wic_contributions_pkey" primary key ("id"));`);
     this.addSql(`create index "prm_wic_contributions_tenant_id_index" on "prm_wic_contributions" ("tenant_id");`);

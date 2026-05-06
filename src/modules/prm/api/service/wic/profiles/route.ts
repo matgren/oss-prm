@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import type { EntityManager } from '@mikro-orm/postgresql'
+import type { EntityManager, FilterQuery } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import {
+  findWithDecryption,
+} from '@open-mercato/shared/lib/encryption/find'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { Agency, AgencyMember } from '../../../../data/entities'
 import { authenticateServiceRequest } from '../../../../lib/serviceAuthMiddleware'
@@ -39,26 +42,49 @@ type ProfileRow = {
   is_active: boolean
 }
 
-export async function listActiveProfiles(em: EntityManager): Promise<ProfileRow[]> {
+export type ListActiveProfilesScope = {
+  tenantId: string
+  organizationId: string
+}
+
+export async function listActiveProfiles(
+  em: EntityManager,
+  scope: ListActiveProfilesScope,
+): Promise<ProfileRow[]> {
   // Two-step query (no cross-module ORM relations per AGENTS rule).
-  // 1. Fetch active onboarded agencies.
+  // 1. Fetch active onboarded agencies for the resolved tenant.
   // 2. Fetch active members with github_profile non-null whose agencyId is in step 1.
-  const agencies = await em.find(
+  const agencies = await findWithDecryption<Agency>(
+    em,
     Agency,
-    { status: 'active', onboarded: true, deletedAt: null },
+    {
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      status: 'active',
+      onboarded: true,
+      deletedAt: null,
+    } as FilterQuery<Agency>,
     { fields: ['id', 'slug'] as never },
+    { tenantId: scope.tenantId, organizationId: scope.organizationId },
   )
   if (agencies.length === 0) return []
   const agencyById = new Map<string, string>()
   for (const a of agencies) agencyById.set(a.id, a.slug)
   const agencyIds = Array.from(agencyById.keys())
 
-  const members = await em.find(AgencyMember, {
-    agencyId: { $in: agencyIds },
-    isActive: true,
-    deletedAt: null,
-    githubProfile: { $ne: null },
-  } as any)
+  const members = await findWithDecryption<AgencyMember>(
+    em,
+    AgencyMember,
+    {
+      tenantId: scope.tenantId,
+      agencyId: { $in: agencyIds },
+      isActive: true,
+      deletedAt: null,
+      githubProfile: { $ne: null },
+    } as FilterQuery<AgencyMember>,
+    undefined,
+    { tenantId: scope.tenantId, organizationId: scope.organizationId },
+  )
 
   const out: ProfileRow[] = []
   for (const member of members) {
@@ -85,14 +111,24 @@ export async function GET(req: Request) {
     )
   }
 
-  const auth = await authenticateServiceRequest(req, { endpoint: ENDPOINT })
+  const container = await createRequestContainer()
+  const em = container.resolve('em') as EntityManager
+
+  const auth = await authenticateServiceRequest(req, { endpoint: ENDPOINT, em })
   if (!auth.ok) return auth.response
+
+  const tenantId = auth.identity.tenantId
+  const organizationId = auth.identity.organizationId
+  if (!tenantId || !organizationId) {
+    return NextResponse.json(
+      { ok: false, error: 'WIC tenant context unresolved' },
+      { status: 503 },
+    )
+  }
 
   const month = parsed.data.month ?? defaultMonth(new Date())
 
-  const container = await createRequestContainer()
-  const em = container.resolve('em') as EntityManager
-  const profiles = await listActiveProfiles(em)
+  const profiles = await listActiveProfiles(em, { tenantId, organizationId })
 
   return NextResponse.json({ month, profiles })
 }
@@ -134,7 +170,7 @@ const getDoc: OpenApiMethodDoc = {
     { status: 400, description: 'Bad headers/query', schema: errorSchema },
     { status: 401, description: 'Bad/missing X-Om-Import-Secret', schema: errorSchema },
     { status: 408, description: 'Timestamp outside ±5min window', schema: errorSchema },
-    { status: 503, description: 'WIC import secret not configured', schema: errorSchema },
+    { status: 503, description: 'WIC import secret or tenant context not configured', schema: errorSchema },
   ],
 }
 

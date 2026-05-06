@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import type { EntityManager } from '@mikro-orm/postgresql'
+import type { EntityManager, FilterQuery } from '@mikro-orm/postgresql'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { findAndCountWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { WicImportAuditLog } from '../../../data/entities'
 import { WIC_REJECTION_REASONS, WIC_RESOLUTION_ACTIONS } from '../../../data/validators'
@@ -69,11 +70,17 @@ export async function GET(req: Request) {
   if (rejection_reason) where.rejectionReason = rejection_reason
   if (import_batch_id) where.importBatchId = import_batch_id
 
-  const [items, total] = await em.findAndCount(WicImportAuditLog, where as any, {
-    orderBy: { createdAt: 'desc' },
-    limit: pageSize,
-    offset: (page - 1) * pageSize,
-  })
+  const [items, total] = await findAndCountWithDecryption<WicImportAuditLog>(
+    em,
+    WicImportAuditLog,
+    where as FilterQuery<WicImportAuditLog>,
+    {
+      orderBy: { createdAt: 'desc' },
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    },
+    { tenantId: auth.tenantId, organizationId: auth.orgId ?? null },
+  )
 
   return NextResponse.json({
     ok: true,

@@ -77,16 +77,22 @@ export default function WicIssuesBackendPage() {
       })
       if (reason) params.set('rejection_reason', reason)
       const res = await apiCall<ListResponse>(`/api/prm/wic/audit-log?${params.toString()}`)
-      if (!res.ok || !res.result?.ok) throw new Error('Failed to load WIC audit log')
+      if (!res.ok || !res.result?.ok) {
+        throw new Error(t('prm.wicIssues.error.loadFailed', 'Failed to load WIC audit log'))
+      }
       setItems(res.result.items)
       setTotal(res.result.total)
       setTotalPages(res.result.totalPages)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load WIC audit log')
+      setError(
+        err instanceof Error
+          ? err.message
+          : t('prm.wicIssues.error.loadFailed', 'Failed to load WIC audit log'),
+      )
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, resolved, reason])
+  }, [page, pageSize, resolved, reason, t])
 
   React.useEffect(() => {
     void load()
@@ -101,11 +107,18 @@ export default function WicIssuesBackendPage() {
           body: JSON.stringify({ action }),
           headers: { 'Content-Type': 'application/json' },
         })
-        if (!res.ok) throw new Error('Failed to resolve')
+        if (!res.ok) {
+          throw new Error(t('prm.wicIssues.error.resolveFailed', 'Failed to resolve'))
+        }
         flash(t('prm.wicIssues.resolved', 'Issue resolved'), 'success')
         await load()
       } catch (err) {
-        flash(err instanceof Error ? err.message : 'Failed to resolve', 'error')
+        flash(
+          err instanceof Error
+            ? err.message
+            : t('prm.wicIssues.error.resolveFailed', 'Failed to resolve'),
+          'error',
+        )
       } finally {
         setResolvingId(null)
       }

@@ -1,23 +1,50 @@
 import { NextResponse } from 'next/server'
 import { createHash, timingSafeEqual } from 'node:crypto'
-import type { EntityManager } from '@mikro-orm/postgresql'
+import type { EntityManager, FilterQuery } from '@mikro-orm/postgresql'
+import {
+  findOneWithDecryption,
+  findWithDecryption,
+} from '@open-mercato/shared/lib/encryption/find'
 import { Agency, ServiceIdempotencyKey } from '../data/entities'
 
 let cachedSingletonContext: { tenantId: string; organizationId: string } | null = null
 
+/**
+ * Singleton-PRM-tenant fallback. Used only when env (`OM_PRM_WIC_TENANT_ID` +
+ * `OM_PRM_WIC_ORG_ID`) is unset.
+ *
+ * Fail-closed in multi-tenant deployments: if more than one PRM Agency exists across
+ * tenants, refuse rather than guess. Spec §6.1 requires explicit env in production;
+ * the fallback is a dev/test convenience for the single-tenant case only.
+ */
 async function resolveSingletonTenantContext(
   em: EntityManager | undefined,
-): Promise<{ tenantId: string; organizationId: string } | null> {
-  if (cachedSingletonContext) return cachedSingletonContext
-  if (!em) return null
-  const first = await em.findOne(
+): Promise<
+  | { ok: true; tenantId: string; organizationId: string }
+  | { ok: false; reason: 'no_em' | 'no_agency' | 'ambiguous' }
+> {
+  if (cachedSingletonContext) {
+    return { ok: true, ...cachedSingletonContext }
+  }
+  if (!em) return { ok: false, reason: 'no_em' }
+  // Fetch up to 2 rows so we can detect "more than one tenant" without scanning the whole table.
+  const rows = await findWithDecryption<Agency>(
+    em,
     Agency,
-    { deletedAt: null } as any,
-    { orderBy: { createdAt: 'asc' } } as any,
+    { deletedAt: null } as FilterQuery<Agency>,
+    { orderBy: { createdAt: 'asc' }, limit: 2 },
+    { tenantId: null, organizationId: null },
   )
-  if (!first) return null
+  if (rows.length === 0) return { ok: false, reason: 'no_agency' }
+  const first = rows[0]!
+  if (rows.length > 1) {
+    const second = rows[1]!
+    if (second.tenantId !== first.tenantId || second.organizationId !== first.organizationId) {
+      return { ok: false, reason: 'ambiguous' }
+    }
+  }
   cachedSingletonContext = { tenantId: first.tenantId, organizationId: first.organizationId }
-  return cachedSingletonContext
+  return { ok: true, ...cachedSingletonContext }
 }
 
 /** @internal Used only by tests that need to clear the cache between runs. */
@@ -239,9 +266,18 @@ export async function authenticateServiceRequest(
   let organizationId = process.env.OM_PRM_WIC_ORG_ID ?? null
   if ((!tenantId || !organizationId) && options.em) {
     const fallback = await resolveSingletonTenantContext(options.em)
-    if (fallback) {
+    if (fallback.ok) {
       tenantId = fallback.tenantId
       organizationId = fallback.organizationId
+    } else if (fallback.reason === 'ambiguous') {
+      return {
+        ok: false,
+        response: jsonResponse(503, {
+          ok: false,
+          error:
+            'WIC tenant context ambiguous (multiple PRM Agencies across tenants); set OM_PRM_WIC_TENANT_ID + OM_PRM_WIC_ORG_ID explicitly',
+        }),
+      }
     }
   }
 
@@ -286,10 +322,17 @@ export async function authenticateServiceRequest(
 
     const payloadHash = hashPayload(options.bodyText)
 
-    const existing = await options.em.findOne(ServiceIdempotencyKey, {
-      endpoint: options.endpoint,
-      idempotencyKey,
-    })
+    const existing = await findOneWithDecryption<ServiceIdempotencyKey>(
+      options.em,
+      ServiceIdempotencyKey,
+      {
+        tenantId,
+        endpoint: options.endpoint,
+        idempotencyKey,
+      } as FilterQuery<ServiceIdempotencyKey>,
+      undefined,
+      { tenantId, organizationId },
+    )
     if (existing) {
       if (existing.payloadHash !== payloadHash) {
         return {

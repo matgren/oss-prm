@@ -14,6 +14,7 @@ class FakeEm {
   async find(cls: unknown, where: any) {
     if ((cls as { name?: string })?.name === 'AgencyMember') {
       return this.members.filter((m) => {
+        if (where.tenantId && (m as any).tenantId && (m as any).tenantId !== where.tenantId) return false
         if (where.githubProfile && m.githubProfile !== where.githubProfile) return false
         if (where.isActive !== undefined && m.isActive !== where.isActive) return false
         if (where.deletedAt === null && m.deletedAt) return false
@@ -28,6 +29,9 @@ class FakeEm {
       return (
         this.activeContributions.find(
           (c) =>
+            (where.tenantId === undefined ||
+              (c as any).tenantId === undefined ||
+              (c as any).tenantId === where.tenantId) &&
             c.agencyMemberId === where.agencyMemberId &&
             c.contributionMonth?.getTime() === where.contributionMonth?.getTime() &&
             !c.supersededById &&
@@ -181,6 +185,25 @@ describe('WIC ACL — processWicRow (Spec #4 §1.4.6)', () => {
     expect(result.status).toBe('rejected')
     if (result.status !== 'rejected') return
     expect(result.rejectionReason).toBe('invalid_payload')
+  })
+
+  it('tenant isolation — github_profile in another tenant is NOT resolved (rejected as unknown)', async () => {
+    const em = new FakeEm()
+    // Member in a different tenant carries the same github_profile.
+    em.members.push({
+      id: 'cross-tenant-m1',
+      agencyId: 'cross-tenant-a1',
+      githubProfile: 'octocat',
+      isActive: true,
+      deletedAt: null,
+      tenantId: 'OTHER-TENANT',
+    } as any)
+    const result = await processWicRow(em as any, ctx, VALID_ROW, 0)
+    expect(result.status).toBe('rejected')
+    if (result.status !== 'rejected') return
+    expect(result.rejectionReason).toBe('unknown_github_profile')
+    // Crucially, NO contribution row written.
+    expect(em.inserted.find((i) => i.kind === 'WicContribution')).toBeUndefined()
   })
 
   it('snapshot — agency_id + github_profile come from resolved member regardless of payload mismatch', async () => {

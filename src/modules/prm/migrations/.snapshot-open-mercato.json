@@ -2058,8 +2058,9 @@
           "unique": false
         },
         {
-          "keyName": "prm_service_idempotency_key_endpoint_key_uniq",
+          "keyName": "prm_service_idempotency_key_tenant_endpoint_key_uniq",
           "columnNames": [
+            "tenant_id",
             "endpoint",
             "idempotency_key"
           ],

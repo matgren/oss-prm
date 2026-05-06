@@ -123,14 +123,13 @@ export async function POST(req: Request, ctx: RouteCtx) {
       container,
     )
   } catch (err) {
-    // Surface the actual exception so test failures are actionable. Production should
-    // tighten this to a generic 500 with a structured error code; tracked in
-    // POST-MVP-FOLLOW-UPS.
+    // Detail is gated on non-production env so dev/staging keeps actionable error text but
+    // production never leaks internal exception messages to the n8n caller. Structured
+    // error codes are tracked in POST-MVP-FOLLOW-UPS.
     const message = err instanceof Error ? err.message : String(err)
-    return NextResponse.json(
-      { ok: false, error: 'WIC batch processing failed', detail: message },
-      { status: 500 },
-    )
+    const body: Record<string, unknown> = { ok: false, error: 'WIC batch processing failed' }
+    if (process.env.NODE_ENV !== 'production') body.detail = message
+    return NextResponse.json(body, { status: 500 })
   }
 
   const responseBody = {

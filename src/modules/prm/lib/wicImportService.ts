@@ -1,4 +1,8 @@
-import type { EntityManager } from '@mikro-orm/postgresql'
+import type { EntityManager, FilterQuery } from '@mikro-orm/postgresql'
+import {
+  findOneWithDecryption,
+  findWithDecryption,
+} from '@open-mercato/shared/lib/encryption/find'
 import { AgencyMember, WicContribution, WicImportAuditLog } from '../data/entities'
 import {
   isFirstOfMonth,
@@ -98,13 +102,25 @@ type ResolvedMember = {
 
 async function resolveMemberByGithub(
   em: EntityManager,
+  scope: { tenantId: string; organizationId: string },
   githubProfile: string,
 ): Promise<{ status: 'unique'; member: ResolvedMember } | { status: 'none' } | { status: 'ambiguous' }> {
-  const matches = await em.find(AgencyMember, {
-    githubProfile,
-    isActive: true,
-    deletedAt: null,
-  } as any)
+  // Tenant-scoped — invariant #13 (snapshot agency_id) only holds when the resolution is
+  // restricted to the importing tenant's roster. A cross-tenant match would write a row
+  // with `tenant_id = importer's tenant` but `agency_id` from a different tenant, breaking
+  // attribution irrecoverably.
+  const matches = await findWithDecryption<AgencyMember>(
+    em,
+    AgencyMember,
+    {
+      tenantId: scope.tenantId,
+      githubProfile,
+      isActive: true,
+      deletedAt: null,
+    } as FilterQuery<AgencyMember>,
+    undefined,
+    { tenantId: scope.tenantId, organizationId: scope.organizationId },
+  )
   if (matches.length === 0) return { status: 'none' }
   if (matches.length > 1) return { status: 'ambiguous' }
   const m = matches[0]!
@@ -114,15 +130,23 @@ async function resolveMemberByGithub(
 
 async function findActiveContribution(
   em: EntityManager,
+  scope: { tenantId: string; organizationId: string },
   agencyMemberId: string,
   contributionMonth: Date,
 ): Promise<WicContribution | null> {
-  return em.findOne(WicContribution, {
-    agencyMemberId,
-    contributionMonth,
-    supersededById: null,
-    archivedAt: null,
-  } as any)
+  return findOneWithDecryption<WicContribution>(
+    em,
+    WicContribution,
+    {
+      tenantId: scope.tenantId,
+      agencyMemberId,
+      contributionMonth,
+      supersededById: null,
+      archivedAt: null,
+    } as FilterQuery<WicContribution>,
+    undefined,
+    { tenantId: scope.tenantId, organizationId: scope.organizationId },
+  )
 }
 
 function buildAuditLogFromRaw(
@@ -318,8 +342,12 @@ export async function processWicRow(
     }
   }
 
-  // Resolve github_profile → AgencyMember.
-  const resolved = await resolveMemberByGithub(em, row.github_profile)
+  // Resolve github_profile → AgencyMember (tenant-scoped — invariant #13).
+  const resolved = await resolveMemberByGithub(
+    em,
+    { tenantId: ctx.tenantId, organizationId: ctx.organizationId },
+    row.github_profile,
+  )
   if (resolved.status === 'none' || resolved.status === 'ambiguous') {
     const reason: WicRejectionReason =
       resolved.status === 'ambiguous' ? 'ambiguous_github_profile' : 'unknown_github_profile'
@@ -355,7 +383,12 @@ export async function processWicRow(
 
   // Snapshot the contribution.
   const contributionMonth = new Date(`${row.contribution_month}T00:00:00.000Z`)
-  const previous = await findActiveContribution(em, resolved.member.id, contributionMonth)
+  const previous = await findActiveContribution(
+    em,
+    { tenantId: ctx.tenantId, organizationId: ctx.organizationId },
+    resolved.member.id,
+    contributionMonth,
+  )
 
   const newContribution = em.create(WicContribution, {
     tenantId: ctx.tenantId,

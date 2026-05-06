@@ -45,7 +45,7 @@ describe('GET /api/prm/service/wic/profiles handler logic', () => {
       ],
     )
 
-    const profiles = await listActiveProfiles(em as any)
+    const profiles = await listActiveProfiles(em as any, { tenantId: 't1', organizationId: 'o1' })
     expect(profiles).toEqual([
       { agency_member_id: 'm1', github_profile: 'octocat', agency_slug: 'acme', is_active: true },
     ])
@@ -56,7 +56,7 @@ describe('GET /api/prm/service/wic/profiles handler logic', () => {
       [{ id: 'a1', slug: 'acme', status: 'historical', onboarded: true, deletedAt: null }],
       [{ id: 'm1', agencyId: 'a1', githubProfile: 'octocat', isActive: true, deletedAt: null }],
     )
-    const profiles = await listActiveProfiles(em as any)
+    const profiles = await listActiveProfiles(em as any, { tenantId: 't1', organizationId: 'o1' })
     expect(profiles).toEqual([])
   })
 
@@ -68,7 +68,7 @@ describe('GET /api/prm/service/wic/profiles handler logic', () => {
         { id: 'm2', agencyId: 'a1', githubProfile: 'real-user', isActive: true, deletedAt: null },
       ],
     )
-    const profiles = await listActiveProfiles(em as any)
+    const profiles = await listActiveProfiles(em as any, { tenantId: 't1', organizationId: 'o1' })
     expect(profiles.length).toBe(1)
     expect(profiles[0].github_profile).toBe('real-user')
   })
