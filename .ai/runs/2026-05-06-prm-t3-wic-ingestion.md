@@ -172,12 +172,12 @@ Goal: US6.4 — OM PartnerOps can triage rejected rows.
 
 ### Phase 1: Entities, migration, ACL feature
 
-- [ ] 1.1 Add WICContribution + WICImportAuditLog + ServiceIdempotencyKey entities
-- [ ] 1.2 Generate migration; augment with partial-unique-index + day-of-month CHECK
-- [ ] 1.3 Add prm.wic.resolve ACL feature + role seeds
-- [ ] 1.4 Run yarn generate
-- [ ] 1.5 STOP for migration approval (hard-halt rule #1)
-- [ ] 1.6 Commit: T3 WIC entities + migration + acl feature
+- [x] 1.1 Add WICContribution + WICImportAuditLog + ServiceIdempotencyKey entities — 853532c
+- [x] 1.2 Generate migration; augment with partial-unique-index + day-of-month CHECK — 853532c
+- [x] 1.3 Add prm.wic.resolve ACL feature + role seeds — 853532c
+- [x] 1.4 Run yarn generate — verified 853532c
+- [ ] 1.5 STOP for migration approval (hard-halt rule #1) — pending user `db migrate` go-ahead
+- [x] 1.6 Commit: T3 WIC entities + migration + acl feature — 853532c
 
 ### Phase 2: Service auth middleware + idempotency replay
 
