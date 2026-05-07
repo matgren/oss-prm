@@ -6,11 +6,16 @@ import {
   Rfp,
   RfpBroadcast,
   RfpResponse,
+  RfpResponseScore,
 } from '../data/entities'
 import { createHash } from 'node:crypto'
 import {
   type CreateRfpDraftInput,
   type DraftRfpResponseInput,
+  type RecordRfpResponseScoreInput,
+  type SelectRfpWinnerInput,
+  type CloseRfpInput,
+  type ReopenRfpInput,
   type UpdateRfpDraftInput,
   RFP_PORTAL_VISIBLE_STATUSES,
 } from '../data/validators'
@@ -20,6 +25,7 @@ import {
   evaluateRfpEligibility,
   toEligibilityFilterInput,
 } from './rfpEligibility'
+import { RfpResponseScoreRepo } from './rfpResponseScoreRepo'
 
 /**
  * Domain helper for RFP authoring + broadcast (Spec #5).
@@ -778,6 +784,133 @@ export class RfpService {
     return { broadcast, reverted: true }
   }
 
+  /* ---------------------------------------------------------------- *
+   * Spec #6 — RFP scoring & selection                                  *
+   * ---------------------------------------------------------------- */
+
+  /**
+   * Record a score for a submitted `RfpResponse` (Spec #6 §3.1, US5.6).
+   *
+   * **Append-only** per invariant #18 — every call inserts a NEW row with
+   * `version = max(version) + 1`. The repository wraps that contract;
+   * this method enforces the cross-cutting business rules:
+   *
+   *   - RFP must be in `published`, `scoring`, or `reopened` (not closed
+   *     and not pre-publish). On the first score recorded against an RFP
+   *     in `published`, auto-transitions to `scoring` per §2.
+   *   - RfpResponse must be `submitted` — drafts are not scoreable.
+   *   - `change_reason` is required iff version > 1. Server enforces
+   *     against existing rows.
+   *
+   * Emits `prm.rfp_response_score.recorded` with the new row's metadata.
+   */
+  async recordScore(
+    rfpId: string,
+    rfpResponseId: string,
+    input: RecordRfpResponseScoreInput,
+    scope: { organizationId: string; userId: string },
+  ): Promise<{
+    score: RfpResponseScore
+    rfp: Rfp
+    isInitialScoreOnRfp: boolean
+  }> {
+    const rfp = await this.loadRfpForWrite(rfpId, scope.organizationId)
+    if (!RFP_SCOREABLE_STATUSES.includes(rfp.status)) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.RFP_NOT_ACCEPTING_SCORES,
+        `Cannot score — RFP status is "${rfp.status}". Only published / scoring / reopened RFPs accept new scores.`,
+        409,
+      )
+    }
+    const response = await this.em.findOne(
+      RfpResponse,
+      { id: rfpResponseId, rfpId, organizationId: scope.organizationId } as any,
+    )
+    if (!response) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.RFP_RESPONSE_NOT_FOUND,
+        'RfpResponse not found for this RFP',
+        404,
+      )
+    }
+    if (response.status !== 'submitted') {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.RESPONSE_NOT_SUBMITTED,
+        `Cannot score response in status "${response.status}". Only submitted responses are scoreable.`,
+        409,
+      )
+    }
+    const repo = new RfpResponseScoreRepo(this.em)
+    const existingLatest = await repo.findLatest(rfpResponseId, { organizationId: scope.organizationId })
+    if (existingLatest && (!input.change_reason || input.change_reason.trim().length === 0)) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.CHANGE_REASON_REQUIRED,
+        'change_reason is required when re-scoring (version > 1) per invariant #18.',
+        409,
+      )
+    }
+    const score = await repo.insertNextVersion({
+      rfpResponseId,
+      organizationId: scope.organizationId,
+      scoredByUserId: scope.userId,
+      techFitScore: input.tech_fit_score,
+      domainFitScore: input.domain_fit_score,
+      optionalScore: input.optional_score,
+      includeOptional: input.include_optional,
+      reasoning: input.reasoning,
+      source: input.source,
+      llmModelId: input.llm_model_id,
+      changeReason: input.change_reason ?? null,
+    })
+
+    // Auto-transition published → scoring on first-ever score for this RFP.
+    let isInitialScoreOnRfp = false
+    if (rfp.status === 'published') {
+      // Check if this is the first score across ALL responses for the RFP.
+      const peerResponses = await this.em.find(
+        RfpResponse,
+        { rfpId, organizationId: scope.organizationId } as any,
+        { fields: ['id'] } as any,
+      )
+      const peerIds = peerResponses.map((r) => r.id)
+      const peerScores = await repo.findLatestForResponses(peerIds, {
+        organizationId: scope.organizationId,
+      })
+      // After our insert, peerScores includes the row we just persisted (we
+      // share the same EM). If there's exactly 1 scored response (us), this
+      // is the first score on the RFP.
+      if (peerScores.size === 1) {
+        rfp.status = 'scoring'
+        rfp.updatedAt = new Date()
+        this.em.persist(rfp)
+        await this.em.flush()
+        isInitialScoreOnRfp = true
+      }
+    }
+
+    const totalScore = score.techFitScore + score.domainFitScore + (
+      score.includeOptional && typeof score.optionalScore === 'number' ? score.optionalScore : 0
+    )
+
+    await safeEmit('prm.rfp_response_score.recorded', {
+      rfp_response_score_id: score.id,
+      rfp_id: rfpId,
+      rfp_response_id: rfpResponseId,
+      agency_id: response.agencyId,
+      version: score.version,
+      tech_fit_score: score.techFitScore,
+      domain_fit_score: score.domainFitScore,
+      optional_score: score.optionalScore,
+      total_score: totalScore,
+      source: score.source,
+      llm_model_id: score.llmModelId,
+      scored_by_user_id: score.scoredByUserId,
+      change_reason: score.changeReason,
+    })
+
+    return { score, rfp, isInitialScoreOnRfp }
+  }
+
   private async loadRfpForWrite(rfpId: string, organizationId: string): Promise<Rfp> {
     const rfp = await this.em.findOne(Rfp, { id: rfpId, organizationId, deletedAt: null } as any)
     if (!rfp) {
@@ -786,6 +919,13 @@ export class RfpService {
     return rfp
   }
 }
+
+/**
+ * Statuses on which a new score may be recorded. Closed RFPs reject new
+ * scores; drafts are pre-publish so impossible. Reopened RFPs accept
+ * re-scoring during the challenge round.
+ */
+const RFP_SCOREABLE_STATUSES: readonly string[] = ['published', 'scoring', 'reopened']
 
 /** Canonical content hash for dedupe (R7). Stable across re-runs of the same payload. */
 function hashResponseContent(response: RfpResponse): string {

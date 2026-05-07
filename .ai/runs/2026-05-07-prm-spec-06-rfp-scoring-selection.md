@@ -206,11 +206,11 @@ Commit: `docs(runs): close prm-spec-06 run plan; spec implementation status`
 
 ### Commit 2: Append-only repo + record-score API
 
-- [ ] 2.1 Append-only repository
-- [ ] 2.2 RfpService.recordScore
-- [ ] 2.3 API route POST /score
-- [ ] 2.4 Unit tests
-- [ ] 2.5 typecheck + jest + generate green
+- [x] 2.1 Append-only repository (insertNextVersion / findLatest / findHistory / findLatestForResponses; UNIQUE-violation retry once)
+- [x] 2.2 RfpService.recordScore (auto-transition published→scoring on first score)
+- [x] 2.3 API route POST /score with full openApi documentation
+- [x] 2.4 Unit tests (14 cases / rfpScoreService.test.ts)
+- [x] 2.5 typecheck + jest 294/294 + generate green
 
 ### Commit 3: LLM-assist draft
 
