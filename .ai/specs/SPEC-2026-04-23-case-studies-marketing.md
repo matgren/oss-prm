@@ -592,3 +592,33 @@ Mitigation: soft-delete retains the FKs. Any future hard-delete (v2) must delete
 3. `marketing_material` entity + migration + B9 CrudForm + `/publish` + `/unpublish` + `topics` dictionary `setup.ts` seed. **(US7.1 + OQ-012)**
 4. P11 Marketing Library portal custom list + `/api/prm/portal/library` GET + `/download` redirect + tier-gate filter + cache tags. **(US7.2 — portal-side)**
 5. Four per-feature cache invalidator subscribers + Spec #5 read-contract integration test scaffolding + cross-spec fixture. **(OQ-019 + US7.2 reactive + cross-spec with Spec #5)**
+
+---
+
+## 11. Implementation Status
+
+| Phase / Commit | Status | Date | Notes |
+|---|---|---|---|
+| C1 — CaseStudy entity + portal CRUD + soft-delete/restore + own-Agency picker | Done | 2026-05-07 | MarketingMaterial entity + migration shipped together (single auto-generated migration). 5 events added (`prm.case_study.{created,updated,deleted,restored,publication_flag_changed}`). Cross-spec close: `RfpService.upsertResponseDraft` replaces v1 cross-Agency reject with own-Agency lookup against `prm_case_studies` (3 new jest cases). 16 caseStudyService cases. |
+| C2 — MarketingMaterial service + B9 backend admin | Done | 2026-05-07 | Service: create/update/publish/unpublish/delete/list/listPublishedForViewer (tier-gate-aware). 4 backend routes (list/POST + detail GET/PUT/DELETE + publish + unpublish). B9 list (DataTable) + new (CrudForm) + edit pages. 16 marketingMaterialService cases inc. tier gate quad. |
+| C3 — B8 CaseStudy admin + topics dictionary seed | Done | 2026-05-07 | B8 list with inline publication-flag toggle. B8 detail page (read-only narrative + flag/url editor). Topics dictionary seeded idempotently from `lib/topicsDictionarySeed.ts`. 3 setup-seed jest cases. |
+| C4 — P11 Marketing Library + tier gate | Done | 2026-05-07 | `/api/prm/portal/library` GET with facets; `min_tier` never exposed to portal viewer. `/[id]/download` re-checks publish state + tier gate before issuing the URL. P11 portal page custom React + faceted sidebar. tierRank.test.ts (4 cases). |
+| C5 — Cache invalidators + portal P7/P8 + Spec #5 P10 picker | Done | 2026-05-07 | Four per-feature invalidators (published / unpublished / updated-only-when-published / agency.tier_changed); shared `lib/libraryCache.ts` helper. Portal P7 list + new + edit pages. Spec #5 P10 case-study picker (max 5 checkbox list) replaces the deferred message. POST-MVP `Spec #5 case-study picker` entry trimmed; spec #5 §11 status table updated. 8 invalidator cases. |
+
+### Run plan reference
+
+`.ai/runs/2026-05-07-prm-spec-07-case-studies-marketing.md`
+
+### Test surface summary
+
+- **Unit (jest):** 33 suites, 309 tests across PRM. New for Spec #7: `caseStudyService.test.ts` (16), `marketingMaterialService.test.ts` (16), `setupTopicsDictionary.test.ts` (3), `tierRank.test.ts` (4), `marketingLibraryInvalidators.test.ts` (8); plus 3 cross-spec cases added to `rfpService.test.ts` exercising the own-Agency picker contract.
+- **Integration (Playwright):** §9.1–§9.11 deferred to the customer-portal Playwright auth helper follow-up (same blocker as Spec #5). The local `--no-reuse-env` runner currently fails at the migration step before reaching Spec #7's surface — the failure is on Spec #5's pre-existing `prm_rfps_organization_fk → directory_organizations(id)` migration (`relation directory_organizations does not exist`), which suggests a cross-module migration ordering quirk rather than a Spec #7 regression. Once the helper + ordering is resolved, §9.1–§9.11 can land additively without any code change here.
+
+### Cross-spec contracts shipped / closed
+
+- **Closed:** Spec #5 §10 commit 3c case-study picker deferral. `RfpService.upsertResponseDraft` now performs an own-Agency ownership lookup against `prm_case_studies`; cross-Agency / soft-deleted ids → 400 `validation_failed` with `reason: 'case_study_ownership_failed'`. P10 portal renders a checkbox list (max 5) sourced from `GET /api/prm/portal/case-study?includeDeleted=false`. POST-MVP-FOLLOW-UPS entry trimmed.
+- **New:** `prm.case_study.publication_flag_changed` (consumed v2 by external Marketing handshake; v1 OQ-008 shortcut emits only). `prm.marketing_material.{published,unpublished}` (consumed by per-feature cache invalidators). `prm.agency.tier_changed` (already shipped by Spec #1) gains a per-Agency cache invalidator subscriber.
+
+---
+
+*End of SPEC-2026-04-23-case-studies-marketing.*
