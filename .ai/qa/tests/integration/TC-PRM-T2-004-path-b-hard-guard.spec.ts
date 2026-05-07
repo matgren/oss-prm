@@ -51,25 +51,6 @@ import {
  *     after `/unreverse-status signed → pending` per §8.6 lock semantics.
  *
  * Real saga, no stubs. Polls (≤30s).
- *
- * STATUS — `test.fixme()` (2026-05-07): the `prm:rfp-path-b-lock` subscriber
- * is correctly registered in `.mercato/generated/modules.generated.ts:1038`
- * (event `prm.license_deal.status_changed`, persistent: true) and the
- * licenseDealService DOES emit the event with the right shape (verified via
- * Playwright trace — `emittedEvents` includes `prm.license_deal.status_changed`
- * with `attributionPath: 'B'`, `rfpId: <uuid>`, and `tenantId: <uuid>`).
- * Yet `prm_rfps.is_path_b_locked` remains `false` 30s after attribute Path B,
- * confirmed via repeated GET `/api/prm/rfp/{id}` polls (response sha
- * `05b36c89...` stable for 30s). The unit test
- * `__tests__/rfpPathBLockSubscriber.test.ts` shows the subscriber logic is
- * correct in isolation (3 introspection branches + 2 write branches all
- * pass), so the bug is in the in-process subscriber dispatch path —
- * possibly the wildcard `workflows:event-trigger` subscriber consuming the
- * event ahead of `prm:rfp-path-b-lock`, or the `createLazyModuleSubscriber`
- * lazy-loader silently failing on first invoke. The cross-spec invariant
- * is still verified at the unit-test level for both writer (Spec #3) and
- * reader (Spec #6 `rfpSelectionService.test.ts` "scenario:lockedReopen").
- * Un-fixme after triaging the runtime subscriber dispatch in the framework.
  */
 test.describe('TC-PRM-T2-004: Spec #3 §9 IT-9.4 — Path-B hard guard cross-spec contract', () => {
   test.beforeEach(async ({ request }) => {
@@ -77,8 +58,7 @@ test.describe('TC-PRM-T2-004: Spec #3 §9 IT-9.4 — Path-B hard guard cross-spe
     await resetPrmState(request, token)
   })
 
-  // eslint-disable-next-line playwright/no-skipped-test
-  test.fixme('Path B attribution flips RfpPathBLockSubscriber → is_path_b_locked = true; signed→pending releases the lock', async ({
+  test('Path B attribution flips RfpPathBLockSubscriber → is_path_b_locked = true; signed→pending releases the lock', async ({
     request,
   }) => {
     // Two subscriber-driven polls (lock-set + lock-release). Allow 90s.
