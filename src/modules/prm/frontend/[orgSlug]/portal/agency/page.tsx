@@ -7,6 +7,7 @@ import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { OnboardingChips } from '../_components/OnboardingChips'
 import { PartnerStatusBanner } from '../_components/PartnerStatusBanner'
 
 type AgencyView = {
@@ -133,12 +134,15 @@ export default function PortalAgencyProfilePage() {
           </p>
         </div>
         {agency._prm ? (
-          <div className="flex gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded-full border px-2 py-0.5">Tier: {agency._prm.tier}</span>
             <span className="rounded-full border px-2 py-0.5">Status: {agency._prm.status}</span>
-            {agency._prm.contractSigned ? <span className="rounded-full border bg-emerald-50 px-2 py-0.5 text-emerald-800">Contract</span> : null}
-            {agency._prm.ndaSigned ? <span className="rounded-full border bg-emerald-50 px-2 py-0.5 text-emerald-800">NDA</span> : null}
-            {agency._prm.onboarded ? <span className="rounded-full border bg-emerald-50 px-2 py-0.5 text-emerald-800">Onboarded</span> : null}
+            <OnboardingChips
+              contractSigned={agency._prm.contractSigned}
+              ndaSigned={agency._prm.ndaSigned}
+              onboarded={agency._prm.onboarded}
+              t={t}
+            />
           </div>
         ) : null}
       </header>

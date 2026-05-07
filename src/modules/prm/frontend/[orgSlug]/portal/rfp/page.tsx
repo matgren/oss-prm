@@ -5,6 +5,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { RfpResponseStatusChip } from '../_components/RfpResponseStatusChip'
 
 /**
  * P9 — Partner Portal RFP inbox (Spec #5 §3.2 / US5.3).
@@ -217,14 +218,10 @@ export default function PortalRfpInboxPage() {
                         </span>
                       ) : null}
                       {responded ? (
-                        <span
-                          className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
-                          data-testid="rfp-badge-responded"
-                        >
-                          {item.responseStatus === 'submitted'
-                            ? t('prm.portal.rfp.badge.submitted', 'Submitted')
-                            : t('prm.portal.rfp.badge.draft', 'Draft saved')}
-                        </span>
+                        <RfpResponseStatusChip
+                          status={item.responseStatus ?? 'draft'}
+                          t={t}
+                        />
                       ) : null}
                     </div>
                     <span className="text-xs text-muted-foreground">
