@@ -214,12 +214,12 @@ Commit message: `docs(runs): close prm-spec-07 run plan; spec implementation sta
 
 ### Commit 4: P11 Marketing Library + tier gate
 
-- [ ] 4.1 Portal `/api/prm/portal/library` GET (tier gate + facets)
-- [ ] 4.2 Portal `/api/prm/portal/library/[id]/download` redirect (re-checks publish state)
-- [ ] 4.3 Portal P11 page (custom React + facets)
-- [ ] 4.4 Tier-rank helper
-- [ ] 4.5 Unit tests
-- [ ] 4.6 Gate green
+- [x] 4.1 Portal `/api/prm/portal/library` GET — tier gate applied via `MarketingMaterialService.listPublishedForViewer`; facets computed across the gated full set; `min_tier` never exposed
+- [x] 4.2 Portal `/api/prm/portal/library/[id]/download` — re-checks publish + tier gate, returns canonical attachment URL
+- [x] 4.3 Portal P11 page (custom React + facet sidebar + download CTA)
+- [x] 4.4 Tier-rank helper shipped in commit 1 (`lib/tierRank.ts`)
+- [x] 4.5 Unit tests — tierRank.test.ts (4 cases) + library tier gate already covered in marketingMaterialService.test.ts (commit 2)
+- [x] 4.6 Gate green — typecheck clean; jest 301/301 across 32 suites
 
 ### Commit 5: Cache invalidators + portal P7/P8 + Spec #5 P10 picker
 
