@@ -748,3 +748,202 @@ export function monthFromDate(isoDate: string): string | null {
   const m = isoDate.match(/^(\d{4}-\d{2})-\d{2}$/)
   return m ? m[1]! : null
 }
+
+// ---------------------------------------------------------------------------
+// CaseStudy + MarketingMaterial (Spec #7 — case-studies-marketing).
+// ---------------------------------------------------------------------------
+
+/** Slug strings (lowercase, hyphenated). Same shape as Agency.industries. */
+const slugStringArray = z.array(z.string().min(1).max(80)).default([])
+
+/** Marketing-only field names — rejected by portal CaseStudy routes (invariant #6). */
+export const ADMIN_ONLY_CASE_STUDY_FIELDS = [
+  'mayPublishOnOmWebsite',
+  'publishedUrl',
+  'may_publish_on_om_website',
+  'published_url',
+] as const
+
+export const createCaseStudySchema = z.object({
+  title: z.string().min(3).max(200),
+  clientName: z.string().min(1).max(200),
+  clientIndustry: z.string().min(1).max(80).nullable().optional(),
+  clientCountry: z.string().min(1).max(80).nullable().optional(),
+  challengeMarkdown: z.string().min(1).max(40_000),
+  approachMarkdown: z.string().min(1).max(40_000),
+  outcomeMarkdown: z.string().min(1).max(40_000),
+  technologiesUsed: slugStringArray.optional(),
+  servicesDelivered: slugStringArray.optional(),
+  heroImageAttachmentId: z.string().uuid().nullable().optional(),
+  galleryAttachmentIds: z.array(z.string().uuid()).max(20).default([]).optional(),
+})
+export type CreateCaseStudyInput = z.infer<typeof createCaseStudySchema>
+
+export const updateCaseStudySchema = createCaseStudySchema.partial()
+export type UpdateCaseStudyInput = z.infer<typeof updateCaseStudySchema>
+
+export const setCaseStudyPublicationFlagSchema = z
+  .object({
+    mayPublishOnOmWebsite: z.boolean(),
+    publishedUrl: z.string().url().max(2_000).nullable(),
+  })
+  .refine(
+    (v) => !(v.publishedUrl !== null && v.mayPublishOnOmWebsite === false),
+    { message: 'Cannot set publishedUrl when mayPublishOnOmWebsite = false', path: ['publishedUrl'] },
+  )
+export type SetCaseStudyPublicationFlagInput = z.infer<
+  typeof setCaseStudyPublicationFlagSchema
+>
+
+export const listCaseStudyPortalSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  q: z.string().trim().min(1).max(120).optional(),
+  includeDeleted: z.coerce.boolean().default(false),
+})
+export type ListCaseStudyPortalInput = z.infer<typeof listCaseStudyPortalSchema>
+
+export const listCaseStudyBackendSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  agencyId: z.string().uuid().optional(),
+  mayPublish: z
+    .union([z.boolean(), z.literal('true'), z.literal('false')])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined
+      if (typeof v === 'boolean') return v
+      return v === 'true'
+    }),
+  isPublished: z
+    .union([z.boolean(), z.literal('true'), z.literal('false')])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined
+      if (typeof v === 'boolean') return v
+      return v === 'true'
+    }),
+  includeDeleted: z.coerce.boolean().default(true),
+  q: z.string().trim().min(1).max(120).optional(),
+})
+export type ListCaseStudyBackendInput = z.infer<typeof listCaseStudyBackendSchema>
+
+export const MARKETING_MATERIAL_TYPES = [
+  'playbook',
+  'sales_deck',
+  'video',
+  'guide',
+  'case_study_template',
+  'other',
+] as const
+export type MarketingMaterialType = (typeof MARKETING_MATERIAL_TYPES)[number]
+
+export const MARKETING_MATERIAL_VISIBILITIES = ['all_partners', 'tier_gated'] as const
+export type MarketingMaterialVisibility =
+  (typeof MARKETING_MATERIAL_VISIBILITIES)[number]
+
+export const MARKETING_MATERIAL_AUDIENCES = [
+  'new_partner',
+  'active_partner',
+  'tier_progressing',
+] as const
+export type MarketingMaterialAudience =
+  (typeof MARKETING_MATERIAL_AUDIENCES)[number]
+
+const audienceArray = z
+  .array(z.enum(MARKETING_MATERIAL_AUDIENCES))
+  .max(MARKETING_MATERIAL_AUDIENCES.length)
+  .default([])
+
+export const createMarketingMaterialSchema = z
+  .object({
+    title: z.string().min(3).max(200),
+    description: z.string().max(2_000).nullable().optional(),
+    materialType: z.enum(MARKETING_MATERIAL_TYPES),
+    visibility: z.enum(MARKETING_MATERIAL_VISIBILITIES).default('all_partners'),
+    minTier: z.enum(AGENCY_TIERS).nullable().optional(),
+    topics: slugStringArray.optional(),
+    audiences: audienceArray.optional(),
+    primaryAttachmentId: z.string().uuid(),
+  })
+  .refine(
+    (v) => v.visibility === 'all_partners' || (v.minTier ?? null) !== null,
+    { message: 'minTier required when visibility = tier_gated', path: ['minTier'] },
+  )
+export type CreateMarketingMaterialInput = z.infer<
+  typeof createMarketingMaterialSchema
+>
+
+export const updateMarketingMaterialSchema = z
+  .object({
+    title: z.string().min(3).max(200).optional(),
+    description: z.string().max(2_000).nullable().optional(),
+    materialType: z.enum(MARKETING_MATERIAL_TYPES).optional(),
+    visibility: z.enum(MARKETING_MATERIAL_VISIBILITIES).optional(),
+    minTier: z.enum(AGENCY_TIERS).nullable().optional(),
+    topics: slugStringArray.optional(),
+    audiences: audienceArray.optional(),
+    primaryAttachmentId: z.string().uuid().optional(),
+  })
+  .refine(
+    (v) => {
+      if (v.visibility === 'all_partners') return true
+      if (v.visibility === 'tier_gated') return (v.minTier ?? null) !== null
+      return true
+    },
+    { message: 'minTier required when visibility = tier_gated', path: ['minTier'] },
+  )
+export type UpdateMarketingMaterialInput = z.infer<
+  typeof updateMarketingMaterialSchema
+>
+
+export const unpublishMarketingMaterialSchema = z.object({
+  reason: z.string().max(500).nullable().optional(),
+})
+export type UnpublishMarketingMaterialInput = z.infer<
+  typeof unpublishMarketingMaterialSchema
+>
+
+export const listMarketingMaterialBackendSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  materialType: z.enum(MARKETING_MATERIAL_TYPES).optional(),
+  visibility: z.enum(MARKETING_MATERIAL_VISIBILITIES).optional(),
+  isPublished: z
+    .union([z.boolean(), z.literal('true'), z.literal('false')])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined
+      if (typeof v === 'boolean') return v
+      return v === 'true'
+    }),
+  q: z.string().trim().min(1).max(120).optional(),
+})
+export type ListMarketingMaterialBackendInput = z.infer<
+  typeof listMarketingMaterialBackendSchema
+>
+
+export const listLibraryPortalSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  materialType: z.enum(MARKETING_MATERIAL_TYPES).optional(),
+  topics: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined
+      if (Array.isArray(v)) return v
+      return v.split(',').map((s) => s.trim()).filter(Boolean)
+    }),
+  audiences: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined
+      const list = Array.isArray(v) ? v : v.split(',').map((s) => s.trim()).filter(Boolean)
+      return list.filter((s): s is MarketingMaterialAudience =>
+        (MARKETING_MATERIAL_AUDIENCES as readonly string[]).includes(s),
+      )
+    }),
+})
+export type ListLibraryPortalInput = z.infer<typeof listLibraryPortalSchema>

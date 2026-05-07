@@ -3,6 +3,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import {
   Agency,
+  CaseStudy,
   Rfp,
   RfpBroadcast,
   RfpResponse,
@@ -466,21 +467,32 @@ export class RfpService {
       } as any)
     }
 
-    // Cross-Agency CaseStudy reject (Spec #5 §3.2 / §9.3 #14).
-    //
-    // Spec #7 (CaseStudy module) has not yet shipped — there is no CaseStudy
-    // table to resolve `attached_case_study_ids` against, and no own-Agency
-    // ownership check we can perform. Until then, any non-empty list is a 400:
-    // contract surface preserved, picker UI deferred to a Spec #7 follow-up.
-    // Once Spec #7 ships, replace this guard with an ownership query that
-    // verifies every id resolves to a CaseStudy with `agency_id = current_agency_id`.
+    // Own-Agency CaseStudy ownership check (Spec #5 §3.2 / §9.3 #14, closed
+    // by Spec #7). Every id must resolve to a CaseStudy with
+    // `agency_id = current_agency_id` AND `deleted_at IS NULL`. Cross-Agency
+    // or unknown ids → 400; soft-deleted ids → 400. Publication state is NOT
+    // required (drafts are valid evidence too).
     if (input.attached_case_study_ids && input.attached_case_study_ids.length > 0) {
-      throw new PrmDomainError(
-        PRM_ERROR_CODES.VALIDATION_FAILED,
-        'Case study attachments are not yet supported — the Case Studies module ships in a later spec.',
-        400,
-        { reason: 'case_study_module_not_shipped' },
+      const unique = Array.from(new Set(input.attached_case_study_ids))
+      const owned = await this.em.find(
+        CaseStudy,
+        {
+          id: { $in: unique },
+          organizationId: scope.organizationId,
+          agencyId,
+          deletedAt: null,
+        } as any,
       )
+      const ownedIds = new Set(owned.map((row) => row.id))
+      const missing = unique.filter((id) => !ownedIds.has(id))
+      if (missing.length > 0) {
+        throw new PrmDomainError(
+          PRM_ERROR_CODES.VALIDATION_FAILED,
+          'One or more attached case studies do not belong to this Agency.',
+          400,
+          { reason: 'case_study_ownership_failed', missing_ids: missing },
+        )
+      }
     }
 
     const previousHash = hashResponseContent(response)

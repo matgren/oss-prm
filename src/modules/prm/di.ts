@@ -7,6 +7,8 @@ import { ReinviteCooldownService } from './lib/reinviteCooldownService'
 import { ProspectService } from './lib/prospectService'
 import { LicenseDealService } from './lib/licenseDealService'
 import { RfpService } from './lib/rfpService'
+import { CaseStudyService } from './lib/caseStudyService'
+import { MarketingMaterialService } from './lib/marketingMaterialService'
 import {
   executeAttributionSaga,
   type AttributionSagaArgs,
@@ -42,6 +44,12 @@ export function register(container: AppContainer): void {
       ({ em }: { em: EntityManager }) => new LicenseDealService(em),
     ).scoped().proxy(),
     rfpService: asFunction(({ em }: { em: EntityManager }) => new RfpService(em)).scoped().proxy(),
+    caseStudyService: asFunction(
+      ({ em }: { em: EntityManager }) => new CaseStudyService(em),
+    ).scoped().proxy(),
+    marketingMaterialService: asFunction(
+      ({ em }: { em: EntityManager }) => new MarketingMaterialService(em),
+    ).scoped().proxy(),
     reinviteCooldownService: asFunction(() => new ReinviteCooldownService()).singleton(),
     // Convenience: bag of admin-only field names so interceptors and enrichers
     // share one source of truth.

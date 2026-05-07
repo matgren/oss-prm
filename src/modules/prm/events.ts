@@ -94,6 +94,21 @@ const events = [
   { id: 'prm.rfp.reopened_for_scoring', label: 'RFP re-opened for scoring (challenge round)', entity: 'rfp', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.rfp_response.available_for_revision', label: 'RFP response available for revision (challenge round)', entity: 'rfp_response', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.rfp.reopened_deadline_expired', label: 'RFP reopened deadline expired (auto → scoring)', entity: 'rfp', category: 'system' },
+
+  // Case studies + marketing library (Spec #7 — case-studies-marketing).
+  // Cross-spec contract (FROZEN): the cache invalidator subscribers below depend
+  // on the published / unpublished / updated triple. The publication-flag
+  // event drives the external Marketing system (v1 OQ-008 shortcut; v2 will
+  // replace with a full handshake).
+  { id: 'prm.case_study.created', label: 'Case study created', entity: 'case_study', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.case_study.updated', label: 'Case study updated', entity: 'case_study', category: 'crud', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.case_study.deleted', label: 'Case study soft-deleted', entity: 'case_study', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.case_study.restored', label: 'Case study restored from soft-delete', entity: 'case_study', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.case_study.publication_flag_changed', label: 'Case study publication flag changed (B8)', entity: 'case_study', category: 'system' },
+  { id: 'prm.marketing_material.created', label: 'Marketing material created', entity: 'marketing_material', category: 'lifecycle', clientBroadcast: true },
+  { id: 'prm.marketing_material.updated', label: 'Marketing material updated', entity: 'marketing_material', category: 'crud', clientBroadcast: true },
+  { id: 'prm.marketing_material.published', label: 'Marketing material published', entity: 'marketing_material', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.marketing_material.unpublished', label: 'Marketing material unpublished', entity: 'marketing_material', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
 ] as const
 
 export const eventsConfig = createModuleEvents({

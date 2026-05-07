@@ -71,6 +71,19 @@ export const features = [
   { id: 'prm.rfp.select', title: 'Commit RFP winner selection (B7)', module: 'prm' },
   { id: 'prm.rfp.close', title: 'Close an RFP (B7)', module: 'prm' },
   { id: 'prm.rfp.reopen', title: 'Re-open a closed/selected RFP (B7) — Path-B-locked guard applies', module: 'prm' },
+
+  // Case studies + marketing library (Spec #7 — case-studies-marketing).
+  // Backend gates split between read / write / publish. OM PartnerOps reads
+  // case studies cross-Agency for support work; only OM Marketing toggles the
+  // public-website publish flag (invariant #6 + #8). Portal CaseStudy access
+  // is implicit via CustomerUserRole (PartnerAdmin / PartnerMember) — no
+  // dedicated portal.* feature for the picker (read-only).
+  { id: 'prm.case_study.read_all', title: 'Read case studies across agencies (B8)', module: 'prm' },
+  { id: 'prm.case_study.write', title: 'Edit case studies (B8 admin override)', module: 'prm' },
+  { id: 'prm.case_study.toggle_publish', title: 'Toggle case study publication flag (B8 — Marketing only)', module: 'prm' },
+  { id: 'prm.marketing_material.read', title: 'Read marketing materials (B9)', module: 'prm' },
+  { id: 'prm.marketing_material.write', title: 'Create / edit / delete marketing materials (B9)', module: 'prm' },
+  { id: 'prm.marketing_material.publish', title: 'Publish / unpublish marketing materials (B9)', module: 'prm' },
 ] as const
 
 export type PrmFeatureId = (typeof features)[number]['id']

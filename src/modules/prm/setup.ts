@@ -11,6 +11,7 @@ import {
   WorkflowDefinition,
   type WorkflowDefinitionData,
 } from '@open-mercato/core/modules/workflows/data/entities'
+import { seedTopicsDictionary } from './lib/topicsDictionarySeed'
 
 /**
  * PRM module setup.
@@ -248,6 +249,14 @@ export const setup: ModuleSetupConfig = {
       'prm.rfp.select',
       'prm.rfp.close',
       'prm.rfp.reopen',
+      // Spec #7: OM PartnerOps reads case studies + marketing materials
+      // for support work. Authoring + publication-flag is Marketing-only —
+      // create a dedicated `marketing` staff role with `prm.case_study.toggle_publish`
+      // and `prm.marketing_material.write` / `prm.marketing_material.publish`
+      // via the staff-roles UI. Documented in PRM_ROLE_FEATURE_PRESETS below.
+      'prm.case_study.read_all',
+      'prm.case_study.write',
+      'prm.marketing_material.read',
     ],
   },
 
@@ -265,11 +274,13 @@ export const setup: ModuleSetupConfig = {
   async onTenantCreated({ em, tenantId, organizationId }) {
     await seedPartnerRoles(em as EntityManager, { tenantId, organizationId })
     await seedAttributionSagaWorkflow(em as EntityManager, { tenantId, organizationId })
+    await seedTopicsDictionary(em as EntityManager, { tenantId, organizationId })
   },
 
   async seedDefaults({ em, tenantId, organizationId }) {
     await seedPartnerRoles(em as EntityManager, { tenantId, organizationId })
     await seedAttributionSagaWorkflow(em as EntityManager, { tenantId, organizationId })
+    await seedTopicsDictionary(em as EntityManager, { tenantId, organizationId })
   },
 }
 

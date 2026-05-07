@@ -53,6 +53,15 @@ export const PRM_ERROR_CODES = {
   CLOSE_REASON_REQUIRED: 'close_reason_required',
   DEADLINE_IN_PAST: 'deadline_in_past',
   LLM_UNAVAILABLE: 'llm_unavailable',
+  // Spec #7 — case-studies-marketing. FROZEN once shipped.
+  CASE_STUDY_NOT_FOUND: 'case_study_not_found',
+  CASE_STUDY_PUBLISHED_GUARD: 'case_study_published_guard',
+  CASE_STUDY_NOT_DELETED: 'case_study_not_deleted',
+  CASE_STUDY_FORBIDDEN_FIELD: 'case_study_forbidden_field',
+  CASE_STUDY_INVALID_PUBLISH_STATE: 'case_study_invalid_publish_state',
+  MARKETING_MATERIAL_NOT_FOUND: 'marketing_material_not_found',
+  MARKETING_MATERIAL_INVALID_TIER: 'marketing_material_invalid_tier',
+  MARKETING_MATERIAL_NOT_PUBLISHED: 'marketing_material_not_published',
 } as const
 
 export type PrmErrorCode = (typeof PRM_ERROR_CODES)[keyof typeof PRM_ERROR_CODES]
