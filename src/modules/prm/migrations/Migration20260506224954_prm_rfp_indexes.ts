@@ -9,7 +9,7 @@ import { Migration } from '@mikro-orm/migrations'
  *   - Enum CHECK constraints (`status`, `eligibility_filter`,
  *     `budget_bucket`, `timeline_bucket`).
  *   - Cross-field CHECK: `min_tier` required iff `eligibility_filter = 'by_min_tier'`.
- *   - FKs to `directory_organizations`, `prm_agencies`, `prm_agency_members`.
+ *   - FKs to `organizations` (directory module — its actual table name), `prm_agencies`, `prm_agency_members`.
  *   - Perf indexes for portal inbox JOIN and Spec #6 scoring-ready query.
  *   - Deadline index for the auto-transition scheduler (Spec #6 owns the job;
  *     index lives here so the column owner ships it).
@@ -49,9 +49,11 @@ export class Migration20260506224954_prm_rfp_indexes extends Migration {
     this.addSql(
       `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_rfps_explicit_agencies_required_check') then alter table "prm_rfps" add constraint "prm_rfps_explicit_agencies_required_check" check ("eligibility_filter" <> 'explicit' or (jsonb_typeof("explicit_agency_ids") = 'array' and jsonb_array_length("explicit_agency_ids") > 0)); end if; end $$;`,
     )
-    // FK: Rfp.organization_id → directory_organizations(id) (RESTRICT).
+    // FK: Rfp.organization_id → organizations(id) (RESTRICT).
+    // Directory core module declares the table as `organizations` (not `directory_organizations`);
+    // the original reference here failed at migrate time and blocked all ephemeral Playwright runs.
     this.addSql(
-      `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_rfps_organization_fk') then alter table "prm_rfps" add constraint "prm_rfps_organization_fk" foreign key ("organization_id") references "directory_organizations" ("id") on delete restrict; end if; end $$;`,
+      `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_rfps_organization_fk') then alter table "prm_rfps" add constraint "prm_rfps_organization_fk" foreign key ("organization_id") references "organizations" ("id") on delete restrict; end if; end $$;`,
     )
     // FK: Rfp.selected_agency_id → prm_agencies(id) (SET NULL on agency delete).
     this.addSql(
