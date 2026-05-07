@@ -143,9 +143,9 @@ All slugs kebab-case (`saas`, `e-commerce`, `fintech`, `node-js`, `dot-net`, etc
 
 ### Phase 3: Validation gate
 
-- [ ] 3.1 `yarn typecheck`
-- [ ] 3.2 `yarn jest src/modules/prm` (≥491 passing)
-- [ ] 3.3 `yarn build`
+- [x] 3.1 `yarn typecheck` — clean (after `yarn generate`)
+- [x] 3.2 `yarn jest src/modules/prm` — 491 passing (52 suites)
+- [x] 3.3 `yarn build` — compiled + static pages OK
 
 ### Phase 4: PR + auto-review
 
