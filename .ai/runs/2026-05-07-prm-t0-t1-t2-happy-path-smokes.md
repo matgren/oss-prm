@@ -228,9 +228,9 @@ Commit: `docs: trim POST-MVP follow-ups now covered by smoke suite + cross-refer
 
 ### Phase 3: T1 smoke (Prospect happy path)
 
-- [ ] 3.1 Create TC-PRM-T1-001-prospect-happy-path.spec.ts (register + transitions + dashboard)
-- [ ] 3.2 Run twice — green both times
-- [ ] 3.3 Surface any real bug; do NOT stub
+- [x] 3.1 Create TC-PRM-T1-001-prospect-happy-path.spec.ts (register + transitions + dashboard) — d99b54d
+- [x] 3.2 Run twice — green both times — d99b54d
+- [x] 3.3 No new bugs surfaced — pre-existing portal route + seam fixes from Phase 2 unblock T1 cleanly
 
 ### Phase 4: T2 smoke (Attribution Path A + saga + MIN)
 
