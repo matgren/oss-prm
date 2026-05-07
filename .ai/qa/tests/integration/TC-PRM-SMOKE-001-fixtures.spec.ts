@@ -9,9 +9,16 @@ import {
   createLicenseDealFixture,
   deleteAgencyIfExists,
   deleteLicenseDealIfExists,
+  resetPrmState,
 } from '@/modules/prm/testing/integration'
 
 test.describe('TC-PRM-SMOKE-001: PRM fixture wire-up', () => {
+  // Cross-spec test isolation — TRUNCATE PRM tables before each test.
+  test.beforeEach(async ({ request }) => {
+    const token = await getAuthToken(request, 'admin')
+    await resetPrmState(request, token)
+  })
+
   test('createAgencyFixture seeds an Agency that GET returns', async ({ request }) => {
     const token = await getAuthToken(request, 'admin')
     const uniqueSuffix = Date.now().toString(36)

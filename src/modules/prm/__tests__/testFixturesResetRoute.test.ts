@@ -94,7 +94,9 @@ describe('POST /api/prm/test-fixtures/reset', () => {
 
     // Single TRUNCATE call.
     expect(knexRawMock).toHaveBeenCalledTimes(1)
-    const sql = knexRawMock.mock.calls[0]![0] as string
+    const firstCall = knexRawMock.mock.calls[0]
+    expect(firstCall).toBeDefined()
+    const sql = (firstCall as unknown as [string])[0]
     expect(sql).toMatch(/^TRUNCATE TABLE /i)
     expect(sql).toMatch(/RESTART IDENTITY CASCADE$/i)
 
@@ -130,7 +132,9 @@ describe('POST /api/prm/test-fixtures/reset', () => {
     const res = await POST(makeRequest())
     expect(res.status).toBe(200)
 
-    const sql = knexRawMock.mock.calls[0]![0] as string
+    const firstCall = knexRawMock.mock.calls[0]
+    expect(firstCall).toBeDefined()
+    const sql = (firstCall as unknown as [string])[0]
     // Spot-check the most load-bearing non-PRM tables. The seam must never
     // touch organisation / customer / staff tables — those are seeded once
     // per ephemeral run and the suite depends on that state surviving.

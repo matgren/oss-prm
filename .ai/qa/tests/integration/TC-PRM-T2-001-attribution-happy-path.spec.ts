@@ -8,6 +8,7 @@ import {
   customerApiRequest,
   getProspectViaPortalFixture,
   listGoldenRuleCandidatesFixture,
+  resetPrmState,
   transitionProspectViaPortalFixture,
 } from '@/modules/prm/testing/integration'
 
@@ -39,6 +40,12 @@ import {
  * test is designed to catch — do NOT stub the saga.
  */
 test.describe('TC-PRM-T2-001: Spec #3 §9 IT-9.1 — Path A attribution + saga + MIN happy path', () => {
+  // Cross-spec test isolation — TRUNCATE PRM tables before each test.
+  test.beforeEach(async ({ request }) => {
+    const token = await getAuthToken(request, 'admin')
+    await resetPrmState(request, token)
+  })
+
   test('OMPartnerOps attributes deal Path A; saga walks prospect to won; portal MIN reflects', async ({
     request,
   }) => {

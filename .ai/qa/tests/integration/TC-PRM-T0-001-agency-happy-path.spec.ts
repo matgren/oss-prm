@@ -4,6 +4,7 @@ import {
   bootPartnerAgencyWithMembers,
   createAgencyFixture,
   customerApiRequest,
+  resetPrmState,
   setAgencyOnboardedFixture,
 } from '@/modules/prm/testing/integration'
 
@@ -37,6 +38,12 @@ import {
  *      `/api/prm/portal/agency/{id}/member/{memberId}` route (US1.4).
  */
 test.describe('TC-PRM-T0-001: Spec #1 §9 IT-1 — Agency happy-path onboarding', () => {
+  // Cross-spec test isolation — TRUNCATE PRM tables before each test.
+  test.beforeEach(async ({ request }) => {
+    const token = await getAuthToken(request, 'admin')
+    await resetPrmState(request, token)
+  })
+
   test('OMPartnerOps creates Agency, invites PartnerAdmin, accepts via seam, fills profile', async ({
     request,
   }) => {
