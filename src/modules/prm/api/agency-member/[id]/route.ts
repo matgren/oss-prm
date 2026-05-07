@@ -15,7 +15,7 @@ import {
 } from '@open-mercato/core/modules/customer_accounts/data/entities'
 import { ROLE_SLUGS, updateAgencyMemberBackendSchema } from '../../../data/validators'
 import type { AgencyMemberService } from '../../../lib/agencyMemberService'
-import { PRM_ERROR_CODES, PrmDomainError, toPrmErrorBody } from '../../../lib/errors'
+import { PRM_ERROR_CODES, isPrmDomainError, toPrmErrorBody } from '../../../lib/errors'
 import { summariseAgencyMember } from '../route'
 
 export const metadata = {
@@ -92,7 +92,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     return NextResponse.json({ ok: true, agencyMember: summariseAgencyMember(updated) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

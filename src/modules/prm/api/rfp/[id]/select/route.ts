@@ -5,7 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { selectRfpWinnerSchema } from '../../../../data/validators'
 import type { RfpService } from '../../../../lib/rfpService'
-import { PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 
 /**
  * POST /api/prm/rfp/{id}/select — Spec #6 §3.3 (US5.7).
@@ -63,7 +63,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       is_reselection: result.isReselection,
     })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

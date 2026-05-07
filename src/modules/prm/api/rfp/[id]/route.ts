@@ -8,7 +8,7 @@ import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib
 import { Rfp } from '../../../data/entities'
 import { updateRfpDraftSchema } from '../../../data/validators'
 import type { RfpService } from '../../../lib/rfpService'
-import { PrmDomainError, toPrmErrorBody } from '../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../lib/errors'
 import { summariseRfp } from '../route'
 
 /**
@@ -78,7 +78,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     const rfp = await service.updateDraft(params.id, parsed.data, { organizationId: auth.orgId })
     return NextResponse.json({ ok: true, rfp: summariseRfp(rfp) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

@@ -10,7 +10,7 @@ import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib
 import { updateAgencyMemberPortalSchema } from '../../../../../../data/validators'
 import type { AgencyMemberService } from '../../../../../../lib/agencyMemberService'
 import type { AgencyService } from '../../../../../../lib/agencyService'
-import { PRM_ERROR_CODES, PrmDomainError, toPrmErrorBody } from '../../../../../../lib/errors'
+import { PRM_ERROR_CODES, isPrmDomainError, toPrmErrorBody } from '../../../../../../lib/errors'
 import { summariseAgencyMember } from '../../../../../agency-member/route'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -123,7 +123,7 @@ export async function PATCH(
     })
     return NextResponse.json({ ok: true, agencyMember: summariseAgencyMember(updated) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

@@ -1,5 +1,6 @@
 import {
   assertBroadcastedOrNotFound,
+  isRfpVisibilityNotFoundError,
   rfpNotFoundResponse,
   RfpVisibilityNotFoundError,
 } from '../lib/rfpVisibility'
@@ -126,5 +127,60 @@ describe('assertBroadcastedOrNotFound — uniform-failure semantics', () => {
       captured = err
     }
     expect(captured).toBeInstanceOf(RfpVisibilityNotFoundError)
+  })
+})
+
+describe('isRfpVisibilityNotFoundError type guard', () => {
+  it('recognises a real `RfpVisibilityNotFoundError`', () => {
+    const err = new RfpVisibilityNotFoundError('rfp_not_found')
+    expect(isRfpVisibilityNotFoundError(err)).toBe(true)
+  })
+
+  it('recognises a sibling-chunk `RfpVisibilityNotFoundError` (correct tag + shape, different prototype)', () => {
+    // Simulates the Next.js Turbopack scenario where the service-side chunk
+    // and the route-side chunk each have their own copy of the class — the
+    // prototype chains diverge but the structural shape is identical.
+    // `instanceof` returns false here; the guard MUST still recognise it,
+    // because letting the catch fall through to a bare 500 would break the
+    // load-bearing silent-404 privacy invariant (Spec #5 R3 / invariant #15).
+    class SiblingRfpVisibilityNotFoundError extends Error {
+      public readonly reason: string
+      constructor(reason: string) {
+        super('RFP not visible')
+        this.name = 'RfpVisibilityNotFoundError'
+        this.reason = reason
+      }
+    }
+    const err = new SiblingRfpVisibilityNotFoundError('broadcast_not_found')
+    expect(err instanceof RfpVisibilityNotFoundError).toBe(false)
+    expect(isRfpVisibilityNotFoundError(err)).toBe(true)
+  })
+
+  it('rejects unrelated errors', () => {
+    expect(isRfpVisibilityNotFoundError(new Error('boom'))).toBe(false)
+    expect(isRfpVisibilityNotFoundError(new TypeError('boom'))).toBe(false)
+  })
+
+  it('rejects a tag-spoofed object that is missing structural fields', () => {
+    // Defence in depth — a random thrown object that happens to set
+    // `.name = 'RfpVisibilityNotFoundError'` but lacks `.reason` must not pass.
+    const fake = { name: 'RfpVisibilityNotFoundError', message: 'incomplete' }
+    expect(isRfpVisibilityNotFoundError(fake)).toBe(false)
+  })
+
+  it('rejects null / undefined / primitives', () => {
+    expect(isRfpVisibilityNotFoundError(null)).toBe(false)
+    expect(isRfpVisibilityNotFoundError(undefined)).toBe(false)
+    expect(isRfpVisibilityNotFoundError('RfpVisibilityNotFoundError')).toBe(false)
+    expect(isRfpVisibilityNotFoundError(42)).toBe(false)
+  })
+
+  it('narrows the union so the call site can read `reason`', () => {
+    const err: unknown = new RfpVisibilityNotFoundError('rfp_not_portal_visible')
+    if (isRfpVisibilityNotFoundError(err)) {
+      expect(err.reason).toBe('rfp_not_portal_visible')
+    } else {
+      throw new Error('guard should have narrowed')
+    }
   })
 })

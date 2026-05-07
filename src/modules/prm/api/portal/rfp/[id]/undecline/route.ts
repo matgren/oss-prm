@@ -8,12 +8,12 @@ import {
 import { CustomerRbacService } from '@open-mercato/core/modules/customer_accounts/services/customerRbacService'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
-import { PrmDomainError } from '../../../../../lib/errors'
+import { isPrmDomainError } from '../../../../../lib/errors'
 import type { AgencyMemberService } from '../../../../../lib/agencyMemberService'
 import type { RfpService } from '../../../../../lib/rfpService'
 import {
   assertBroadcastedOrNotFound,
-  RfpVisibilityNotFoundError,
+  isRfpVisibilityNotFoundError,
   rfpNotFoundResponse,
 } from '../../../../../lib/rfpVisibility'
 
@@ -77,7 +77,7 @@ export async function POST(
       organizationId: auth.orgId,
     })
   } catch (err) {
-    if (err instanceof RfpVisibilityNotFoundError) return rfpNotFoundResponse()
+    if (isRfpVisibilityNotFoundError(err)) return rfpNotFoundResponse()
     throw err
   }
 
@@ -96,7 +96,7 @@ export async function POST(
       reverted,
     })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(
         {
           ok: false,

@@ -9,7 +9,7 @@ import {
 } from '../../data/validators'
 import { LicenseDeal } from '../../data/entities'
 import type { LicenseDealService } from '../../lib/licenseDealService'
-import { PrmDomainError, toPrmErrorBody } from '../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../lib/errors'
 
 /**
  * Backend LicenseDeal list + create (Spec #3 — attribution-loop, B5).
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
     })
     return NextResponse.json({ ok: true, licenseDeal: summariseLicenseDeal(deal) }, { status: 201 })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

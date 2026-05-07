@@ -5,7 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { publishRfpSchema } from '../../../../data/validators'
 import type { RfpService } from '../../../../lib/rfpService'
-import { PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 import { summariseRfp } from '../../route'
 
 /**
@@ -61,7 +61,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       rfp: summariseRfp(result.rfp),
     })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

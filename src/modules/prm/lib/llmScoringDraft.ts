@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { llmProviderRegistry } from '@open-mercato/shared/lib/ai/llm-provider-registry'
 import { Rfp, RfpResponse } from '../data/entities'
-import { PRM_ERROR_CODES, PrmDomainError } from './errors'
+import { PRM_ERROR_CODES, PrmDomainError, isPrmDomainError } from './errors'
 
 /**
  * LLM-assisted scoring draft (Spec #6 §3.2 — US5.6 LLM).
@@ -175,7 +175,7 @@ export async function generateScoringDraft(args: {
       llm_model_id: `${provider.id}:${modelId}`,
     }
   } catch (err) {
-    if (err instanceof PrmDomainError) throw err
+    if (isPrmDomainError(err)) throw err
     const message =
       err instanceof Error ? err.message : 'LLM provider call failed'
     throw new PrmDomainError(PRM_ERROR_CODES.LLM_UNAVAILABLE, message, 503)

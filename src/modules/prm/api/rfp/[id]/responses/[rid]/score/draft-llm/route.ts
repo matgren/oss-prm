@@ -6,7 +6,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { Rfp, RfpResponse } from '../../../../../../../data/entities'
 import { generateScoringDraft } from '../../../../../../../lib/llmScoringDraft'
-import { PrmDomainError, toPrmErrorBody, PRM_ERROR_CODES } from '../../../../../../../lib/errors'
+import { PrmDomainError, isPrmDomainError, toPrmErrorBody, PRM_ERROR_CODES } from '../../../../../../../lib/errors'
 
 /**
  * POST /api/prm/rfp/{id}/responses/{rid}/score/draft-llm — Spec #6 §3.2.
@@ -89,7 +89,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       llm_model_id: draft.llm_model_id,
     })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

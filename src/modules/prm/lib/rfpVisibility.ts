@@ -41,6 +41,41 @@ export class RfpVisibilityNotFoundError extends Error {
 }
 
 /**
+ * Tag-based type guard for `RfpVisibilityNotFoundError`.
+ *
+ * Same dual-load problem as `isPrmDomainError` (see `lib/errors.ts` for the
+ * full doc): under Next.js Turbopack production bundling, the service-side
+ * chunk that throws this error and the route-side chunk that catches it can
+ * each receive their own copy of the class, so `instanceof` returns false
+ * even when the structural shape matches. Since the load-bearing privacy
+ * property here is that EVERY visibility failure renders the byte-identical
+ * 404 envelope (no exceptions), letting an `instanceof` miss fall through
+ * to a bare 500 would let a partner Agency distinguish "RFP exists but you
+ * can't see it" from "RFP doesn't exist" — the exact probing attack the
+ * silent-404 invariant defends against.
+ *
+ * Recognises a sibling-chunk error by `name === 'RfpVisibilityNotFoundError'`
+ * plus structural shape (`reason: string`, `message: string`). Keeps
+ * `instanceof` as the fast-path so same-chunk identity still works.
+ */
+export function isRfpVisibilityNotFoundError(
+  err: unknown,
+): err is RfpVisibilityNotFoundError {
+  if (!err || typeof err !== 'object') return false
+  if (err instanceof RfpVisibilityNotFoundError) return true
+  const candidate = err as {
+    name?: unknown
+    reason?: unknown
+    message?: unknown
+  }
+  return (
+    candidate.name === 'RfpVisibilityNotFoundError' &&
+    typeof candidate.reason === 'string' &&
+    typeof candidate.message === 'string'
+  )
+}
+
+/**
  * Returns the canonical 404 NextResponse used by every portal RFP route.
  * Centralised so byte-identity is guaranteed across all callers.
  */

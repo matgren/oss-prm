@@ -9,7 +9,7 @@ import { inviteAgencyMemberSchema } from '../../../../data/validators'
 import type { AgencyService } from '../../../../lib/agencyService'
 import type { AgencyMemberService } from '../../../../lib/agencyMemberService'
 import type { ReinviteCooldownService } from '../../../../lib/reinviteCooldownService'
-import { PRM_ERROR_CODES, PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
+import { PRM_ERROR_CODES, isPrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 import { sendPartnerInviteEmail } from '../../../../emails/sendPartnerInviteEmail'
 
 export const metadata = {
@@ -128,7 +128,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       { status: 201 },
     )
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

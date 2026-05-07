@@ -13,7 +13,7 @@ import {
   toCaseStudyDto,
 } from '../../../../lib/caseStudyService'
 import type { AgencyMemberService } from '../../../../lib/agencyMemberService'
-import { PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 import { assertNoAdminFields } from '../route'
 
 /**
@@ -68,7 +68,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     })
     return NextResponse.json({ ok: true, caseStudy: toCaseStudyDto(cs) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err
@@ -111,7 +111,7 @@ export async function PUT(req: Request, ctx: RouteContext) {
     })
     return NextResponse.json({ ok: true, caseStudy: toCaseStudyDto(cs) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

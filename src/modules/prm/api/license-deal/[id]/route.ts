@@ -5,7 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { updateLicenseDealSchema } from '../../../data/validators'
 import type { LicenseDealService } from '../../../lib/licenseDealService'
-import { PrmDomainError, toPrmErrorBody } from '../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../lib/errors'
 import { summariseLicenseDeal } from '../route'
 
 /**
@@ -76,7 +76,7 @@ export async function PUT(req: Request) {
     })
     return NextResponse.json({ ok: true, licenseDeal: summariseLicenseDeal(deal) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err
@@ -99,7 +99,7 @@ export async function DELETE(req: Request) {
     })
     return new NextResponse(null, { status: 204 })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

@@ -8,7 +8,7 @@ import {
   type CaseStudyService,
   toCaseStudyDto,
 } from '../../../../lib/caseStudyService'
-import { PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 
 /**
  * B8 — toggle the Case Study publication flag (US2.4).
@@ -59,7 +59,7 @@ export async function PUT(req: Request, ctx: RouteContext) {
     )
     return NextResponse.json({ ok: true, caseStudy: toCaseStudyDto(cs) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err
