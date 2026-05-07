@@ -116,12 +116,13 @@ None. The fix is informed by:
 
 ### Phase 4: Validation gate + PR
 
-- [ ] 4.1 Run full pre-PR validation gate
-- [ ] 4.2 Run i18n checks
-- [ ] 4.3 Open PR against develop with `fix` + `review` + `skip-qa` labels
-- [ ] 4.4 Run auto-review-pr autofix pass
-- [ ] 4.5 Post lean summary comment
+- [x] 4.1 Run full pre-PR validation gate — typecheck clean, jest 636/636, build clean
+- [x] 4.2 Run i18n checks — `i18n:check-sync` / `i18n:check-usage` not registered in this app's `package.json`; no locale files were touched, so n/a
+- [x] 4.3 Open PR against develop — labels applied: `bug`, `tests`, `merge-queue` (no `fix` or `skip-qa` labels exist in this repo's vocabulary; substituted `bug` + `tests`; final pipeline state is `merge-queue` after self-review)
+- [x] 4.4 Run auto-review-pr — verdict APPROVED (submitted as comment per GitHub same-author rule); 0 findings
+- [x] 4.5 Post lean summary comment — done
 
 ## Changelog
 
 - 2026-05-07: plan created.
+- 2026-05-07: shipped — PR #37 (`fix(prm): RfpPathBLockSubscriber filter prm_rfps by organization_id (IT-9.4 unblock)`); commit range `0f34d41..174d679`; status `complete`.
