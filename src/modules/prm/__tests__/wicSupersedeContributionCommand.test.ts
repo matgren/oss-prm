@@ -21,7 +21,12 @@ jest.mock('@open-mercato/shared/lib/encryption/find', () => ({
 
 const { safeEmit } = jest.requireMock('../lib/safeEmit') as { safeEmit: jest.Mock }
 
-import { execute, undo, SupersedeWicContributionCommand } from '../commands/wic/supersedeWicContribution'
+import {
+  execute,
+  executeById,
+  undo,
+  SupersedeWicContributionCommand,
+} from '../commands/wic/supersedeWicContribution'
 
 const TENANT = '11111111-1111-4111-8111-111111111111'
 const ORG = '22222222-2222-4222-8222-222222222222'
@@ -74,6 +79,7 @@ describe('SupersedeWicContributionCommand.execute', () => {
         organizationId: ORG,
         previousContributionId: 'prev-1',
         newContributionId: 'new-1',
+        previous: prev,
       },
       { em: em as any },
     )
@@ -96,10 +102,10 @@ describe('SupersedeWicContributionCommand.execute', () => {
     )
   })
 
-  it('throws when the previous row is missing', async () => {
+  it('executeById throws when the previous row is missing', async () => {
     const em = new FakeEm()
     await expect(
-      execute(
+      executeById(
         {
           tenantId: TENANT,
           organizationId: ORG,
@@ -111,6 +117,38 @@ describe('SupersedeWicContributionCommand.execute', () => {
     ).rejects.toThrow(/previous contribution missing not found/)
   })
 
+  it('executeById loads the previous row by id then delegates to execute', async () => {
+    const em = new FakeEm()
+    const prev = seedActiveRow(em, 'prev-1')
+    await executeById(
+      {
+        tenantId: TENANT,
+        organizationId: ORG,
+        previousContributionId: 'prev-1',
+        newContributionId: 'new-1',
+      },
+      { em: em as any },
+    )
+    expect(prev.supersededById).toBe('new-1')
+  })
+
+  it('execute throws if previous.id mismatches previousContributionId', async () => {
+    const em = new FakeEm()
+    const prev = seedActiveRow(em, 'prev-1')
+    await expect(
+      execute(
+        {
+          tenantId: TENANT,
+          organizationId: ORG,
+          previousContributionId: 'different-id',
+          newContributionId: 'new-1',
+          previous: prev,
+        },
+        { em: em as any },
+      ),
+    ).rejects.toThrow(/previous\.id .* does not match/)
+  })
+
   it('is replay-safe — re-executing with the SAME newContributionId is fine', async () => {
     const em = new FakeEm()
     const prev = seedActiveRow(em, 'prev-1')
@@ -120,6 +158,7 @@ describe('SupersedeWicContributionCommand.execute', () => {
         organizationId: ORG,
         previousContributionId: 'prev-1',
         newContributionId: 'new-1',
+        previous: prev,
       },
       { em: em as any },
     )
@@ -133,6 +172,7 @@ describe('SupersedeWicContributionCommand.execute', () => {
         organizationId: ORG,
         previousContributionId: 'prev-1',
         newContributionId: 'new-1',
+        previous: prev,
       },
       { em: em as any },
     )
@@ -142,13 +182,14 @@ describe('SupersedeWicContributionCommand.execute', () => {
 
   it('throws when re-executing with a DIFFERENT newContributionId (chain corruption guard)', async () => {
     const em = new FakeEm()
-    seedActiveRow(em, 'prev-1')
+    const prev = seedActiveRow(em, 'prev-1')
     await execute(
       {
         tenantId: TENANT,
         organizationId: ORG,
         previousContributionId: 'prev-1',
         newContributionId: 'new-1',
+        previous: prev,
       },
       { em: em as any },
     )
@@ -159,6 +200,7 @@ describe('SupersedeWicContributionCommand.execute', () => {
           organizationId: ORG,
           previousContributionId: 'prev-1',
           newContributionId: 'new-2',
+          previous: prev,
         },
         { em: em as any },
       ),
@@ -178,6 +220,7 @@ describe('SupersedeWicContributionCommand.undo', () => {
         organizationId: ORG,
         previousContributionId: 'prev-1',
         newContributionId: 'new-1',
+        previous: prev,
       },
       { em: em as any },
     )
@@ -212,6 +255,7 @@ describe('SupersedeWicContributionCommand.undo', () => {
         organizationId: ORG,
         previousContributionId: 'prev-1',
         newContributionId: 'new-1',
+        previous: prev,
       },
       { em: em as any },
     )
@@ -258,8 +302,7 @@ describe('SupersedeWicContributionCommand.undo', () => {
     //   - gen2 remains superseded by gen3 (its own state is untouched).
     const em = new FakeEm()
     const gen1 = seedActiveRow(em, 'gen1')
-    const gen2 = { ...seedActiveRow(em, 'gen2') }
-    em.rows[em.rows.length - 1] = gen2
+    const gen2 = seedActiveRow(em, 'gen2')
 
     // Step 1: gen2 supersedes gen1.
     await execute(
@@ -268,6 +311,7 @@ describe('SupersedeWicContributionCommand.undo', () => {
         organizationId: ORG,
         previousContributionId: 'gen1',
         newContributionId: 'gen2',
+        previous: gen1,
       },
       { em: em as any },
     )
@@ -278,6 +322,7 @@ describe('SupersedeWicContributionCommand.undo', () => {
         organizationId: ORG,
         previousContributionId: 'gen2',
         newContributionId: 'gen3',
+        previous: gen2,
       },
       { em: em as any },
     )
@@ -298,7 +343,8 @@ describe('SupersedeWicContributionCommand.undo', () => {
   })
 })
 
-it('exposes the namespace SupersedeWicContributionCommand with execute + undo', () => {
+it('exposes the namespace SupersedeWicContributionCommand with execute + executeById + undo', () => {
   expect(typeof SupersedeWicContributionCommand.execute).toBe('function')
+  expect(typeof SupersedeWicContributionCommand.executeById).toBe('function')
   expect(typeof SupersedeWicContributionCommand.undo).toBe('function')
 })

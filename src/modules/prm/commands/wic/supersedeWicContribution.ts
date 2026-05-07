@@ -53,31 +53,23 @@ export type SupersedeWicContributionResult = {
 }
 
 /**
- * Execute the command. Caller has already loaded + held the previous row
- * (this is the standard `wicImportService.processWicRow` path) but the command
- * re-loads defensively to keep its contract self-contained — it must work
- * standalone for replay tooling.
+ * Execute the command. Caller passes the already-loaded previous row — this keeps
+ * the import hot path single-SELECT (the service has already loaded `previous` to
+ * decide whether to supersede or insert fresh). For standalone replay tooling
+ * use `executeById` which re-loads from `previousContributionId`.
  *
- * Throws when the previous row is missing or already superseded by a different
- * `newContributionId` (the latter would silently corrupt the chain).
+ * Throws when the previous row is already superseded by a DIFFERENT
+ * `newContributionId` (chain corruption guard). Re-applying the same supersession
+ * is a no-op + still emits the event for subscriber convergence.
  */
 export async function execute(
-  args: SupersedeWicContributionArgs,
+  args: SupersedeWicContributionArgs & { previous: WicContribution },
   ctx: SupersedeWicContributionCtx,
 ): Promise<SupersedeWicContributionResult> {
-  const previous = await findOneWithDecryption<WicContribution>(
-    ctx.em,
-    WicContribution,
-    {
-      id: args.previousContributionId,
-      tenantId: args.tenantId,
-    } as FilterQuery<WicContribution>,
-    undefined,
-    { tenantId: args.tenantId, organizationId: args.organizationId },
-  )
-  if (!previous) {
+  const previous = args.previous
+  if (previous.id !== args.previousContributionId) {
     throw new Error(
-      `SupersedeWicContributionCommand.execute: previous contribution ${args.previousContributionId} not found in tenant ${args.tenantId}`,
+      `SupersedeWicContributionCommand.execute: previous.id (${previous.id}) does not match previousContributionId (${args.previousContributionId})`,
     )
   }
   if (previous.supersededById && previous.supersededById !== args.newContributionId) {
@@ -180,4 +172,31 @@ export async function undo(
   }
 }
 
-export const SupersedeWicContributionCommand = { execute, undo }
+/**
+ * Convenience wrapper for callers that don't have the previous row loaded
+ * (e.g. replay tooling, ad-hoc B10 actions). Loads `previous` by id then
+ * delegates to `execute`. Throws `Error` if the row is missing.
+ */
+export async function executeById(
+  args: SupersedeWicContributionArgs,
+  ctx: SupersedeWicContributionCtx,
+): Promise<SupersedeWicContributionResult> {
+  const previous = await findOneWithDecryption<WicContribution>(
+    ctx.em,
+    WicContribution,
+    {
+      id: args.previousContributionId,
+      tenantId: args.tenantId,
+    } as FilterQuery<WicContribution>,
+    undefined,
+    { tenantId: args.tenantId, organizationId: args.organizationId },
+  )
+  if (!previous) {
+    throw new Error(
+      `SupersedeWicContributionCommand.executeById: previous contribution ${args.previousContributionId} not found in tenant ${args.tenantId}`,
+    )
+  }
+  return execute({ ...args, previous }, ctx)
+}
+
+export const SupersedeWicContributionCommand = { execute, executeById, undo }

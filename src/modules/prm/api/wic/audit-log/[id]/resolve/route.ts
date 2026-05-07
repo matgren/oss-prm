@@ -1,19 +1,27 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import type { EntityManager, FilterQuery } from '@mikro-orm/postgresql'
+import type { EntityManager } from '@mikro-orm/postgresql'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
-import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
-import { WicImportAuditLog } from '../../../../../data/entities'
 import { WIC_RESOLUTION_ACTIONS } from '../../../../../data/validators'
-import { safeEmit } from '../../../../../lib/safeEmit'
+import {
+  execute as executeResolve,
+  WicAuditLogAlreadyResolvedError,
+  WicAuditLogNotFoundError,
+} from '../../../../../commands/wic/resolveWicImportAuditLog'
 
 /**
  * POST /api/prm/wic/audit-log/[id]/resolve — B10 row action (Spec #4 §3.4 + §6.2).
  *
  * RBAC: prm.wic.resolve. Marks an audit-log row as resolved with one of three actions.
- * Idempotent — re-resolving an already-resolved row returns 409 (use `unresolve` to clear).
+ * Re-resolving an already-resolved row returns 409 (use a future `unresolve` command for that).
+ *
+ * The atomic write + `prm.wic_import.resolved` event emit is delegated to
+ * `ResolveWicImportAuditLogCommand.execute` (Spec §4.1). The handler stays thin:
+ * auth + Zod + sentinel-error → status mapping. Undo of a resolution is owned by
+ * the command's `undo` (used by the future B10 unresolve action — see Spec §10.7
+ * "undo by default").
  */
 
 export const metadata = {
@@ -57,52 +65,42 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // WIC audit-log is tenant-wide by design (Spec §6.1) and adding an
   // `organizationId` filter here would break staff users whose `auth.orgId`
   // (staff org) does not match the audit-log row's `organizationId` (the
-  // singleton-resolved Agency org).
-  const row = await findOneWithDecryption<WicImportAuditLog>(
-    em,
-    WicImportAuditLog,
-    { id, tenantId: auth.tenantId } as FilterQuery<WicImportAuditLog>,
-    undefined,
-    { tenantId: auth.tenantId, organizationId: auth.orgId ?? null },
-  )
-  if (!row) {
-    return NextResponse.json({ ok: false, error: 'Audit log row not found' }, { status: 404 })
-  }
-  if (row.resolvedAt) {
-    return NextResponse.json(
-      { ok: false, error: 'Already resolved', resolvedAt: row.resolvedAt.toISOString() },
-      { status: 409 },
+  // singleton-resolved Agency org). The command is org-aware for decryption
+  // helpers but the lookup itself is keyed by id+tenant.
+  try {
+    const result = await executeResolve(
+      {
+        tenantId: auth.tenantId,
+        organizationId: auth.orgId ?? auth.tenantId,
+        auditLogId: id,
+        action: parsed.data.action,
+        resolvedByUserId: auth.sub,
+        note: parsed.data.note ?? null,
+      },
+      { em, container },
     )
+    return NextResponse.json({
+      ok: true,
+      auditLog: {
+        id: result.auditLogId,
+        resolvedAt: result.resolvedAt,
+        resolutionAction: result.resolutionAction,
+        resolvedByUserId: result.resolvedByUserId,
+        resolutionNote: result.resolutionNote,
+      },
+    })
+  } catch (err) {
+    if (err instanceof WicAuditLogNotFoundError) {
+      return NextResponse.json({ ok: false, error: 'Audit log row not found' }, { status: 404 })
+    }
+    if (err instanceof WicAuditLogAlreadyResolvedError) {
+      return NextResponse.json(
+        { ok: false, error: 'Already resolved', resolvedAt: err.resolvedAt },
+        { status: 409 },
+      )
+    }
+    throw err
   }
-
-  row.resolvedAt = new Date()
-  row.resolutionAction = parsed.data.action
-  row.resolvedByUserId = auth.sub
-  row.resolutionNote = parsed.data.note ?? null
-  em.persist(row)
-  await em.flush()
-
-  await safeEmit(
-    'prm.wic_import.resolved',
-    {
-      auditLogId: row.id,
-      action: row.resolutionAction,
-      resolvedByUserId: row.resolvedByUserId,
-      resolvedAt: row.resolvedAt!.toISOString(),
-    },
-    { container },
-  )
-
-  return NextResponse.json({
-    ok: true,
-    auditLog: {
-      id: row.id,
-      resolvedAt: row.resolvedAt!.toISOString(),
-      resolutionAction: row.resolutionAction,
-      resolvedByUserId: row.resolvedByUserId,
-      resolutionNote: row.resolutionNote,
-    },
-  })
 }
 
 const errorSchema = z.object({ ok: z.literal(false), error: z.string() })
