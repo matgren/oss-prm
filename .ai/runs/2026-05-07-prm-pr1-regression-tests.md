@@ -62,7 +62,7 @@ The fake EM lives in the test file (or a sibling test helper) to keep it scoped 
 
 ### Phase 2: Pre-flush UUID coherence test
 
-- [ ] 2.1 Add `agencyService.uuidCoherence.test.ts` exercising `createAgencyWithOrganization` against an EM that does NOT auto-assign IDs, asserting `Agency.organizationId === Organization.id` and is non-null at flush time
+- [x] 2.1 Add `agencyService.uuidCoherence.test.ts` exercising `createAgencyWithOrganization` against an EM that does NOT auto-assign IDs, asserting `Agency.organizationId === Organization.id` and is non-null at flush time — 5c1752a
 
 ### Phase 3: Wire-up + sanity checks
 
