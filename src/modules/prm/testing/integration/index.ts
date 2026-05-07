@@ -28,3 +28,18 @@ export {
   publishRfpFixture,
   unpublishRfpFixture,
 } from './fixtures'
+
+export {
+  loginCustomer,
+  customerApiRequest,
+  getCustomerRoleIdBySlug,
+  createCustomerUserFixture,
+  linkAgencyMemberFixture,
+  bootPartnerAgencyWithMembers,
+} from './customerAuth'
+
+export type {
+  CustomerApiOptions,
+  PartnerAgencyMember,
+  PartnerAgencyFixture,
+} from './customerAuth'
