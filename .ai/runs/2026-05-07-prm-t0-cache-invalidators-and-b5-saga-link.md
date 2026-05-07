@@ -149,14 +149,14 @@ None — this PR uses only repository-internal references (the spec, the existin
 
 ### Phase 2: B5 saga retry dashboard link + render test
 
-- [ ] 2.1 Add `SagaInstanceLink` component in B5 page
-- [ ] 2.2 Add i18n keys for the saga link label
-- [ ] 2.3 Add render test for the saga link
-- [ ] 2.4 Verify `/backend/workflows/instances/{id}` exists in core (already confirmed in plan)
-- [ ] 2.5 Run `yarn typecheck`
-- [ ] 2.6 Run `yarn jest src/modules/prm`
-- [ ] 2.7 Run `yarn build`
-- [ ] 2.8 Commit Phase 2 (feat(prm): add B5 saga retry dashboard link)
+- [x] 2.1 Add `SagaInstanceLink` component in B5 page — fadae54
+- [x] 2.2 Add i18n keys for the saga link label — fadae54
+- [x] 2.3 Add render test for the saga link (URL builder + response picker helpers) — fadae54
+- [x] 2.4 Verify `/backend/workflows/instances/{id}` exists in core — confirmed at `node_modules/@open-mercato/core/src/modules/workflows/backend/instances/[id]/page.tsx`
+- [x] 2.5 Run `yarn typecheck` — clean
+- [x] 2.6 Run `yarn jest src/modules/prm` — 433/433 pass
+- [x] 2.7 Run `yarn build` — clean
+- [x] 2.8 Commit Phase 2 (feat(prm): add B5 saga retry dashboard link) — fadae54
 
 ### Phase 3: Validation gate + PR
 
