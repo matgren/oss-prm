@@ -121,23 +121,24 @@ export async function POST(req: Request) {
     })
   }
 
-  // NB: in production, `CustomerInvitationService.acceptInvitation` creates
-  // the new CustomerUser with `invitation.organizationId === agency.organizationId`,
-  // so a real partner is always in the agency's organization after accept.
-  // Several PRM portal routes lean on that invariant — see e.g. the
+  // Production parity: `CustomerInvitationService.acceptInvitation` creates the
+  // accepted CustomerUser at `invitation.organizationId === agency.organizationId`
+  // — the partner lives in the *agency's* org, not the staff org. PRM portal
+  // routes for agency CRUD lean on that invariant (e.g. the
   // `agency.organizationId === auth.orgId` guard in
-  // `PATCH /api/prm/portal/agency/[id]/member/[memberId]/route.ts` and the
-  // `organizationId: scope.organizationId` lookup in `assertBroadcastedOrNotFound`.
+  // `PATCH /api/prm/portal/agency/[id]/member/[memberId]/route.ts`).
   //
-  // We deliberately do NOT migrate the CustomerUser's organizationId in this
-  // seam right now: the existing portal/rfp visibility scope reads RFPs by
-  // `auth.orgId` (which staff seeds against staff's org, not the agency's),
-  // so flipping the customer's org here while leaving the RFP scope untouched
-  // would regress the T5-003 P10 submit flow. The mismatched org-vs-route
-  // contract is a real bug — see TC-PRM-T0-001 commit for details — and is
-  // tracked as a deferred follow-up. Until the route-side fix lands, callers
-  // in this seam stay in the staff org so the `T5-002`/`T5-003` portal-RFP
-  // path remains green.
+  // The portal RFP-table reads were previously scoped by `auth.orgId`, which
+  // forced this seam to leave the customer in the staff org so the org-on-RFP
+  // filter would still match. That mismatch is now fixed: portal RFP visibility
+  // is scoped by `tenantId + broadcast.agencyId` (POST-MVP-FOLLOW-UPS line 23),
+  // so we can — and must — migrate the customer to the agency's org here to
+  // mirror production. Cross-org portal smokes (T0-001 profile-fill leg) and
+  // the agency-CRUD `org === auth.orgId` guard now both work end-to-end.
+  if (customerUser.organizationId !== agency.organizationId) {
+    customerUser.organizationId = agency.organizationId
+    em.persist(customerUser)
+  }
 
   // Resolve and assign the customer role on CustomerUser (so the customer JWT
   // carries `partner_admin`/`partner_member` features end-to-end).

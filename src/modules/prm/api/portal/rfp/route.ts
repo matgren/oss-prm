@@ -111,9 +111,16 @@ export async function GET(req: Request) {
   }
 
   const em = container.resolve('em') as EntityManager
+  // POST-MVP-FOLLOW-UPS line 23 fix: do NOT filter by `auth.orgId`. PRM creates
+  // one Organization per Agency (`agencyService.createAgencyWithOrganization`),
+  // but RFPs are seeded by staff into the staff org. After
+  // `CustomerInvitationService.acceptInvitation`, `auth.orgId` is the agency's
+  // org — which never matches the broadcast/RFP staff-org id. The broadcast
+  // row at `(rfp_id, agency_id)` is the authorization (invariant #15) and the
+  // tenant boundary is enforced one hop earlier by
+  // `agencyMemberService.findByCustomerUserId(..., { tenantId: auth.tenantId })`.
   const baseWhere: Record<string, unknown> = {
     agencyId: member.agencyId,
-    organizationId: auth.orgId,
   }
   // Tab → broadcast-level filter (the response-existence checks happen below).
   if (tab === 'unread') {
@@ -141,20 +148,24 @@ export async function GET(req: Request) {
     })
   }
 
+  // The broadcast rows already authorize the caller for these RFPs; the RFP
+  // lookup is by primary key + soft-delete sentinel. Decryption helper still
+  // receives the auth scope so per-tenant keys resolve.
   const rfps = await findWithDecryption<Rfp>(
     em,
     Rfp,
-    { id: { $in: rfpIds }, organizationId: auth.orgId, deletedAt: null } as any,
+    { id: { $in: rfpIds }, deletedAt: null } as any,
     { fields: ['id', 'title', 'receivedFrom', 'receivedAt', 'status', 'industry', 'budgetBucket', 'timelineBucket', 'deadlineToRespond'] as never },
     { tenantId: auth.tenantId, organizationId: auth.orgId },
   )
   const rfpById = new Map(rfps.map((r) => [r.id, r]))
 
-  // Response existence — needed for `responded` tab + every item's hasResponse flag.
+  // Response existence — needed for `responded` tab + every item's hasResponse
+  // flag. Scoped by `(rfpId, agencyId)`; both come from broadcasts the caller
+  // is already authorized for.
   const responses = await em.find(RfpResponse, {
     rfpId: { $in: rfpIds },
     agencyId: member.agencyId,
-    organizationId: auth.orgId,
   } as any)
   const responseByRfpId = new Map(responses.map((r) => [r.rfpId, r]))
 

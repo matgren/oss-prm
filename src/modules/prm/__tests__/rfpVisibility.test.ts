@@ -72,7 +72,7 @@ describe('assertBroadcastedOrNotFound — uniform-failure semantics', () => {
   it('throws "invalid_id" on malformed UUID without touching the EM', async () => {
     const em = new FakeEm()
     await expect(
-      assertBroadcastedOrNotFound('not-a-uuid', AGENCY, em as any, { organizationId: ORG }),
+      assertBroadcastedOrNotFound('not-a-uuid', AGENCY, em as any),
     ).rejects.toMatchObject({
       name: 'RfpVisibilityNotFoundError',
       reason: 'invalid_id',
@@ -82,7 +82,7 @@ describe('assertBroadcastedOrNotFound — uniform-failure semantics', () => {
   it('throws "rfp_not_found" when no RFP row exists for the tenant', async () => {
     const em = new FakeEm()
     await expect(
-      assertBroadcastedOrNotFound(RFP, AGENCY, em as any, { organizationId: ORG }),
+      assertBroadcastedOrNotFound(RFP, AGENCY, em as any),
     ).rejects.toMatchObject({ reason: 'rfp_not_found' })
   })
 
@@ -91,12 +91,12 @@ describe('assertBroadcastedOrNotFound — uniform-failure semantics', () => {
     em.rfps.push(makeRfp({ status: 'draft' }))
     em.broadcasts.push(makeBroadcast())
     await expect(
-      assertBroadcastedOrNotFound(RFP, AGENCY, em as any, { organizationId: ORG }),
+      assertBroadcastedOrNotFound(RFP, AGENCY, em as any),
     ).rejects.toMatchObject({ reason: 'rfp_not_portal_visible' })
 
     em.rfps[0].status = 'closed'
     await expect(
-      assertBroadcastedOrNotFound(RFP, AGENCY, em as any, { organizationId: ORG }),
+      assertBroadcastedOrNotFound(RFP, AGENCY, em as any),
     ).rejects.toMatchObject({ reason: 'rfp_not_portal_visible' })
   })
 
@@ -105,7 +105,7 @@ describe('assertBroadcastedOrNotFound — uniform-failure semantics', () => {
     em.rfps.push(makeRfp())
     em.broadcasts.push(makeBroadcast({ agencyId: OTHER_AGENCY }))
     await expect(
-      assertBroadcastedOrNotFound(RFP, AGENCY, em as any, { organizationId: ORG }),
+      assertBroadcastedOrNotFound(RFP, AGENCY, em as any),
     ).rejects.toMatchObject({ reason: 'broadcast_not_found' })
   })
 
@@ -113,16 +113,38 @@ describe('assertBroadcastedOrNotFound — uniform-failure semantics', () => {
     const em = new FakeEm()
     em.rfps.push(makeRfp())
     em.broadcasts.push(makeBroadcast())
-    const result = await assertBroadcastedOrNotFound(RFP, AGENCY, em as any, { organizationId: ORG })
+    const result = await assertBroadcastedOrNotFound(RFP, AGENCY, em as any)
     expect(result.rfp.id).toBe(RFP)
     expect(result.broadcast.agencyId).toBe(AGENCY)
+  })
+
+  it('returns the RFP when the partner lives in a different org than the RFP staff org (POST-MVP-FOLLOW-UPS line 23)', async () => {
+    // Production scenario: PRM creates one Organization per Agency, so a real
+    // partner accepted via `CustomerInvitationService.acceptInvitation` lives
+    // in the *agency's* org. RFPs are seeded by staff into the staff org. The
+    // gate must NOT filter by the partner's `auth.orgId` — the broadcast row
+    // (UNIQUE on `rfp_id, agency_id`) is the authorization. Tenant scoping is
+    // enforced one hop earlier by `agencyMemberService.findByCustomerUserId`.
+    const STAFF_ORG = '99999999-9999-4999-8999-999999999999'
+    const AGENCY_ORG = '88888888-8888-4888-8888-888888888888'
+    expect(STAFF_ORG).not.toBe(AGENCY_ORG)
+    const em = new FakeEm()
+    // The RFP and broadcast both live in the staff org (where staff seeded them).
+    em.rfps.push(makeRfp({ organizationId: STAFF_ORG }))
+    em.broadcasts.push(makeBroadcast({ organizationId: STAFF_ORG }))
+    // The partner's `auth.orgId` (= AGENCY_ORG) is different from STAFF_ORG, but
+    // the helper no longer takes/uses that scope — the broadcast row gates access.
+    const result = await assertBroadcastedOrNotFound(RFP, AGENCY, em as any)
+    expect(result.rfp.id).toBe(RFP)
+    expect(result.broadcast.agencyId).toBe(AGENCY)
+    expect(result.broadcast.organizationId).toBe(STAFF_ORG)
   })
 
   it('every failure reason is a typed RfpVisibilityNotFoundError so callers can convert uniformly', async () => {
     const em = new FakeEm()
     let captured: unknown
     try {
-      await assertBroadcastedOrNotFound('not-a-uuid', AGENCY, em as any, { organizationId: ORG })
+      await assertBroadcastedOrNotFound('not-a-uuid', AGENCY, em as any)
     } catch (err) {
       captured = err
     }

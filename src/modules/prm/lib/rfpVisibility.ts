@@ -89,19 +89,30 @@ export function rfpNotFoundResponse(): NextResponse {
  * — caller catches and converts to `rfpNotFoundResponse()`.
  *
  * Returns the loaded `{ rfp, broadcast }` so callers don't have to re-query.
+ *
+ * Authorization scope (POST-MVP-FOLLOW-UPS line 23 fix): we deliberately do
+ * NOT filter the central `Rfp` and `RfpBroadcast` rows by `auth.orgId`. PRM
+ * creates one Organization per Agency, so a real partner accepted via
+ * `CustomerInvitationService.acceptInvitation` lives in the *agency's* org —
+ * but RFPs are seeded by staff into the staff org, so the org IDs do not
+ * match. The broadcast row IS the authorization: a row at
+ * `(rfp_id, agency_id)` (UNIQUE) is the load-bearing privacy property
+ * (invariant #15 / silent 404). Tenant scoping comes via the AgencyMember
+ * lookup in the route layer — `agencyMemberService.findByCustomerUserId`
+ * already filters by `auth.tenantId`, so any `agencyId` the route passes
+ * here is guaranteed to belong to the caller's tenant. A cross-tenant
+ * `agencyId` cannot reach this function.
  */
 export async function assertBroadcastedOrNotFound(
   rfpId: string,
   agencyId: string,
   em: EntityManager,
-  scope: { organizationId: string },
 ): Promise<{ rfp: Rfp; broadcast: RfpBroadcast }> {
   if (!UUID_REGEX.test(rfpId)) {
     throw new RfpVisibilityNotFoundError('invalid_id')
   }
   const rfp = await em.findOne(Rfp, {
     id: rfpId,
-    organizationId: scope.organizationId,
     deletedAt: null,
   } as any)
   if (!rfp) {
@@ -114,7 +125,6 @@ export async function assertBroadcastedOrNotFound(
   const broadcast = await em.findOne(RfpBroadcast, {
     rfpId,
     agencyId,
-    organizationId: scope.organizationId,
   } as any)
   if (!broadcast) {
     throw new RfpVisibilityNotFoundError('broadcast_not_found')

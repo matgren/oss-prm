@@ -64,10 +64,10 @@ export async function POST(
   if (!member) return rfpNotFoundResponse()
 
   const em = container.resolve('em') as EntityManager
+  let scopedRfp
   try {
-    await assertBroadcastedOrNotFound(params.id, member.agencyId, em, {
-      organizationId: auth.orgId,
-    })
+    const result = await assertBroadcastedOrNotFound(params.id, member.agencyId, em)
+    scopedRfp = result.rfp
   } catch (err) {
     if (isRfpVisibilityNotFoundError(err)) return rfpNotFoundResponse()
     throw err
@@ -75,10 +75,11 @@ export async function POST(
 
   // Author-scope check — fetch the response BEFORE delegating, so we can return
   // 403 (authorization) rather than 404 (visibility) when M2 attempts to submit
-  // M1's draft. The service then runs the structural guards.
+  // M1's draft. The service then runs the structural guards. Scoped by
+  // `(rfpId, agencyId)`; the broadcast above already authorizes the caller.
   const response = await em.findOne(
     RfpResponse,
-    { rfpId: params.id, agencyId: member.agencyId, organizationId: auth.orgId } as any,
+    { rfpId: params.id, agencyId: member.agencyId } as any,
   )
   if (response && member.roleSlug === 'partner_member' && response.submittedByMemberId !== member.id) {
     return NextResponse.json(
@@ -96,10 +97,12 @@ export async function POST(
 
   const rfpService = container.resolve('rfpService') as RfpService
   try {
+    // Service writes scope by the RFP's staff `organizationId`, NOT `auth.orgId`
+    // (which is the agency's org). See POST-MVP-FOLLOW-UPS line 23.
     const { response: updated, isInitialSubmission } = await rfpService.submitResponse(
       params.id,
       member.agencyId,
-      { organizationId: auth.orgId },
+      { organizationId: scopedRfp.organizationId },
     )
     return NextResponse.json({
       ok: true,
