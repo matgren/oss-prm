@@ -14,7 +14,7 @@ import type { AgencyMemberService } from '../../../../../../lib/agencyMemberServ
 import type { RfpService } from '../../../../../../lib/rfpService'
 import {
   assertBroadcastedOrNotFound,
-  RfpVisibilityNotFoundError,
+  isRfpVisibilityNotFoundError,
   rfpNotFoundResponse,
 } from '../../../../../../lib/rfpVisibility'
 
@@ -69,7 +69,7 @@ export async function POST(
       organizationId: auth.orgId,
     })
   } catch (err) {
-    if (err instanceof RfpVisibilityNotFoundError) return rfpNotFoundResponse()
+    if (isRfpVisibilityNotFoundError(err)) return rfpNotFoundResponse()
     throw err
   }
 
