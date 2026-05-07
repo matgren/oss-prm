@@ -1,6 +1,6 @@
 # PRM — Fix T5-001 #1 cross-spec test-isolation bleed
 
-**Status:** in-progress
+**Status:** complete
 **Branch:** `fix/prm-fix-test-isolation-bleed`
 **Target:** `develop`
 **Owner:** matgren
@@ -155,6 +155,6 @@ Note: brief listed `prm_wic_import_audit_logs` and `prm_service_idempotency_keys
 
 ### Phase 5: Validation gate
 
-- [ ] 5.1 `yarn typecheck`
-- [ ] 5.2 `yarn jest src/modules/prm` ≥482 passing
-- [ ] 5.3 `yarn test:integration:ephemeral` × 2 back-to-back, T5-001 #1 green both runs
+- [x] 5.1 `yarn typecheck` — clean (0 errors)
+- [x] 5.2 `yarn jest src/modules/prm` — 490 passing (482 baseline + 8 new tests across reset route + helper)
+- [x] 5.3 `yarn test:integration:ephemeral` × 2 back-to-back — Run #1: 28 passed. Run #2: 27 passed + 1 skipped (TC-CLI-001 environmental skip, unrelated to PRM). T5-001 §9.1 #1 PASSED both runs.
