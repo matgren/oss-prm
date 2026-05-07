@@ -53,6 +53,10 @@ export type ResolveWicImportAuditLogResult = {
  * this to a 409. Using a tagged Error so the handler doesn't have to inspect
  * row state itself — keeps the command the source of truth on resolution
  * lifecycle.
+ *
+ * `name` is set explicitly so the tag-based guard `isWicAuditLogAlreadyResolvedError`
+ * can recognise a sibling-chunk copy of this class under Next.js Turbopack
+ * production bundling — see the guard's doc-block below for the full rationale.
  */
 export class WicAuditLogAlreadyResolvedError extends Error {
   readonly code = 'WIC_AUDIT_LOG_ALREADY_RESOLVED' as const
@@ -60,6 +64,7 @@ export class WicAuditLogAlreadyResolvedError extends Error {
   readonly resolvedAt: string
   constructor(auditLogId: string, resolvedAt: string) {
     super(`Audit log ${auditLogId} is already resolved at ${resolvedAt}`)
+    this.name = 'WicAuditLogAlreadyResolvedError'
     this.auditLogId = auditLogId
     this.resolvedAt = resolvedAt
   }
@@ -67,14 +72,89 @@ export class WicAuditLogAlreadyResolvedError extends Error {
 
 /**
  * Sentinel for "row not found". Caller maps this to 404.
+ *
+ * `name` is set explicitly so the tag-based guard `isWicAuditLogNotFoundError`
+ * can recognise a sibling-chunk copy of this class under Next.js Turbopack
+ * production bundling — see the guard's doc-block below for the full rationale.
  */
 export class WicAuditLogNotFoundError extends Error {
   readonly code = 'WIC_AUDIT_LOG_NOT_FOUND' as const
   readonly auditLogId: string
   constructor(auditLogId: string) {
     super(`Audit log ${auditLogId} not found`)
+    this.name = 'WicAuditLogNotFoundError'
     this.auditLogId = auditLogId
   }
+}
+
+/**
+ * Tag-based type guard for `WicAuditLogNotFoundError`.
+ *
+ * **Why not `err instanceof WicAuditLogNotFoundError`?** Under Next.js
+ * Turbopack production bundling the service-side chunk (this file) and the
+ * route-side chunk (`api/wic/audit-log/[id]/resolve/route.ts`) can each
+ * receive their own copy of this class. The prototype chains diverge, so an
+ * error thrown from `execute` does not satisfy `instanceof
+ * WicAuditLogNotFoundError` when caught in the route handler — even though
+ * `err.name === 'WicAuditLogNotFoundError'` and the structural shape
+ * (`code`, `auditLogId`, `message`) is identical. The route handler then
+ * falls through to its `throw err` branch and Next.js surfaces a bare 500
+ * with `body=null`, masking the intended 404 envelope.
+ *
+ * Same root cause and same canonical fix as `isPrmDomainError`
+ * (`lib/errors.ts`) and `isRfpVisibilityNotFoundError`
+ * (`lib/rfpVisibility.ts`) — see PR #19 / commit a317ea7 for the prior
+ * landings. The guard checks `name` + minimal structural shape so a
+ * sibling-chunk error is recognised correctly, and keeps `instanceof` as a
+ * fast-path so same-chunk identity still works.
+ */
+export function isWicAuditLogNotFoundError(
+  err: unknown,
+): err is WicAuditLogNotFoundError {
+  if (!err || typeof err !== 'object') return false
+  if (err instanceof WicAuditLogNotFoundError) return true
+  const candidate = err as {
+    name?: unknown
+    code?: unknown
+    auditLogId?: unknown
+    message?: unknown
+  }
+  return (
+    candidate.name === 'WicAuditLogNotFoundError' &&
+    candidate.code === 'WIC_AUDIT_LOG_NOT_FOUND' &&
+    typeof candidate.auditLogId === 'string' &&
+    typeof candidate.message === 'string'
+  )
+}
+
+/**
+ * Tag-based type guard for `WicAuditLogAlreadyResolvedError`.
+ *
+ * Same dual-load problem and rationale as `isWicAuditLogNotFoundError`
+ * above — letting an `instanceof` miss fall through to a bare 500 would
+ * collapse the intended 409 "already resolved" envelope (with the
+ * `resolvedAt` hint the UI uses to render the conflict toast) into an
+ * opaque server error.
+ */
+export function isWicAuditLogAlreadyResolvedError(
+  err: unknown,
+): err is WicAuditLogAlreadyResolvedError {
+  if (!err || typeof err !== 'object') return false
+  if (err instanceof WicAuditLogAlreadyResolvedError) return true
+  const candidate = err as {
+    name?: unknown
+    code?: unknown
+    auditLogId?: unknown
+    resolvedAt?: unknown
+    message?: unknown
+  }
+  return (
+    candidate.name === 'WicAuditLogAlreadyResolvedError' &&
+    candidate.code === 'WIC_AUDIT_LOG_ALREADY_RESOLVED' &&
+    typeof candidate.auditLogId === 'string' &&
+    typeof candidate.resolvedAt === 'string' &&
+    typeof candidate.message === 'string'
+  )
 }
 
 export async function execute(

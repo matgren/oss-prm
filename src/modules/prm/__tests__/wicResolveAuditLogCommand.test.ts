@@ -24,6 +24,8 @@ const { safeEmit } = jest.requireMock('../lib/safeEmit') as { safeEmit: jest.Moc
 import {
   execute,
   undo,
+  isWicAuditLogAlreadyResolvedError,
+  isWicAuditLogNotFoundError,
   ResolveWicImportAuditLogCommand,
   WicAuditLogAlreadyResolvedError,
   WicAuditLogNotFoundError,
@@ -288,4 +290,132 @@ it('exposes ResolveWicImportAuditLogCommand namespace + sentinel error classes',
   expect(typeof ResolveWicImportAuditLogCommand.undo).toBe('function')
   expect(WicAuditLogNotFoundError.prototype).toBeInstanceOf(Error)
   expect(WicAuditLogAlreadyResolvedError.prototype).toBeInstanceOf(Error)
+})
+
+describe('isWicAuditLogNotFoundError type guard', () => {
+  it('recognises a real `WicAuditLogNotFoundError`', () => {
+    const err = new WicAuditLogNotFoundError('audit-1')
+    expect(isWicAuditLogNotFoundError(err)).toBe(true)
+  })
+
+  it('recognises a sibling-chunk `WicAuditLogNotFoundError` (correct tag + shape, different prototype)', () => {
+    // Simulates the Next.js Turbopack scenario where the service-side chunk
+    // (this command file) and the route-side chunk
+    // (`api/wic/audit-log/[id]/resolve/route.ts`) each have their own copy
+    // of the class — the prototype chains diverge but the structural shape
+    // is identical. `instanceof` returns false here; the guard MUST still
+    // recognise it, because letting the catch fall through to a bare 500
+    // would mask the intended 404 envelope. Same regression class as PR #19
+    // / commit a317ea7 (PrmDomainError, RfpVisibilityNotFoundError).
+    class SiblingWicAuditLogNotFoundError extends Error {
+      readonly code = 'WIC_AUDIT_LOG_NOT_FOUND' as const
+      readonly auditLogId: string
+      constructor(auditLogId: string) {
+        super(`Audit log ${auditLogId} not found`)
+        this.name = 'WicAuditLogNotFoundError'
+        this.auditLogId = auditLogId
+      }
+    }
+    const err = new SiblingWicAuditLogNotFoundError('audit-1')
+    expect(err instanceof WicAuditLogNotFoundError).toBe(false)
+    expect(isWicAuditLogNotFoundError(err)).toBe(true)
+  })
+
+  it('rejects unrelated errors', () => {
+    expect(isWicAuditLogNotFoundError(new Error('boom'))).toBe(false)
+    expect(isWicAuditLogNotFoundError(new TypeError('boom'))).toBe(false)
+  })
+
+  it('rejects the sibling AlreadyResolved error (different name + code)', () => {
+    const err = new WicAuditLogAlreadyResolvedError('audit-1', '2026-04-15T00:00:00Z')
+    expect(isWicAuditLogNotFoundError(err)).toBe(false)
+  })
+
+  it('rejects a tag-spoofed object that is missing structural fields', () => {
+    // Defence in depth — a random thrown object that happens to set
+    // `.name = 'WicAuditLogNotFoundError'` but lacks `.auditLogId` / `.code`
+    // must not pass.
+    const fake = { name: 'WicAuditLogNotFoundError', message: 'incomplete' }
+    expect(isWicAuditLogNotFoundError(fake)).toBe(false)
+  })
+
+  it('rejects null / undefined / primitives', () => {
+    expect(isWicAuditLogNotFoundError(null)).toBe(false)
+    expect(isWicAuditLogNotFoundError(undefined)).toBe(false)
+    expect(isWicAuditLogNotFoundError('WicAuditLogNotFoundError')).toBe(false)
+    expect(isWicAuditLogNotFoundError(42)).toBe(false)
+  })
+
+  it('narrows the union so the call site can read `auditLogId` / `code`', () => {
+    const err: unknown = new WicAuditLogNotFoundError('audit-1')
+    if (isWicAuditLogNotFoundError(err)) {
+      expect(err.auditLogId).toBe('audit-1')
+      expect(err.code).toBe('WIC_AUDIT_LOG_NOT_FOUND')
+    } else {
+      throw new Error('guard should have narrowed')
+    }
+  })
+})
+
+describe('isWicAuditLogAlreadyResolvedError type guard', () => {
+  const RESOLVED_AT = '2026-04-15T00:00:00.000Z'
+
+  it('recognises a real `WicAuditLogAlreadyResolvedError`', () => {
+    const err = new WicAuditLogAlreadyResolvedError('audit-1', RESOLVED_AT)
+    expect(isWicAuditLogAlreadyResolvedError(err)).toBe(true)
+  })
+
+  it('recognises a sibling-chunk `WicAuditLogAlreadyResolvedError` (correct tag + shape, different prototype)', () => {
+    class SiblingWicAuditLogAlreadyResolvedError extends Error {
+      readonly code = 'WIC_AUDIT_LOG_ALREADY_RESOLVED' as const
+      readonly auditLogId: string
+      readonly resolvedAt: string
+      constructor(auditLogId: string, resolvedAt: string) {
+        super(`Audit log ${auditLogId} is already resolved at ${resolvedAt}`)
+        this.name = 'WicAuditLogAlreadyResolvedError'
+        this.auditLogId = auditLogId
+        this.resolvedAt = resolvedAt
+      }
+    }
+    const err = new SiblingWicAuditLogAlreadyResolvedError('audit-1', RESOLVED_AT)
+    expect(err instanceof WicAuditLogAlreadyResolvedError).toBe(false)
+    expect(isWicAuditLogAlreadyResolvedError(err)).toBe(true)
+  })
+
+  it('rejects unrelated errors', () => {
+    expect(isWicAuditLogAlreadyResolvedError(new Error('boom'))).toBe(false)
+    expect(isWicAuditLogAlreadyResolvedError(new TypeError('boom'))).toBe(false)
+  })
+
+  it('rejects the sibling NotFound error (different name + code)', () => {
+    const err = new WicAuditLogNotFoundError('audit-1')
+    expect(isWicAuditLogAlreadyResolvedError(err)).toBe(false)
+  })
+
+  it('rejects a tag-spoofed object that is missing `resolvedAt`', () => {
+    const fake = {
+      name: 'WicAuditLogAlreadyResolvedError',
+      code: 'WIC_AUDIT_LOG_ALREADY_RESOLVED',
+      auditLogId: 'audit-1',
+      message: 'incomplete',
+    }
+    expect(isWicAuditLogAlreadyResolvedError(fake)).toBe(false)
+  })
+
+  it('rejects null / undefined / primitives', () => {
+    expect(isWicAuditLogAlreadyResolvedError(null)).toBe(false)
+    expect(isWicAuditLogAlreadyResolvedError(undefined)).toBe(false)
+    expect(isWicAuditLogAlreadyResolvedError('WicAuditLogAlreadyResolvedError')).toBe(false)
+    expect(isWicAuditLogAlreadyResolvedError(42)).toBe(false)
+  })
+
+  it('narrows the union so the call site can read `resolvedAt`', () => {
+    const err: unknown = new WicAuditLogAlreadyResolvedError('audit-1', RESOLVED_AT)
+    if (isWicAuditLogAlreadyResolvedError(err)) {
+      expect(err.resolvedAt).toBe(RESOLVED_AT)
+      expect(err.auditLogId).toBe('audit-1')
+    } else {
+      throw new Error('guard should have narrowed')
+    }
+  })
 })
