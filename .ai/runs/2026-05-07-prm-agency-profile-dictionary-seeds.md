@@ -134,8 +134,8 @@ All slugs kebab-case (`saas`, `e-commerce`, `fintech`, `node-js`, `dot-net`, etc
 ### Phase 1: Seed files + per-seed tests
 
 - [x] 1.1 Industries seed + test — 8ee5e32
-- [ ] 1.2 Services seed + test
-- [ ] 1.3 Technologies seed + test
+- [x] 1.2 Services seed + test — b6d0a71
+- [x] 1.3 Technologies seed + test — c1524b3
 
 ### Phase 2: Wire into setup.ts
 
