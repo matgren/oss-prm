@@ -11,6 +11,7 @@ import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { ReasonDialog, type ReasonDialogCopy } from './reasonDialog'
 
 type LicenseDeal = {
   id: string
@@ -546,6 +547,51 @@ function ActionsBar({
   const t = useT()
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [reverseOpen, setReverseOpen] = React.useState(false)
+  const [unreverseTarget, setUnreverseTarget] = React.useState<'signed' | 'pending' | null>(null)
+
+  const reverseCopy: ReasonDialogCopy = {
+    title: t('prm.licenseDeals.reverse.dialog.title', 'Reverse attribution'),
+    help: t(
+      'prm.licenseDeals.reverse.dialog.help',
+      'Provide an audit-grade reason of at least 10 characters. The reverse compensates Path A/B/C attribution and emits an audit event.',
+    ),
+    placeholder: t(
+      'prm.licenseDeals.reverse.dialog.placeholder',
+      'Why is this attribution being reversed?',
+    ),
+    reasonLabel: t('prm.licenseDeals.reverse.dialog.reasonLabel', 'Reason'),
+    cancel: t('prm.licenseDeals.reverse.dialog.cancel', 'Cancel'),
+    confirm: t('prm.licenseDeals.reverse.dialog.confirm', 'Reverse'),
+    saving: t('prm.licenseDeals.reverse.dialog.saving', 'Reversing…'),
+    validationMessage: t(
+      'prm.licenseDeals.reverse.dialog.validation',
+      'Reason must be at least 10 characters.',
+    ),
+  }
+
+  const unreverseCopy: ReasonDialogCopy = {
+    title:
+      unreverseTarget === 'signed'
+        ? t('prm.licenseDeals.unreverse.dialog.title.signed', 'Walk back to signed')
+        : t('prm.licenseDeals.unreverse.dialog.title.pending', 'Release back to pending'),
+    help: t(
+      'prm.licenseDeals.unreverse.dialog.help',
+      'Provide an audit-grade reason of at least 10 characters. Use this only when the status was advanced in error.',
+    ),
+    placeholder: t(
+      'prm.licenseDeals.unreverse.dialog.placeholder',
+      'Why is the status being walked back?',
+    ),
+    reasonLabel: t('prm.licenseDeals.unreverse.dialog.reasonLabel', 'Reason'),
+    cancel: t('prm.licenseDeals.unreverse.dialog.cancel', 'Cancel'),
+    confirm: t('prm.licenseDeals.unreverse.dialog.confirm', 'Unreverse status'),
+    saving: t('prm.licenseDeals.unreverse.dialog.saving', 'Saving…'),
+    validationMessage: t(
+      'prm.licenseDeals.unreverse.dialog.validation',
+      'Reason must be at least 10 characters.',
+    ),
+  }
 
   async function transition(toStatus: 'signed' | 'active' | 'churned') {
     setBusy(true)
@@ -565,18 +611,17 @@ function ActionsBar({
     }
   }
 
-  async function reverse() {
-    const reason = window.prompt(t('prm.licenseDeals.reverse.prompt', 'Reason for reversal (≥10 chars)?'))
-    if (!reason || reason.trim().length < 10) return
+  async function reverse(reason: string) {
     setBusy(true)
     setError(null)
     try {
       await apiCallOrThrow(`/api/prm/license-deal/${deal.id}/reverse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason }),
       })
       flash(t('prm.licenseDeals.reverse.flash.success', 'Attribution reversed.'), 'success')
+      setReverseOpen(false)
       onChange()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reverse')
@@ -585,18 +630,17 @@ function ActionsBar({
     }
   }
 
-  async function unreverse(toStatus: 'signed' | 'pending') {
-    const reason = window.prompt(t('prm.licenseDeals.unreverse.prompt', 'Reason for unreverse (≥10 chars)?'))
-    if (!reason || reason.trim().length < 10) return
+  async function unreverse(toStatus: 'signed' | 'pending', reason: string) {
     setBusy(true)
     setError(null)
     try {
       await apiCallOrThrow(`/api/prm/license-deal/${deal.id}/unreverse-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toStatus, reason: reason.trim() }),
+        body: JSON.stringify({ toStatus, reason }),
       })
       flash(t('prm.licenseDeals.unreverse.flash.success', 'Status unreversed.'), 'success')
+      setUnreverseTarget(null)
       onChange()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to unreverse')
@@ -638,17 +682,17 @@ function ActionsBar({
           </Button>
         ) : null}
         {deal.attributionPath !== 'none' && !isFrozen ? (
-          <Button onClick={reverse} disabled={busy} variant="outline">
+          <Button onClick={() => setReverseOpen(true)} disabled={busy} variant="outline">
             {t('prm.licenseDeals.actions.reverse', 'Reverse attribution')}
           </Button>
         ) : null}
         {deal.status === 'active' ? (
-          <Button onClick={() => unreverse('signed')} disabled={busy} variant="outline">
+          <Button onClick={() => setUnreverseTarget('signed')} disabled={busy} variant="outline">
             {t('prm.licenseDeals.actions.unreverseToSigned', 'Unreverse → signed (US4.4b)')}
           </Button>
         ) : null}
         {deal.status === 'signed' ? (
-          <Button onClick={() => unreverse('pending')} disabled={busy} variant="outline">
+          <Button onClick={() => setUnreverseTarget('pending')} disabled={busy} variant="outline">
             {t('prm.licenseDeals.actions.unreverseToPending', 'Unreverse → pending (release)')}
           </Button>
         ) : null}
@@ -658,6 +702,36 @@ function ActionsBar({
           </Button>
         ) : null}
       </div>
+      <ReasonDialog
+        open={reverseOpen}
+        copy={reverseCopy}
+        busy={busy}
+        onConfirm={(reason) => void reverse(reason)}
+        onCancel={() => setReverseOpen(false)}
+        testId="reverse-dialog"
+      />
+      <ReasonDialog
+        open={unreverseTarget !== null}
+        copy={unreverseCopy}
+        busy={busy}
+        onConfirm={(reason) => {
+          if (unreverseTarget) void unreverse(unreverseTarget, reason)
+        }}
+        onCancel={() => setUnreverseTarget(null)}
+        testId="unreverse-dialog"
+      >
+        <p className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {unreverseTarget === 'signed'
+            ? t(
+                'prm.licenseDeals.unreverse.dialog.targetHint.signed',
+                'Target status: signed. Use to walk an active deal back to signed (US4.4b).',
+              )
+            : t(
+                'prm.licenseDeals.unreverse.dialog.targetHint.pending',
+                'Target status: pending. Use to release a signed deal back to pending so it can be reversed.',
+              )}
+        </p>
+      </ReasonDialog>
     </section>
   )
 }
