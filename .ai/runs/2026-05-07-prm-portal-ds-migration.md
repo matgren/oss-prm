@@ -160,10 +160,10 @@ Rewrite the "Design system follow-ups" section header with a one-paragraph corre
 
 ### Phase 4: Empty states → PortalEmptyState
 
-- [ ] 4.1 Wire `prospects/page.tsx` empty state + tests
-- [ ] 4.2 Wire `library/page.tsx` empty state + tests
-- [ ] 4.3 Wire `case-studies/page.tsx` empty state + tests
-- [ ] 4.4 Wire `rfp/page.tsx` empty state + tests
+- [x] 4.1 Wire `prospects/page.tsx` empty state + tests — ac420d5
+- [x] 4.2 Wire `library/page.tsx` empty state + tests — ac420d5
+- [x] 4.3 Wire `case-studies/page.tsx` empty state + tests — ac420d5
+- [x] 4.4 Wire `rfp/page.tsx` empty state + tests — ac420d5
 
 ### Phase 5: Doc + verification
 
