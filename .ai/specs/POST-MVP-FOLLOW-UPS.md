@@ -37,11 +37,11 @@ Wave 1 in flight: F1 covers T0 IT-2..6, F2 covers T1 IT-9.2..9.8, F3 covers T2 I
 ### T0 Agency Foundation (SPEC-2026-04-23-agency-foundation.md §9)
 
 - ~~**IT-1 — Happy path onboarding**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T0-001-agency-happy-path.spec.ts` (Agency creation + invite + accept seam + cooldown probe + portal /me — covers US1.1, US1.2, US1.4 auth path, US2.1).
-- **IT-2 — Duplicate GH-profile rejection (L-010)** — 409 with privacy-preserving message; no Agency name leaked (US1.2, US1.5, invariant #5). Owner: QA team. Effort: per-test.
-- **IT-3 — Admin-only field 403 from portal** — `PATCH /api/prm/portal/agency/{id}` with `tier` field rejected (US1.3, US2.1, invariant #6). Owner: QA team. Effort: per-test.
-- **IT-4 — Lockout recovery (US1.6)** — OMPartnerOps promotes a `partner_member` to `partner_admin` via B2 Members tab. Owner: QA team. Effort: per-test.
-- **IT-5 — `status = historical` cascade banner** — `prm.agency.status_changed` propagates to AgencyMember read-model + portal banner (US1.7, Vernon C3). Owner: QA team. Effort: per-test.
-- **IT-6 — Re-invite cooldown** — Second invite within 10min returns 429 with `retry_after_seconds` (US1.2). Owner: QA team. Effort: per-test.
+- ~~**IT-2 — Duplicate GH-profile rejection (L-010)**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T0-002-duplicate-github-profile.spec.ts` (cross-Agency invite with same `githubProfile` returns 409 `github_profile_conflict`; verbatim L-010 privacy-preserving message asserted; body string-scanned to confirm Agency-A name/slug/id never leak — US1.2, US1.5, invariant #5).
+- ~~**IT-3 — Admin-only field 403 from portal**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T0-003-admin-only-field-403.spec.ts` (PartnerAdmin `PATCH /api/prm/portal/agency/{id}` with `tier` rejected with 403 `admin_only_field`; `details.fields` includes `tier`; post-PATCH GET proves both editable + admin-only fields are unchanged — US1.3, US2.1, invariant #6).
+- ~~**IT-4 — Lockout recovery (US1.6)**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T0-004-lockout-recovery.spec.ts` (OMPartnerOps `PATCH /api/prm/agency-member/{id}` with `roleSlug: partner_admin` promotes the partner_member; pre-existing partner_admin row unchanged — US1.6).
+- ~~**IT-5 — `status = historical` cascade banner**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T0-005-historical-cascade-banner.spec.ts` (backend PATCH flips Agency.status to `historical`; portal `/me` reflects synchronously; persistent subscriber polled ≤30s for AgencyMember.agencyStatus cascade across both members — US1.7, Vernon C3).
+- ~~**IT-6 — Re-invite cooldown**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T0-006-reinvite-cooldown.spec.ts` (second invite within window → 429 `invite_cooldown_active` + `retryAfterSeconds` + `Retry-After` header; cross-Agency same-email and cross-email same-Agency control axes prove the cooldown key is `(agency_id, lower(email))` — US1.2).
 
 ### T1 WIP Scoreboard (SPEC-2026-04-23-wip-scoreboard.md §9)
 
