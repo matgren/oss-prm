@@ -559,4 +559,34 @@ The portal API interceptor (Spec #1) already rejects writes to `RFP.*` from port
 
 ---
 
+## 11. Implementation Status
+
+| Phase / Commit | Status | Date | Notes |
+|---|---|---|---|
+| C1 — Entities + B7 + publish + notification seed | Done | 2026-05-07 | 11 events shipped (over-delivered: also includes broadcast.first_opened/declined/undeclined and rfp_response.* used by C2/C3/C4). 14/14 evaluator + 12/12 service jest cases. §9.1 #1, #2, #3, #5 in TC-PRM-T5-001. |
+| C2 — P9 portal inbox + visibility gate | Done | 2026-05-07 | `assertBroadcastedOrNotFound` helper enforces silent-404 (R3 / invariant #15). §9.2 #7 byte-identical contract locked at unit-test level (`__tests__/rfpVisibility.test.ts`); Playwright surface deferred until customer-portal auth helper ships (see POST-MVP-FOLLOW-UPS). |
+| C3a — P10 scaffold + read brief | Done | 2026-05-07 | Status-aware lock notices, decline/respond CTAs initially disabled. |
+| C3b — P10 markdown editors + draft auto-save | Done | 2026-05-07 | R7 sha256 content-hash dedupe (same-text re-saves skip event emit). 4 req/s server rate-limit per CustomerUser. R1 markdown editor shipped as `Textarea` + "Markdown supported" hint; promote to a real primitive when one ships in `@open-mercato/ui` (POST-MVP-FOLLOW-UPS). |
+| C3c — CaseStudy picker | Deferred | 2026-05-07 | Picker UI deferred to a Spec #7 follow-up. Cross-Agency reject contract preserved at service layer — any non-empty `attached_case_study_ids` returns 400. §9.3 #14 will activate once Spec #7 fills in the ownership query. |
+| C3d — P10 submit + unsubmit | Done | 2026-05-07 | Author-scope (M1's draft, M2's submit → 403) at route layer. Service guards: `RFP.status='published'`, `tech_experience` + `domain_experience` non-empty, deadline check, idempotent for already-submitted. 9 service-test cases. |
+| C4 — Decline flow (US5.5) | Done | 2026-05-07 | PartnerAdmin-only at route layer. Service guards: `RFP.status='published'` (R6 pattern), idempotent for already-declined. 8 service-test cases (§9.4 #20-#23 + cross-agency probe). |
+| C5 — Final gate + spec status | Done | 2026-05-07 | typecheck=0, jest 21 suites / 189 tests, generate clean. POST-MVP-FOLLOW-UPS extended with 5 entries (customer-portal Playwright auth helper, case-study picker, markdown editor primitive, §9.1 #4 partial-insert rollback, §9.6 perf smoke). |
+
+### Run plan reference
+
+`.ai/runs/2026-05-07-prm-spec-05-rfp-broadcast-response.md`
+
+### Test surface summary
+
+- **Unit (jest):** 21 suites, 189 tests across PRM. New for Spec #5: `rfpEligibility.test.ts` (14), `rfpService.test.ts` (33), `rfpVisibility.test.ts` (7).
+- **Integration (Playwright):** TC-PRM-T5-001 covers §9.1 #1, #2, #3, #5. §9.1 #4 (DB-error injection), §9.1 #6 (undo-refused-after-first-open), §9.2-§9.5 deferred until customer-portal Playwright auth helper lands (POST-MVP-FOLLOW-UPS).
+
+### Cross-spec contracts shipped
+
+- `prm.rfp_response.submitted` (consumed by Spec #6 scoring-ready heuristic) — payload frozen.
+- `prm.rfp_broadcast.declined` (consumed by Spec #6 auto-transition heuristic) — payload frozen.
+- `RFP.is_path_b_locked` column declared with default `false` (read-model — Spec #3 writes via subscriber, Spec #6 reads in re-open guard).
+
+---
+
 *End of SPEC-2026-04-23-rfp-broadcast-response.*

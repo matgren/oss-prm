@@ -55,6 +55,14 @@ export const features = [
   // Cross-spec contract (FROZEN). Backend-only. Service routes under /api/prm/service/wic/*
   // are auth'd by shared secret + timestamp + idempotency-key headers — no ACL feature.
   { id: 'prm.wic.resolve', title: 'Triage WIC import audit log (B10)', module: 'prm' },
+
+  // RFP broadcast & response (Spec #5 — rfp-broadcast-response).
+  // Backend-only gates. Portal RFP routes use implicit tenant scope +
+  // CustomerUserRole pattern (Spec #1 / SPEC-060) — no explicit prm.* feature.
+  // `create` and `publish` are split so an intern-tier role can draft but not
+  // broadcast; v1 grants both to the OM PartnerOps `employee` staff role.
+  { id: 'prm.rfp.create', title: 'Create + edit RFP drafts (B7)', module: 'prm' },
+  { id: 'prm.rfp.publish', title: 'Publish + unpublish RFPs (B7)', module: 'prm' },
 ] as const
 
 export type PrmFeatureId = (typeof features)[number]['id']

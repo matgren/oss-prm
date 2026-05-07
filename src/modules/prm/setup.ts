@@ -237,6 +237,9 @@ export const setup: ModuleSetupConfig = {
       'prm.license_deal.read',
       // Spec #4: extend employee with B10 WIC import audit-log triage (resolve action).
       'prm.wic.resolve',
+      // Spec #5: OM PartnerOps owns RFP authoring + broadcast.
+      'prm.rfp.create',
+      'prm.rfp.publish',
     ],
   },
 

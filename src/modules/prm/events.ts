@@ -59,6 +59,23 @@ const events = [
   { id: 'prm.wic_import.row_rejected', label: 'WIC import row rejected (Anti-Corruption Layer)', entity: 'wic_import', category: 'system' },
   { id: 'prm.wic_import.batch_completed', label: 'WIC import batch completed', entity: 'wic_import', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.wic_import.resolved', label: 'WIC import audit-log row resolved (B10)', entity: 'wic_import', category: 'system' },
+
+  // RFP broadcast & response (Spec #5 — rfp-broadcast-response).
+  // Cross-spec contract (FROZEN): Spec #6 subscribes to `prm.rfp_response.submitted` for
+  // its scoring-ready heuristic; Spec #6 also reads `prm.rfp_broadcast.declined` for the
+  // auto-transition-to-scoring path. The `is_path_b_locked` column on `prm_rfps` is a
+  // read-model written by Spec #3 on `prm.license_deal.status_changed`.
+  { id: 'prm.rfp.created', label: 'RFP draft created', entity: 'rfp', category: 'lifecycle', clientBroadcast: true },
+  { id: 'prm.rfp.updated', label: 'RFP draft updated', entity: 'rfp', category: 'crud', clientBroadcast: true },
+  { id: 'prm.rfp.published', label: 'RFP published + broadcast', entity: 'rfp', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.rfp.unpublished', label: 'RFP unpublished (undo of publish)', entity: 'rfp', category: 'lifecycle', clientBroadcast: true },
+  { id: 'prm.rfp_broadcast.created', label: 'RFP broadcast created (per agency)', entity: 'rfp_broadcast', category: 'lifecycle' },
+  { id: 'prm.rfp_broadcast.first_opened', label: 'RFP broadcast first opened', entity: 'rfp_broadcast', category: 'system', portalBroadcast: true },
+  { id: 'prm.rfp_broadcast.declined', label: 'RFP broadcast declined', entity: 'rfp_broadcast', category: 'lifecycle', portalBroadcast: true },
+  { id: 'prm.rfp_broadcast.undeclined', label: 'RFP broadcast undeclined', entity: 'rfp_broadcast', category: 'lifecycle', portalBroadcast: true },
+  { id: 'prm.rfp_response.draft_saved', label: 'RFP response draft saved', entity: 'rfp_response', category: 'system' },
+  { id: 'prm.rfp_response.submitted', label: 'RFP response submitted', entity: 'rfp_response', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.rfp_response.unsubmitted', label: 'RFP response unsubmitted (undo)', entity: 'rfp_response', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
 ] as const
 
 export const eventsConfig = createModuleEvents({
