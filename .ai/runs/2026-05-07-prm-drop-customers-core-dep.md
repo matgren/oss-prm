@@ -129,8 +129,8 @@ If any step fails, fix-forward in a new commit; do not amend.
 
 ### Phase 2: Remove customers from src/modules.ts + refresh generated artefacts
 
-- [ ] 2.1 Drop `customers` entry from `src/modules.ts`
-- [ ] 2.2 Run `yarn generate` to refresh generated files
+- [x] 2.1 Drop `customers` entry from `src/modules.ts` — 5c504c0
+- [x] 2.2 Run `yarn generate` to refresh generated files — 5c504c0 (no tracked file changes; `.mercato/generated` is gitignored. OpenAPI route count went from 179 → 150 confirming customers routes dropped.)
 
 ### Phase 3: Full validation gate
 
