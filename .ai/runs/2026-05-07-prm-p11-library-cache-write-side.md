@@ -117,6 +117,6 @@ Phase commit (Progress only): `docs(runs): mark Phase 3 gate green`
 
 ### Phase 3: Validation gate
 
-- [ ] 3.1 `yarn typecheck` clean
-- [ ] 3.2 `yarn jest src/modules/prm` clean (≥ baseline + new tests)
-- [ ] 3.3 `yarn build` clean
+- [x] 3.1 `yarn typecheck` clean (post `yarn generate`)
+- [x] 3.2 `yarn jest src/modules/prm` clean — 51 suites, 504 tests passed (was 482; this PR added +14 helper + +8 route = +22; the rest were already in develop tip)
+- [x] 3.3 `yarn build` clean (exit 0; only pre-existing optional-import warning from `llmScoringDraft.ts`, not from this PR)
