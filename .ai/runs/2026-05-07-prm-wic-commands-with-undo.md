@@ -99,8 +99,8 @@ Non-goals (do NOT touch):
 
 ### Phase 2: SupersedeWicContributionCommand
 
-- [ ] 2.1 Create `src/modules/prm/commands/wic/supersedeWicContribution.ts` with execute + undo
-- [ ] 2.2 Add unit tests at `src/modules/prm/__tests__/wicSupersedeContributionCommand.test.ts`
+- [x] 2.1 Create `src/modules/prm/commands/wic/supersedeWicContribution.ts` with execute + undo — 442b4fb
+- [x] 2.2 Add unit tests at `src/modules/prm/__tests__/wicSupersedeContributionCommand.test.ts` (9 tests; full PRM suite 489→498) — 442b4fb
 
 ### Phase 3: ResolveWicImportAuditLogCommand
 
