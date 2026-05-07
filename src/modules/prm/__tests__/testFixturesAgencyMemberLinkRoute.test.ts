@@ -190,14 +190,15 @@ describe('POST /api/prm/test-fixtures/agency-member-link', () => {
     expect(createdAgencyMember.activatedAt).toBeInstanceOf(Date)
   })
 
-  it('does NOT migrate the CustomerUser organizationId in this seam (deferred — see route.ts comments)', async () => {
-    // Tracking the deliberate non-migration. In production the
-    // accept-invitation flow flips the user's org to the agency's org. The
-    // test seam currently leaves the customer in the staff org so the
-    // existing T5 portal/RFP visibility test does not regress. See
-    // `route.ts` deferred-fix comment block + the TC-PRM-T0-001 commit body
-    // for the full chain. When the route-side org-scope fix lands, this test
-    // flips to assert the migration.
+  it('migrates the CustomerUser organizationId to the agency org (mirrors production accept-invitation)', async () => {
+    // POST-MVP-FOLLOW-UPS line 23 fix. Production
+    // `CustomerInvitationService.acceptInvitation` creates the accepted
+    // CustomerUser at `invitation.organizationId === agency.organizationId`,
+    // so a real partner is in the *agency's* org after accept. The seam now
+    // mirrors that — coupled with portal RFP visibility scoped by
+    // `tenantId + broadcast.agencyId` (instead of `auth.orgId`), the cross-org
+    // T0-001 profile-fill leg and the agency-CRUD `org === auth.orgId` guard
+    // both work end-to-end.
     process.env.OM_PRM_TEST_FIXTURES_ENABLED = '1'
     getAuthFromRequestMock.mockResolvedValue({ tenantId: TENANT, orgId: ORG, sub: 'staff-1' })
     findOneWithDecryptionMock
@@ -230,8 +231,10 @@ describe('POST /api/prm/test-fixtures/agency-member-link', () => {
       }),
     )
     expect(res.status).toBe(201)
-    // The customer org is NOT flipped — see the deferred-fix comment in route.ts.
-    expect(customerUser.organizationId).toBe(ORG)
+    // The customer org has been flipped to the agency's org.
+    expect(customerUser.organizationId).toBe('agency-org-99')
+    // And the route persisted that change.
+    expect(containerEmPersistMock).toHaveBeenCalledWith(customerUser)
   })
 
   it('returns existing member with reused=true on second call (idempotent)', async () => {

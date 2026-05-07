@@ -88,10 +88,10 @@ export async function POST(
   }
 
   const em = container.resolve('em') as EntityManager
+  let scopedRfp
   try {
-    await assertBroadcastedOrNotFound(params.id, member.agencyId, em, {
-      organizationId: auth.orgId,
-    })
+    const result = await assertBroadcastedOrNotFound(params.id, member.agencyId, em)
+    scopedRfp = result.rfp
   } catch (err) {
     if (isRfpVisibilityNotFoundError(err)) return rfpNotFoundResponse()
     throw err
@@ -99,11 +99,13 @@ export async function POST(
 
   const rfpService = container.resolve('rfpService') as RfpService
   try {
+    // Service writes scope by the RFP's staff `organizationId`, NOT `auth.orgId`
+    // (which is the agency's org). See POST-MVP-FOLLOW-UPS line 23.
     const { broadcast, declined } = await rfpService.declineBroadcast(
       params.id,
       member.agencyId,
       { decline_reason: parsed.data.decline_reason ?? null },
-      { organizationId: auth.orgId },
+      { organizationId: scopedRfp.organizationId },
     )
     return NextResponse.json({
       ok: true,

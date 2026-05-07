@@ -75,9 +75,7 @@ export async function GET(
   let rfp
   let broadcast
   try {
-    const result = await assertBroadcastedOrNotFound(params.id, member.agencyId, em, {
-      organizationId: auth.orgId,
-    })
+    const result = await assertBroadcastedOrNotFound(params.id, member.agencyId, em)
     rfp = result.rfp
     broadcast = result.broadcast
   } catch (err) {
@@ -85,18 +83,22 @@ export async function GET(
     throw err
   }
 
-  // First-open side effect (idempotent at the DB layer).
+  // First-open side effect (idempotent at the DB layer). Service writes scope
+  // by `RfpBroadcast.organizationId` (the staff org where the RFP was seeded),
+  // not `auth.orgId` (the agency's org). See POST-MVP-FOLLOW-UPS line 23.
   const rfpService = container.resolve('rfpService') as RfpService
-  await rfpService.markBroadcastFirstOpened(broadcast, { organizationId: auth.orgId })
+  await rfpService.markBroadcastFirstOpened(broadcast, { organizationId: broadcast.organizationId })
 
-  // Optional own-Agency response (used by P10 to pre-fill the form).
+  // Optional own-Agency response (used by P10 to pre-fill the form). Scoped by
+  // `(rfpId, agencyId)`; the broadcast above already authorized the caller for
+  // this RFP, and the response row's `organizationId` matches the RFP's staff
+  // org, not `auth.orgId`.
   const response = await findOneWithDecryption(
     em,
     RfpResponse,
     {
       rfpId: rfp.id,
       agencyId: member.agencyId,
-      organizationId: auth.orgId,
     } as any,
     undefined,
     { tenantId: auth.tenantId, organizationId: auth.orgId },
