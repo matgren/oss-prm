@@ -7,6 +7,7 @@ import { Input } from '@open-mercato/ui/primitives/input'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { PortalEmptyState } from '@open-mercato/ui/portal/components/PortalEmptyState'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 
 type ProspectRow = {
@@ -351,8 +352,22 @@ export default function PortalProspectsListPage() {
             ))}
             {!loading && items.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
-                  {t('prm.portal.prospects.empty', 'No prospects yet — register your first one above.')}
+                <td colSpan={6} className="px-3 py-6">
+                  <PortalEmptyState
+                    title={t(
+                      'prm.portal.prospects.empty.title',
+                      'No prospects yet',
+                    )}
+                    description={t(
+                      'prm.portal.prospects.empty.description',
+                      'Register your first prospect above to start tracking companies you have introduced to Open Mercato. New registrations appear in the WIP widget.',
+                    )}
+                    action={
+                      <Button type="button" size="sm" onClick={() => setShowRegister(true)}>
+                        {t('prm.portal.prospects.empty.action', 'Register a prospect')}
+                      </Button>
+                    }
+                  />
                 </td>
               </tr>
             ) : null}

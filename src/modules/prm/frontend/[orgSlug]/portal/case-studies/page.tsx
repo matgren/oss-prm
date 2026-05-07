@@ -6,6 +6,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { PortalEmptyState } from '@open-mercato/ui/portal/components/PortalEmptyState'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
 /**
@@ -148,15 +149,20 @@ export default function PortalCaseStudiesPage() {
       {error ? <ErrorMessage label={error} /> : null}
       {loading ? <div className="text-sm text-muted-foreground">Loading…</div> : null}
       {!loading && items.length === 0 ? (
-        <div className="rounded-md border bg-muted/30 p-6 text-sm">
-          <h3 className="font-medium">{t('prm.portal.caseStudies.empty.title', 'No case studies yet')}</h3>
-          <p className="text-muted-foreground">
-            {t(
-              'prm.portal.caseStudies.empty.body',
-              'Document a recent engagement so it can be attached to RFP responses and (with Marketing\'s approval) appear on openmercato.com.',
-            )}
-          </p>
-        </div>
+        <PortalEmptyState
+          title={t('prm.portal.caseStudies.empty.title', 'No case studies yet')}
+          description={t(
+            'prm.portal.caseStudies.empty.body',
+            "Document a recent engagement so it can be attached to RFP responses and (with Marketing's approval) appear on openmercato.com.",
+          )}
+          action={
+            <Link href={`/${orgSlug}/portal/case-studies/new`}>
+              <Button type="button" size="sm">
+                {t('prm.portal.caseStudies.empty.action', 'Add a case study')}
+              </Button>
+            </Link>
+          }
+        />
       ) : null}
       <ul className="space-y-2">
         {items.map((cs) => (

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { ErrorMessage } from '@open-mercato/ui/backend/detail'
+import { PortalEmptyState } from '@open-mercato/ui/portal/components/PortalEmptyState'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { RfpResponseStatusChip } from '../_components/RfpResponseStatusChip'
 
@@ -106,17 +107,41 @@ export default function PortalRfpInboxPage() {
     void load()
   }, [load])
 
-  const emptyMessage = React.useMemo(() => {
+  const emptyState = React.useMemo<{ title: string; description: string }>(() => {
     switch (tab) {
       case 'unread':
-        return t('prm.portal.rfp.empty.unread', 'No unread RFPs. New ones will appear here when OM PartnerOps publishes them.')
+        return {
+          title: t('prm.portal.rfp.empty.unread.title', 'You are all caught up'),
+          description: t(
+            'prm.portal.rfp.empty.unread.description',
+            'No unread RFPs. New ones will appear here when OM PartnerOps publishes them.',
+          ),
+        }
       case 'responded':
-        return t('prm.portal.rfp.empty.responded', 'You have not responded to any RFPs yet.')
+        return {
+          title: t('prm.portal.rfp.empty.responded.title', 'No responses yet'),
+          description: t(
+            'prm.portal.rfp.empty.responded.description',
+            'You have not responded to any RFPs yet. Open one from the All tab to draft a response.',
+          ),
+        }
       case 'declined':
-        return t('prm.portal.rfp.empty.declined', 'You have not declined any RFPs yet.')
+        return {
+          title: t('prm.portal.rfp.empty.declined.title', 'No declined RFPs'),
+          description: t(
+            'prm.portal.rfp.empty.declined.description',
+            'You have not declined any RFPs yet.',
+          ),
+        }
       case 'all':
       default:
-        return t('prm.portal.rfp.empty.all', 'No RFPs in your inbox yet.')
+        return {
+          title: t('prm.portal.rfp.empty.all.title', 'No RFPs in your inbox yet'),
+          description: t(
+            'prm.portal.rfp.empty.all.description',
+            'When OM PartnerOps publishes an RFP that matches your agency, it will appear here so you can review the brief and respond.',
+          ),
+        }
     }
   }, [tab, t])
 
@@ -173,8 +198,8 @@ export default function PortalRfpInboxPage() {
         ) : null}
 
         {!loading && items.length === 0 ? (
-          <li className="rounded-md border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-            {emptyMessage}
+          <li>
+            <PortalEmptyState title={emptyState.title} description={emptyState.description} />
           </li>
         ) : null}
 
