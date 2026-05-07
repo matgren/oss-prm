@@ -136,8 +136,8 @@ Note: brief listed `prm_wic_import_audit_logs` and `prm_service_idempotency_keys
 
 ### Phase 1: Reset seam route
 
-- [ ] 1.1 Create `src/modules/prm/api/test-fixtures/reset/route.ts`
-- [ ] 1.2 Add unit tests in `src/modules/prm/__tests__/test-fixtures/reset.test.ts`
+- [x] 1.1 Create `src/modules/prm/api/test-fixtures/reset/route.ts` — d1cf385
+- [x] 1.2 Add unit tests in `src/modules/prm/__tests__/testFixturesResetRoute.test.ts` — d1cf385
 
 ### Phase 2: `resetPrmState()` helper
 
