@@ -94,12 +94,12 @@ None. The fix is informed by:
 
 ### Phase 1: Subscriber fix + unit-test correction
 
-- [ ] 1.1 Edit subscriber to filter prm_rfps by organization_id
-- [ ] 1.2 Edit unit test to assert organization_id and cover missing organizationId
-- [ ] 1.3 Run targeted unit tests (8/8 green)
-- [ ] 1.4 Run full PRM jest suite (must stay green)
-- [ ] 1.5 Run typecheck (must pass)
-- [ ] 1.6 Commit Phase 1 (fix(prm): RfpPathBLockSubscriber filter prm_rfps by organization_id)
+- [x] 1.1 Edit subscriber to filter prm_rfps by organization_id — ffb9aa0
+- [x] 1.2 Edit unit test to assert organization_id and cover missing organizationId — ffb9aa0
+- [x] 1.3 Run targeted unit tests (8/8 green) — 8/8 pass
+- [x] 1.4 Run full PRM jest suite (must stay green) — 636/636 pass
+- [x] 1.5 Run typecheck (must pass) — clean
+- [x] 1.6 Commit Phase 1 (fix(prm): RfpPathBLockSubscriber filter prm_rfps by organization_id) — ffb9aa0
 
 ### Phase 2: Ship the IT-9.4 integration test
 
