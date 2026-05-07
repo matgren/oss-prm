@@ -70,6 +70,6 @@ Wave 1 in flight: F1 covers T0 IT-2..6, F2 covers T1 IT-9.2..9.8, F3 covers T2 I
 - ~~**TC-PRM-T5-002 — Byte-identical 404 on un-broadcasted RFP**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T5-002-portal-rfp-byte-identical-404.spec.ts` (§9.2 invariant #15).
 - ~~**TC-PRM-T5-003 — Submit happy path**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T5-003-portal-rfp-submit-happy-path.spec.ts` (§9.3 P10 happy path).
 - ~~**TC-PRM-T5-PERF-001 — Eligibility evaluator at 500 agencies**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T5-PERF-001-eligibility-evaluator-500-agencies.spec.ts` (§9.6 #27).
-- **P10 unsubmit (US5.4 step 5)** — Submit → unsubmit flow; response goes back to draft state. Owner: QA team. Effort: per-test.
-- **Decline / undecline (US5.5)** — Decline broadcast → undecline; state transitions correct. Owner: QA team. Effort: per-test.
-- **`partner_member` author-scope 403** — Non-author cannot edit another member's response. Owner: QA team. Effort: per-test.
+- ~~**P10 unsubmit (US5.4 step 5)**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T5-004-portal-rfp-unsubmit.spec.ts` (draft → submit → unsubmit `reverted=true` → idempotent re-unsubmit on draft `reverted=false`; detail GET preserves `firstSubmittedAt` across the unsubmit).
+- ~~**Decline / undecline (US5.5)**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T5-005-portal-rfp-decline-undecline.spec.ts` (PartnerMember decline → 403 PartnerAdmin-only; PartnerAdmin decline-with-reason → idempotent re-decline preserves original reason → un-decline clears state → idempotent re-undecline → re-decline without reason allowed).
+- ~~**`partner_member` author-scope 403**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T5-006-partner-member-author-scope-403.spec.ts` (M1 stamps `submittedByMemberId` on draft; M2 sees the RFP via Agency-scope but `/submit` and `/unsubmit` both 403; M1 submits successfully; PartnerAdmin overrides author-scope on unsubmit).
