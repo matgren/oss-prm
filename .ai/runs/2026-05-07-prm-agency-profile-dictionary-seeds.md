@@ -149,7 +149,7 @@ All slugs kebab-case (`saas`, `e-commerce`, `fintech`, `node-js`, `dot-net`, etc
 
 ### Phase 4: PR + auto-review
 
-- [ ] 4.1 Open PR + labels + summary body
+- [x] 4.1 Open PR + labels + summary body — PR #22 (https://github.com/matgren/oss-prm/pull/22)
 - [ ] 4.2 `auto-review-pr` autofix pass
 - [ ] 4.3 Comprehensive summary comment
 
