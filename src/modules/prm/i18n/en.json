@@ -238,6 +238,7 @@
   "prm.licenseDeals.detail.back": "Back to list",
   "prm.licenseDeals.detail.overview": "Overview",
   "prm.licenseDeals.detail.attribution": "Attribution",
+  "prm.licenseDeals.attribution.sagaLink.label": "View attribution saga (retry / cancel)",
 
   "prm.licenseDeals.col.identifier": "Identifier",
   "prm.licenseDeals.col.client": "Client",

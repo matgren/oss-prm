@@ -13,6 +13,10 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { ReasonDialog, type ReasonDialogCopy } from './reasonDialog'
 import { ConfirmDialog, type ConfirmDialogCopy } from './confirmDialog'
+import {
+  buildSagaInstanceLookupUrl,
+  pickFirstSagaInstanceId,
+} from './sagaInstanceLink'
 
 type LicenseDeal = {
   id: string
@@ -210,7 +214,67 @@ function AttributedSummary({ deal }: { deal: LicenseDeal }) {
           <p className="mt-1 whitespace-pre-wrap">{deal.attributionReasoning}</p>
         </div>
       ) : null}
+      <SagaInstanceLink deal={deal} />
     </section>
+  )
+}
+
+/**
+ * Lookup the `prm.license_deal.attribution_saga` workflow instance for this
+ * deal and render a link to `/backend/workflows/instances/{id}` (the core
+ * workflows module's retry/cancel page).
+ *
+ * Strictly additive — renders nothing when:
+ *   - the lookup returns no result (older deals attributed before the saga
+ *     existed, or the workflow runtime is disabled),
+ *   - the API call fails (401, 404, network),
+ *   - the deal is unattributed (parent already gates this on `isAttributed`).
+ *
+ * Saga correlation key shape: `{licenseDealId}:{attributionSource}` — see
+ * `licenseDealCorrelationKey()` in `data/validators.ts`.
+ */
+function SagaInstanceLink({ deal }: { deal: LicenseDeal }) {
+  const t = useT()
+  const [instanceId, setInstanceId] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let cancelled = false
+    async function lookup() {
+      try {
+        const url = buildSagaInstanceLookupUrl({
+          licenseDealId: deal.id,
+          attributionSource: deal.attributionSource,
+        })
+        const res = await apiCall<{ data?: Array<{ id: string }> }>(url)
+        if (cancelled) return
+        if (res.ok) {
+          const picked = pickFirstSagaInstanceId(res.result ?? null)
+          if (picked) setInstanceId(picked)
+        }
+      } catch {
+        // Soft-fail: link is silent additive surface; no error UI.
+      }
+    }
+    void lookup()
+    return () => {
+      cancelled = true
+    }
+  }, [deal.id, deal.attributionSource])
+
+  if (!instanceId) return null
+
+  return (
+    <div className="mt-3 text-sm" data-testid="b5-saga-instance-link">
+      <Link
+        href={`/backend/workflows/instances/${instanceId}`}
+        className="text-primary underline-offset-4 hover:underline"
+      >
+        {t(
+          'prm.licenseDeals.attribution.sagaLink.label',
+          'View attribution saga (retry / cancel)',
+        )}
+      </Link>
+    </div>
   )
 }
 
