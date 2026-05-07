@@ -5,7 +5,7 @@ date: 2026-05-07
 branch: feat/prm-spec-06-rfp-scoring-selection
 author: matgren
 input_spec: .ai/specs/SPEC-2026-04-23-rfp-scoring-selection.md
-status: in-progress
+status: complete
 ---
 
 # Run plan — PRM Spec #6 (RFP Scoring & Selection)
@@ -249,6 +249,6 @@ Combined Commits 4 + 5 into one large commit for cohesion (selection drives clos
 
 ### Commit 7: Final gate + PR
 
-- [ ] 7.1 Full gate green
-- [ ] 7.2 Spec implementation status table
-- [ ] 7.3 PR opened
+- [x] 7.1 Full gate green — typecheck=0, jest 35 suites / 334 tests, generate clean
+- [x] 7.2 Spec implementation status table — added §11 to spec
+- [x] 7.3 PR opened
