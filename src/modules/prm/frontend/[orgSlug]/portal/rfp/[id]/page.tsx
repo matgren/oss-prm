@@ -533,12 +533,25 @@ function ResponseSection({ rfpId, initialResponse, isResponseable, onChange }: R
         testId="rfp-field-differentiators"
       />
 
-      <p className="text-xs text-muted-foreground">
-        {t(
-          'prm.portal.rfp.response.caseStudy.deferred',
-          'Case study attachments will be available when the Case Studies module ships.',
-        )}
-      </p>
+      <CaseStudyPicker
+        rfpId={rfpId}
+        editable={editable}
+        selectedIds={response?.attachedCaseStudyIds ?? []}
+        onSaved={(updated) => {
+          const next: Response = {
+            id: response?.id ?? '',
+            status: response?.status ?? 'draft',
+            techExperience: tech,
+            domainExperience: domain,
+            differentiators: diff,
+            attachedCaseStudyIds: updated.attachedCaseStudyIds,
+            firstSubmittedAt: response?.firstSubmittedAt ?? null,
+            lastUpdatedAt: updated.lastUpdatedAt,
+          }
+          setResponse(next)
+          onChange(next)
+        }}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         {submitted ? (
@@ -823,5 +836,159 @@ function MetaRow({ label, value }: { label: string; value: string | null }) {
       <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="text-sm">{value ?? '—'}</dd>
     </div>
+  )
+}
+
+const MAX_CASE_STUDIES = 5
+
+type PortalCaseStudyOption = {
+  id: string
+  title: string
+  clientName: string
+  isCurrentlyPublished: boolean
+}
+
+type CaseStudyPickerProps = {
+  rfpId: string
+  editable: boolean
+  selectedIds: string[]
+  onSaved: (next: { attachedCaseStudyIds: string[]; lastUpdatedAt: string }) => void
+}
+
+function CaseStudyPicker({ rfpId, editable, selectedIds, onSaved }: CaseStudyPickerProps) {
+  const t = useT()
+  const [options, setOptions] = React.useState<PortalCaseStudyOption[]>([])
+  const [loading, setLoading] = React.useState(false)
+  const [errorLabel, setErrorLabel] = React.useState<string | null>(null)
+  const [savingState, setSavingState] = React.useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  const load = React.useCallback(async () => {
+    setLoading(true)
+    setErrorLabel(null)
+    try {
+      const res = await apiCall<{ ok: true; items: PortalCaseStudyOption[] }>(
+        '/api/prm/portal/case-study?page=1&pageSize=100&includeDeleted=false',
+      )
+      if (!res.ok || !res.result || !('items' in res.result) || !res.result.ok) {
+        throw new Error(t('prm.portal.rfp.response.caseStudy.error', 'Could not load your case studies.'))
+      }
+      setOptions(res.result.items)
+    } catch (err) {
+      setErrorLabel(
+        err instanceof Error
+          ? err.message
+          : t('prm.portal.rfp.response.caseStudy.error', 'Could not load your case studies.'),
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [t])
+
+  React.useEffect(() => {
+    void load()
+  }, [load])
+
+  const persist = async (nextIds: string[]) => {
+    setSavingState('saving')
+    try {
+      const res = await apiCall<DraftRouteResponse>(
+        `/api/prm/portal/rfp/${rfpId}/response/draft`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attached_case_study_ids: nextIds }),
+        },
+      )
+      if (!res.ok || !res.result || !('id' in res.result)) {
+        const errObj = res.result && typeof (res.result as any).error === 'object'
+          ? ((res.result as any).error as { message?: string } | null)
+          : null
+        const msg =
+          errObj?.message ??
+          t('prm.portal.rfp.response.caseStudy.saveError', 'Could not save the case study selection.')
+        throw new Error(msg)
+      }
+      setSavingState('saved')
+      onSaved({ attachedCaseStudyIds: nextIds, lastUpdatedAt: res.result.lastUpdatedAt })
+    } catch (err) {
+      setSavingState('error')
+      setErrorLabel(
+        err instanceof Error
+          ? err.message
+          : t('prm.portal.rfp.response.caseStudy.saveError', 'Could not save the case study selection.'),
+      )
+    }
+  }
+
+  const toggle = (id: string) => {
+    if (!editable) return
+    const isOn = selectedIds.includes(id)
+    let next: string[]
+    if (isOn) {
+      next = selectedIds.filter((x) => x !== id)
+    } else {
+      if (selectedIds.length >= MAX_CASE_STUDIES) {
+        setErrorLabel(t('prm.portal.rfp.response.caseStudy.maxReached', 'Up to 5 attachments per response.'))
+        return
+      }
+      next = [...selectedIds, id]
+    }
+    void persist(next)
+  }
+
+  return (
+    <section className="space-y-2 rounded-md border bg-muted/10 p-3">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-medium">
+            {t('prm.portal.rfp.response.caseStudy.title', 'Case studies')}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'prm.portal.rfp.response.caseStudy.subtitle',
+              'Attach up to 5 of your published case studies as evidence.',
+            )}
+          </p>
+        </div>
+        {savingState === 'saving' ? (
+          <span className="text-xs text-muted-foreground">Saving…</span>
+        ) : null}
+      </header>
+      {loading ? <div className="text-xs text-muted-foreground">Loading…</div> : null}
+      {!loading && options.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {t(
+            'prm.portal.rfp.response.caseStudy.empty',
+            'You have no case studies yet. Create one in the Case Studies area.',
+          )}
+        </p>
+      ) : null}
+      {options.length ? (
+        <ul className="space-y-1 text-sm">
+          {options.map((opt) => {
+            const checked = selectedIds.includes(opt.id)
+            return (
+              <li key={opt.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  data-testid={`rfp-case-study-${opt.id}`}
+                  checked={checked}
+                  disabled={!editable || (!checked && selectedIds.length >= MAX_CASE_STUDIES)}
+                  onChange={() => toggle(opt.id)}
+                />
+                <span className="flex-1">{opt.title}</span>
+                <span className="text-xs text-muted-foreground">{opt.clientName}</span>
+                <span className="rounded border px-1.5 text-xs text-muted-foreground">
+                  {opt.isCurrentlyPublished
+                    ? t('prm.portal.rfp.response.caseStudy.published', 'Published')
+                    : t('prm.portal.rfp.response.caseStudy.draft', 'Draft')}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
+      {errorLabel ? <p className="text-xs text-destructive">{errorLabel}</p> : null}
+    </section>
   )
 }

@@ -223,12 +223,12 @@ Commit message: `docs(runs): close prm-spec-07 run plan; spec implementation sta
 
 ### Commit 5: Cache invalidators + portal P7/P8 + Spec #5 P10 picker
 
-- [ ] 5.1 Four cache invalidator subscribers
-- [ ] 5.2 Portal P7 list page
-- [ ] 5.3 Portal P8 create/edit form
-- [ ] 5.4 P10 case-study picker (replaces deferred message)
-- [ ] 5.5 Unit tests
-- [ ] 5.6 Gate green
+- [x] 5.1 Four cache invalidator subscribers — published / unpublished / updated (no-op on draft) / agency tier_changed (per-Agency tag); shared helper in `lib/libraryCache.ts`
+- [x] 5.2 Portal P7 list page (custom React; soft-delete + restore CTAs; includeDeleted toggle)
+- [x] 5.3 Portal P8 create/edit form (reusable `caseStudyForm.tsx` + new + [id] pages; plain Textarea + "Markdown supported" hint per R1)
+- [x] 5.4 P10 case-study picker (replaces deferred message; checkbox list capped at 5; auto-saves into `attached_case_study_ids` via existing draft endpoint)
+- [x] 5.5 Unit tests — marketingLibraryInvalidators.test.ts (8 cases inc. updated-on-draft no-op, missing-cache graceful, missing-agency_id loud-throw + production silent-noop)
+- [x] 5.6 Gate green — typecheck clean; jest 309/309 across 33 suites
 
 ### Commit 6: Final gate + PR
 
