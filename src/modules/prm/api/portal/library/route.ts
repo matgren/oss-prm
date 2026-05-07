@@ -15,18 +15,36 @@ import {
 } from '../../../lib/marketingMaterialService'
 import type { AgencyMemberService } from '../../../lib/agencyMemberService'
 import { Agency } from '../../../data/entities'
+import {
+  LIBRARY_CACHE_TAG,
+  LIBRARY_CACHE_TTL_MS,
+  agencyTierTag,
+  buildLibraryCacheKey,
+} from '../../../lib/libraryCache'
 
 /**
  * P11 — Portal Marketing Library (Spec #7 §3.4 / US7.2).
  *
  *   GET /api/prm/portal/library
  *
- * Server-applied tier gate (`min_tier_rank ≤ viewer_rank`). Cache tags:
- *   `prm:library`
- *   `prm:agency:${agencyId}:tier:${tier}`
- * Per-feature `cache.deleteByTags` invalidator subscribers (commit 5)
- * react to `prm.marketing_material.published / unpublished / updated`
- * and `prm.agency.tier_changed`.
+ * Server-applied tier gate (`min_tier_rank ≤ viewer_rank`) — defense-in-depth:
+ * the cache key includes the viewer's `agencyId` and `tier`, AND the SQL
+ * filter inside `MarketingMaterialService.listPublishedForViewer` re-applies
+ * the visibility rule on every cache miss. Either layer alone would be
+ * sufficient; both together survive a cache-key drift.
+ *
+ * Cache (Spec #7 §3.4):
+ *   key   = `prm:portal:library:${orgId}:${agencyId}:${tier|null}:${sha1(params)}`
+ *   tags  = [`prm:library`, `prm:agency:${agencyId}:tier:${tier|null}`]
+ *   ttl   = 15 minutes (`LIBRARY_CACHE_TTL_MS`)
+ *
+ * Per-feature `cache.deleteByTags` invalidator subscribers
+ * (`subscribers/marketing-library-{published,unpublished,updated}-invalidator.ts`,
+ * `subscribers/agency-tier-change-library-invalidator.ts`) react to
+ * `prm.marketing_material.{published,unpublished,updated}` and
+ * `prm.agency.tier_changed` and bust the matching tags.
+ *
+ * Cache reads/writes soft-fail to a direct DB query — never break the user.
  *
  * The `min_tier` field is NEVER exposed to the portal viewer — a viewer
  * below tier never sees the row at all; an at-tier viewer doesn't need
@@ -39,6 +57,60 @@ import { Agency } from '../../../data/entities'
 // customer JWT path can run.
 export const metadata = {
   GET: { requireAuth: false },
+}
+
+type LibraryResponseBody = {
+  ok: true
+  items: ReturnType<typeof toPublicLibraryDto>[]
+  facets: ReturnType<typeof computeFacets>
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
+type CacheLikeRW = {
+  get?: (key: string) => Promise<unknown>
+  set?: (
+    key: string,
+    value: unknown,
+    options?: { ttl?: number; tags?: string[] },
+  ) => Promise<unknown>
+}
+
+async function tryReadCache(
+  cache: CacheLikeRW | null,
+  key: string,
+): Promise<LibraryResponseBody | null> {
+  if (!cache || typeof cache.get !== 'function') return null
+  try {
+    const cached = await cache.get(key)
+    if (cached && typeof cached === 'object' && (cached as { ok?: unknown }).ok === true) {
+      return cached as LibraryResponseBody
+    }
+    return null
+  } catch (err) {
+    if (typeof console !== 'undefined') {
+      console.warn('[prm:portal:library] cache.get failed; falling through to DB', err)
+    }
+    return null
+  }
+}
+
+async function tryWriteCache(
+  cache: CacheLikeRW | null,
+  key: string,
+  body: LibraryResponseBody,
+  tags: string[],
+): Promise<void> {
+  if (!cache || typeof cache.set !== 'function') return
+  try {
+    await cache.set(key, body, { ttl: LIBRARY_CACHE_TTL_MS, tags })
+  } catch (err) {
+    if (typeof console !== 'undefined') {
+      console.warn('[prm:portal:library] cache.set failed; serving uncached response', err)
+    }
+  }
 }
 
 export async function GET(req: Request) {
@@ -61,6 +133,8 @@ export async function GET(req: Request) {
   const memberService = container.resolve('agencyMemberService') as AgencyMemberService
   const member = await memberService.findByCustomerUserId(auth.sub, { tenantId: auth.tenantId })
   if (!member) {
+    // Empty no-op response — intentionally NOT cached (no agencyId means
+    // we'd have to invent a synthetic key, and the response is cheap).
     return NextResponse.json({
       ok: true,
       items: [],
@@ -93,6 +167,25 @@ export async function GET(req: Request) {
   }
   const { page, pageSize, materialType, topics, audiences } = parsed.data
 
+  // Cache layer. Soft-fail at every point — the §8.4 perf model leans on
+  // the cache but correctness leans on the DB query + tier gate.
+  let cache: CacheLikeRW | null = null
+  try {
+    cache = container.resolve<CacheLikeRW>('cache')
+  } catch {
+    cache = null
+  }
+  const cacheKey = buildLibraryCacheKey({
+    orgId: auth.orgId,
+    agencyId: member.agencyId,
+    tier: viewerTier,
+    params: { page, pageSize, materialType, topics, audiences },
+  })
+  const cacheTags = [LIBRARY_CACHE_TAG, agencyTierTag(member.agencyId, viewerTier)]
+
+  const cached = await tryReadCache(cache, cacheKey)
+  if (cached) return NextResponse.json(cached)
+
   const service = container.resolve('marketingMaterialService') as MarketingMaterialService
   const { items, total } = await service.listPublishedForViewer(
     { organizationId: auth.orgId, viewerTier },
@@ -113,7 +206,7 @@ export async function GET(req: Request) {
   )
   const facets = computeFacets(allForFacets.items)
 
-  return NextResponse.json({
+  const body: LibraryResponseBody = {
     ok: true,
     items: items.map(toPublicLibraryDto),
     facets,
@@ -121,7 +214,12 @@ export async function GET(req: Request) {
     pageSize,
     total,
     totalPages: Math.max(1, Math.ceil(total / pageSize)),
-  })
+  }
+
+  // Fire-and-forget cache write — failure does not block the response.
+  await tryWriteCache(cache, cacheKey, body, cacheTags)
+
+  return NextResponse.json(body)
 }
 
 function computeFacets(rows: ReadonlyArray<{ materialType: string; topics: string[]; audiences: string[] }>) {
