@@ -1,12 +1,20 @@
-import { invalidateLibraryCache, type CacheLike } from '../lib/libraryCache'
+import {
+  allAgencyTierTags,
+  invalidateLibraryCache,
+  type CacheLike,
+} from '../lib/libraryCache'
 
 /**
  * `AgencyTierChangeLibraryInvalidator` — Spec #7 §4.3.
  *
  * Listens on `prm.agency.tier_changed` (Spec #1). When an Agency's tier
  * changes, the library cache for that Agency must be invalidated — the
- * visibility set may change. Tag invalidation is targeted to the Agency:
- *   `cache.deleteByTags(['prm:agency:${agency_id}:tier:*'])`
+ * visibility set may change. Tag invalidation is targeted to the Agency.
+ *
+ * `@open-mercato/cache.deleteByTags` does NOT support wildcards; tags are
+ * sha1-hashed and exact-matched. We enumerate every known tier tag for the
+ * agency (via `allAgencyTierTags`) so the subscriber works regardless of
+ * whether the payload carries the prior `fromTier`/`toTier` fields.
  *
  * Per spec §8.5 mitigation: the payload assertion is loud — if `agency_id`
  * is missing the subscriber throws (in non-production mode) so a Spec #1
@@ -48,5 +56,5 @@ export default async function handle(
   } catch {
     return
   }
-  await invalidateLibraryCache(cache, [`prm:agency:${agencyId}:tier:*`])
+  await invalidateLibraryCache(cache, allAgencyTierTags(agencyId))
 }
