@@ -66,5 +66,9 @@ The fake EM lives in the test file (or a sibling test helper) to keep it scoped 
 
 ### Phase 3: Wire-up + sanity checks
 
-- [ ] 3.1 Run `yarn jest src/modules/prm` green and `yarn typecheck` clean
-- [ ] 3.2 Open the PR and post the comprehensive summary comment
+- [x] 3.1 Run `yarn jest src/modules/prm` green (413/413 across 44 suites) and `yarn typecheck` clean (exit 0); `yarn build` also green — ce4881a
+- [x] 3.2 Open the PR (#15 — https://github.com/matgren/oss-prm/pull/15) and post the comprehensive summary comment
+
+## Changelog
+
+- 2026-05-07 — PR #15 opened against `develop`. `auto-review-pr` autofix pass returned APPROVED on first cycle (no findings). PR moved to `merge-queue`. Status: complete.
