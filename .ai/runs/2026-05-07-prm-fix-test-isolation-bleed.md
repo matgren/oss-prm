@@ -141,8 +141,8 @@ Note: brief listed `prm_wic_import_audit_logs` and `prm_service_idempotency_keys
 
 ### Phase 2: `resetPrmState()` helper
 
-- [ ] 2.1 Add `resetPrmState` to `fixtures.ts`
-- [ ] 2.2 Re-export from `testing/integration/index.ts`
+- [x] 2.1 Add `resetPrmState` to `fixtures.ts` — 470163b
+- [x] 2.2 Re-export from `testing/integration/index.ts` — 470163b
 
 ### Phase 3: Wire `beforeEach` into PRM Playwright specs
 
