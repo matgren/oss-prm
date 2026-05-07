@@ -73,24 +73,48 @@ If Phase 2 leaves any `instanceof PrmDomainError` sites unfixed (i.e. fix is one
 
 ### Phase 1: Reproduce + identify root cause
 
-- [ ] 1.1 Add temporary debug catch instrumentation to publish route
-- [ ] 1.2 Run failing test in isolation, capture actual error class/message
-- [ ] 1.3 Decide root cause (instanceof / upstream / other) — record in plan
-- [ ] 1.4 Remove debug instrumentation
+- [x] 1.1 Add temporary debug catch instrumentation to publish route
+- [x] 1.2 Run failing test in isolation, capture actual error class/message
+- [x] 1.3 Decide root cause (instanceof / upstream / other) — record in plan
+- [x] 1.4 Remove debug instrumentation
+
+**Root cause (1.3):** dual-loaded `PrmDomainError` class identity under Next.js
+Turbopack production bundling. The debug catch in the publish route printed:
+
+```
+ctor: 'PrmDomainError', name: 'PrmDomainError', isPrmDomainError: false
+stack: at RfpService.publish (chunks/ssr/_ai_tmp_..._0_5si~2._.js:8919:19)
+       at async POST          (chunks/[root-of-the-server]__0nr-1mv._.js:40263:24)
+```
+
+The thrown object IS a `PrmDomainError` (`err.name === 'PrmDomainError'`,
+`err.constructor.name === 'PrmDomainError'`, `err.code` + `err.status` set),
+but `err instanceof PrmDomainError` is `false` because Turbopack splits the
+service-side chunk (`ssr/_..._0_5si~2._.js`) and the route-side chunk
+(`[root-of-the-server]__0nr-1mv._.js`) — each chunk gets its own copy of the
+class, so the prototype chains diverge. Jest doesn't reproduce because
+ts-jest puts everything in one CommonJS module graph; production turbopack
+does not.
+
+**Fix decision:** introduce an `isPrmDomainError(err)` type guard in
+`src/modules/prm/lib/errors.ts` that uses a tag-based check (`name ===
+'PrmDomainError'` + structural sanity on `code` and `status`) instead of
+`instanceof`. Replace `err instanceof PrmDomainError` in every PRM route
+catch (39 sites). Same root cause, multiple sites — narrow per task brief.
 
 ### Phase 2: Apply narrowest fix
 
-- [ ] 2.1 Implement chosen fix at the right layer
-- [ ] 2.2 Sweep PRM routes for the same root-cause pattern (if applicable)
+- [x] 2.1 Implement chosen fix at the right layer — 8b28a86
+- [x] 2.2 Sweep PRM routes for the same root-cause pattern (if applicable) — 8b28a86
 
 ### Phase 3: Regression tests
 
-- [ ] 3.1 Unit test invoking the publish route handler directly, asserting body shape
-- [ ] 3.2 Helper-level test (if isPrmDomainError helper added) covering tag-based detection
+- [x] 3.1 Unit test invoking the publish route handler directly, asserting body shape — 8b28a86
+- [x] 3.2 Helper-level test (if isPrmDomainError helper added) covering tag-based detection — 8b28a86
 
 ### Phase 4: POST-MVP-FOLLOW-UPS entries
 
-- [ ] 4.1 Append test-isolation + integration-runner-env entries to POST-MVP-FOLLOW-UPS.md
+- [x] 4.1 Append test-isolation + integration-runner-env entries to POST-MVP-FOLLOW-UPS.md — 8b28a86
 
 ### Phase 5: Validation gate
 
