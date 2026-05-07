@@ -460,6 +460,23 @@ export class RfpService {
       } as any)
     }
 
+    // Cross-Agency CaseStudy reject (Spec #5 §3.2 / §9.3 #14).
+    //
+    // Spec #7 (CaseStudy module) has not yet shipped — there is no CaseStudy
+    // table to resolve `attached_case_study_ids` against, and no own-Agency
+    // ownership check we can perform. Until then, any non-empty list is a 400:
+    // contract surface preserved, picker UI deferred to a Spec #7 follow-up.
+    // Once Spec #7 ships, replace this guard with an ownership query that
+    // verifies every id resolves to a CaseStudy with `agency_id = current_agency_id`.
+    if (input.attached_case_study_ids && input.attached_case_study_ids.length > 0) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        'Case study attachments are not yet supported — the Case Studies module ships in a later spec.',
+        400,
+        { reason: 'case_study_module_not_shipped' },
+      )
+    }
+
     const previousHash = hashResponseContent(response)
     if (input.tech_experience !== undefined) {
       response.techExperience = input.tech_experience ?? null
@@ -490,6 +507,160 @@ export class RfpService {
     }
 
     return { response, emitted }
+  }
+
+  /**
+   * Portal-side: submit a draft response. `draft → submitted` transition.
+   *
+   * Guards (US5.4):
+   *   - RFP must exist + portal-visible.
+   *   - RFP.status must be `published` (challenge-round resubmits are Spec #6).
+   *   - Now must be ≤ deadline_to_respond (NULL deadline = no cutoff).
+   *   - Required fields: tech_experience + domain_experience non-empty.
+   *
+   * Author-scope (PartnerMember M2 cannot submit M1's draft) is enforced at
+   * the route layer — it requires the caller's role-slug context which lives
+   * with the request, not the entity.
+   *
+   * Idempotent for a row already in `submitted` — second call is a no-op
+   * (no event re-emit).
+   */
+  async submitResponse(
+    rfpId: string,
+    agencyId: string,
+    scope: { organizationId: string },
+  ): Promise<{ response: RfpResponse; isInitialSubmission: boolean }> {
+    const rfp = await this.em.findOne(
+      Rfp,
+      { id: rfpId, organizationId: scope.organizationId, deletedAt: null } as any,
+    )
+    if (!rfp) {
+      throw new PrmDomainError(PRM_ERROR_CODES.NOT_FOUND, 'RFP not found', 404)
+    }
+    if (rfp.status !== 'published') {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        `Cannot submit — RFP status is "${rfp.status}". Only "published" RFPs accept new submissions.`,
+        409,
+      )
+    }
+    if (rfp.deadlineToRespond && rfp.deadlineToRespond.getTime() < Date.now()) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        'RFP is no longer accepting responses',
+        400,
+      )
+    }
+    const response = await this.em.findOne(
+      RfpResponse,
+      { rfpId, agencyId, organizationId: scope.organizationId } as any,
+    )
+    if (!response) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.RFP_RESPONSE_NOT_FOUND,
+        'No draft to submit. Save a draft first.',
+        404,
+      )
+    }
+    if (response.status === 'submitted') {
+      // Idempotent — caller may retry on a flaky network.
+      return { response, isInitialSubmission: false }
+    }
+    if (!response.techExperience || response.techExperience.trim() === '') {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        'tech_experience is required to submit',
+        400,
+        { field: 'tech_experience' },
+      )
+    }
+    if (!response.domainExperience || response.domainExperience.trim() === '') {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        'domain_experience is required to submit',
+        400,
+        { field: 'domain_experience' },
+      )
+    }
+
+    const now = new Date()
+    response.status = 'submitted'
+    response.firstSubmittedAt = response.firstSubmittedAt ?? now
+    response.lastUpdatedAt = now
+    this.em.persist(response)
+    await this.em.flush()
+
+    await safeEmit('prm.rfp_response.submitted', {
+      rfp_response_id: response.id,
+      rfp_id: rfpId,
+      agency_id: agencyId,
+      submitted_by_member_id: response.submittedByMemberId,
+      is_initial_submission: true,
+    })
+
+    return { response, isInitialSubmission: true }
+  }
+
+  /**
+   * Portal-side: undo a `submitted → draft` transition (US5.4 step 5).
+   *
+   * Allowed only while RFP is `published` AND now ≤ deadline_to_respond.
+   * Idempotent: a row already in `draft` returns successfully without
+   * re-emitting `prm.rfp_response.unsubmitted`.
+   */
+  async unsubmitResponse(
+    rfpId: string,
+    agencyId: string,
+    args: { reason?: string },
+    scope: { organizationId: string },
+  ): Promise<{ response: RfpResponse; reverted: boolean }> {
+    const rfp = await this.em.findOne(
+      Rfp,
+      { id: rfpId, organizationId: scope.organizationId, deletedAt: null } as any,
+    )
+    if (!rfp) {
+      throw new PrmDomainError(PRM_ERROR_CODES.NOT_FOUND, 'RFP not found', 404)
+    }
+    if (rfp.status !== 'published') {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        `Cannot unsubmit — RFP status is "${rfp.status}". Only "published" RFPs allow unsubmit.`,
+        409,
+      )
+    }
+    if (rfp.deadlineToRespond && rfp.deadlineToRespond.getTime() < Date.now()) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        'Deadline passed — cannot unsubmit',
+        409,
+      )
+    }
+    const response = await this.em.findOne(
+      RfpResponse,
+      { rfpId, agencyId, organizationId: scope.organizationId } as any,
+    )
+    if (!response) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.RFP_RESPONSE_NOT_FOUND,
+        'No response to unsubmit',
+        404,
+      )
+    }
+    if (response.status === 'draft') {
+      return { response, reverted: false }
+    }
+    response.status = 'draft'
+    response.lastUpdatedAt = new Date()
+    this.em.persist(response)
+    await this.em.flush()
+
+    await safeEmit('prm.rfp_response.unsubmitted', {
+      rfp_response_id: response.id,
+      rfp_id: rfpId,
+      agency_id: agencyId,
+      reason: args.reason ?? null,
+    })
+    return { response, reverted: true }
   }
 
   private async loadRfpForWrite(rfpId: string, organizationId: string): Promise<Rfp> {

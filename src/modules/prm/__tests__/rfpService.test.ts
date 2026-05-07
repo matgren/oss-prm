@@ -472,6 +472,22 @@ describe('RfpService.upsertResponseDraft', () => {
     ).rejects.toMatchObject({ status: 409 })
   })
 
+  it('rejects any attached_case_study_ids until Spec #7 ships (§9.3 #14 surface)', async () => {
+    const { service, rfpId } = await setupPublishedRfp()
+    await expect(
+      service.upsertResponseDraft(
+        rfpId,
+        'agency-A',
+        'member-M1',
+        {
+          tech_experience: 'with attachments',
+          attached_case_study_ids: ['11111111-1111-4111-8111-111111111111'],
+        },
+        { organizationId: ORG },
+      ),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+
   it('rejects edits when the response is already submitted (defence-in-depth)', async () => {
     const { em, service, rfpId } = await setupPublishedRfp()
     await service.upsertResponseDraft(
@@ -491,5 +507,114 @@ describe('RfpService.upsertResponseDraft', () => {
         { organizationId: ORG },
       ),
     ).rejects.toMatchObject({ status: 409 })
+  })
+})
+
+describe('RfpService.submitResponse / unsubmitResponse', () => {
+  async function publishedWithDraft(
+    deadline: Date | null = null,
+    overrides: { techExperience?: string | null; domainExperience?: string | null } = {},
+  ): Promise<{ em: FakeEm; service: RfpService; rfpId: string }> {
+    const em = new FakeEm()
+    seedAgency(em, 'agency-A', 'ai_native')
+    const service = new RfpService(em as any)
+    const created = await service.createDraft(
+      makeCreateInput({ deadline_to_respond: deadline }),
+      { tenantId: TENANT, organizationId: ORG, userId: USER },
+    )
+    await service.publish(
+      created.id,
+      {},
+      { tenantId: TENANT, organizationId: ORG, userId: USER },
+    )
+    await service.upsertResponseDraft(
+      created.id,
+      'agency-A',
+      'member-M1',
+      {
+        tech_experience: overrides.techExperience ?? 'Built X for Y',
+        domain_experience: overrides.domainExperience ?? 'fintech 5y',
+        attached_case_study_ids: [],
+      },
+      { organizationId: ORG },
+    )
+    return { em, service, rfpId: created.id }
+  }
+
+  it('happy path: draft → submitted, stamps first_submitted_at, isInitialSubmission=true', async () => {
+    const { em, service, rfpId } = await publishedWithDraft()
+    const result = await service.submitResponse(rfpId, 'agency-A', { organizationId: ORG })
+    expect(result.response.status).toBe('submitted')
+    expect(result.response.firstSubmittedAt).toBeInstanceOf(Date)
+    expect(result.isInitialSubmission).toBe(true)
+    expect(em.responses[0]!.status).toBe('submitted')
+  })
+
+  it('idempotent re-submit returns isInitialSubmission=false (no event re-emit)', async () => {
+    const { service, rfpId } = await publishedWithDraft()
+    const a = await service.submitResponse(rfpId, 'agency-A', { organizationId: ORG })
+    const b = await service.submitResponse(rfpId, 'agency-A', { organizationId: ORG })
+    expect(a.isInitialSubmission).toBe(true)
+    expect(b.isInitialSubmission).toBe(false)
+    expect(b.response.status).toBe('submitted')
+  })
+
+  it('refuses submit with empty tech_experience (§9.3 #13)', async () => {
+    const { service, rfpId } = await publishedWithDraft(null, { techExperience: '' })
+    await expect(
+      service.submitResponse(rfpId, 'agency-A', { organizationId: ORG }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('refuses submit when deadline has passed (§9.3 #15)', async () => {
+    const past = new Date(Date.now() - 60_000)
+    const { service, rfpId } = await publishedWithDraft(past)
+    await expect(
+      service.submitResponse(rfpId, 'agency-A', { organizationId: ORG }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('refuses submit when RFP status is not published (e.g. scoring round)', async () => {
+    const { em, service, rfpId } = await publishedWithDraft()
+    em.rfps[0]!.status = 'scoring'
+    await expect(
+      service.submitResponse(rfpId, 'agency-A', { organizationId: ORG }),
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('unsubmit happy path: submitted → draft, emits prm.rfp_response.unsubmitted', async () => {
+    const { em, service, rfpId } = await publishedWithDraft()
+    await service.submitResponse(rfpId, 'agency-A', { organizationId: ORG })
+    const result = await service.unsubmitResponse(
+      rfpId,
+      'agency-A',
+      { reason: 'changed mind' },
+      { organizationId: ORG },
+    )
+    expect(result.response.status).toBe('draft')
+    expect(result.reverted).toBe(true)
+    expect(em.responses[0]!.status).toBe('draft')
+  })
+
+  it('refuses unsubmit when deadline has passed (§9.3 #18)', async () => {
+    const future = new Date(Date.now() + 60_000)
+    const { em, service, rfpId } = await publishedWithDraft(future)
+    await service.submitResponse(rfpId, 'agency-A', { organizationId: ORG })
+    em.rfps[0]!.deadlineToRespond = new Date(Date.now() - 60_000)
+    await expect(
+      service.unsubmitResponse(rfpId, 'agency-A', {}, { organizationId: ORG }),
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('idempotent unsubmit on a draft row returns reverted=false', async () => {
+    const { service, rfpId } = await publishedWithDraft()
+    const result = await service.unsubmitResponse(
+      rfpId,
+      'agency-A',
+      {},
+      { organizationId: ORG },
+    )
+    expect(result.reverted).toBe(false)
+    expect(result.response.status).toBe('draft')
   })
 })

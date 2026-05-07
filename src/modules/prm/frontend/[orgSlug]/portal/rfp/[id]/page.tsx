@@ -6,7 +6,8 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
-import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { apiCall, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 
 /**
  * P10 — Portal RFP detail (Spec #5 §3.2 / US5.3 + US5.4 + US5.5).
@@ -321,6 +322,7 @@ type ResponseSectionProps = {
 
 function ResponseSection({ rfpId, initialResponse, isResponseable, onChange }: ResponseSectionProps) {
   const t = useT()
+  const [response, setResponse] = React.useState<Response | null>(initialResponse)
   const [tech, setTech] = React.useState(initialResponse?.techExperience ?? '')
   const [domain, setDomain] = React.useState(initialResponse?.domainExperience ?? '')
   const [diff, setDiff] = React.useState(initialResponse?.differentiators ?? '')
@@ -329,9 +331,12 @@ function ResponseSection({ rfpId, initialResponse, isResponseable, onChange }: R
   )
   const [savedAt, setSavedAt] = React.useState<string | null>(initialResponse?.lastUpdatedAt ?? null)
   const [errorLabel, setErrorLabel] = React.useState<string | null>(null)
+  const [submitting, setSubmitting] = React.useState(false)
+  const [unsubmitting, setUnsubmitting] = React.useState(false)
 
-  const submitted = initialResponse?.status === 'submitted'
+  const submitted = response?.status === 'submitted'
   const editable = isResponseable && !submitted
+  const requiredFilled = tech.trim().length > 0 && domain.trim().length > 0
   const lastSentRef = React.useRef<string>(
     serializeDraft(
       initialResponse?.techExperience ?? '',
@@ -361,16 +366,18 @@ function ResponseSection({ rfpId, initialResponse, isResponseable, onChange }: R
           setSavedAt(res.lastUpdatedAt)
           setSavingState('saved')
           setErrorLabel(null)
-          onChange({
+          const updated: Response = {
             id: res.id,
             status: res.status,
             techExperience: tech,
             domainExperience: domain,
             differentiators: diff,
-            attachedCaseStudyIds: initialResponse?.attachedCaseStudyIds ?? [],
-            firstSubmittedAt: initialResponse?.firstSubmittedAt ?? null,
+            attachedCaseStudyIds: response?.attachedCaseStudyIds ?? [],
+            firstSubmittedAt: response?.firstSubmittedAt ?? null,
             lastUpdatedAt: res.lastUpdatedAt,
-          })
+          }
+          setResponse(updated)
+          onChange(updated)
         })
         .catch(() => {
           setErrorLabel(
@@ -380,7 +387,86 @@ function ResponseSection({ rfpId, initialResponse, isResponseable, onChange }: R
         })
     }, AUTO_SAVE_DEBOUNCE_MS)
     return () => window.clearTimeout(handle)
-  }, [tech, domain, diff, rfpId, editable, t, initialResponse, onChange])
+  }, [tech, domain, diff, rfpId, editable, t, response, onChange])
+
+  const handleSubmit = async () => {
+    setSubmitting(true)
+    try {
+      const result = await readApiResultOrThrow<{
+        ok: true
+        id: string
+        status: 'submitted'
+        firstSubmittedAt: string | null
+        lastUpdatedAt: string
+        isInitialSubmission: boolean
+      }>(`/api/prm/portal/rfp/${rfpId}/response/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const updated: Response = {
+        id: result.id,
+        status: result.status,
+        techExperience: tech,
+        domainExperience: domain,
+        differentiators: diff,
+        attachedCaseStudyIds: response?.attachedCaseStudyIds ?? [],
+        firstSubmittedAt: result.firstSubmittedAt,
+        lastUpdatedAt: result.lastUpdatedAt,
+      }
+      setResponse(updated)
+      onChange(updated)
+      flash(t('prm.portal.rfp.response.flash.submitted', 'Response submitted.'), 'success')
+    } catch (err) {
+      flash(
+        err instanceof Error
+          ? err.message
+          : t('prm.portal.rfp.response.flash.submitError', 'Submit failed.'),
+        'error',
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleUnsubmit = async () => {
+    setUnsubmitting(true)
+    try {
+      const result = await readApiResultOrThrow<{
+        ok: true
+        id: string
+        status: 'draft'
+        lastUpdatedAt: string
+        reverted: boolean
+      }>(`/api/prm/portal/rfp/${rfpId}/response/unsubmit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const updated: Response = {
+        id: result.id,
+        status: result.status,
+        techExperience: tech,
+        domainExperience: domain,
+        differentiators: diff,
+        attachedCaseStudyIds: response?.attachedCaseStudyIds ?? [],
+        firstSubmittedAt: response?.firstSubmittedAt ?? null,
+        lastUpdatedAt: result.lastUpdatedAt,
+      }
+      setResponse(updated)
+      onChange(updated)
+      flash(t('prm.portal.rfp.response.flash.unsubmitted', 'Response moved back to draft.'), 'success')
+    } catch (err) {
+      flash(
+        err instanceof Error
+          ? err.message
+          : t('prm.portal.rfp.response.flash.unsubmitError', 'Withdraw failed.'),
+        'error',
+      )
+    } finally {
+      setUnsubmitting(false)
+    }
+  }
 
   const savedAtLabel = savedAt
     ? t('prm.portal.rfp.response.savedAt', 'Last saved {time}', {
@@ -415,8 +501,8 @@ function ResponseSection({ rfpId, initialResponse, isResponseable, onChange }: R
           data-testid="rfp-response-locked"
         >
           {t('prm.portal.rfp.response.locked.submitted', 'Submitted on {date}. Withdraw before the deadline if you need to edit.', {
-            date: initialResponse?.firstSubmittedAt
-              ? new Date(initialResponse.firstSubmittedAt).toLocaleString()
+            date: response?.firstSubmittedAt
+              ? new Date(response.firstSubmittedAt).toLocaleString()
               : '—',
           })}
         </div>
@@ -461,15 +547,38 @@ function ResponseSection({ rfpId, initialResponse, isResponseable, onChange }: R
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" disabled data-testid="rfp-submit-cta">
-          {t('prm.portal.rfp.response.submit', 'Submit response')}
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'prm.portal.rfp.response.requiredHint',
-            'Technical and domain experience are required to submit.',
-          )}
-        </p>
+        {submitted ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={unsubmitting || !isResponseable}
+            onClick={handleUnsubmit}
+            data-testid="rfp-unsubmit-cta"
+          >
+            {unsubmitting
+              ? t('prm.portal.rfp.response.unsubmitting', 'Withdrawing…')
+              : t('prm.portal.rfp.response.unsubmit', 'Withdraw submission')}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            disabled={!editable || submitting || !requiredFilled}
+            onClick={handleSubmit}
+            data-testid="rfp-submit-cta"
+          >
+            {submitting
+              ? t('prm.portal.rfp.response.submitting', 'Submitting…')
+              : t('prm.portal.rfp.response.submit', 'Submit response')}
+          </Button>
+        )}
+        {!submitted ? (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'prm.portal.rfp.response.requiredHint',
+              'Technical and domain experience are required to submit.',
+            )}
+          </p>
+        ) : null}
       </div>
     </section>
   )
