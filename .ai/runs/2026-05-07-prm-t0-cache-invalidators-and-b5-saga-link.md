@@ -139,13 +139,13 @@ None — this PR uses only repository-internal references (the spec, the existin
 
 ### Phase 1: Cache invalidator subscribers + unit tests
 
-- [ ] 1.1 Create five subscriber files for agency cache invalidation
-- [ ] 1.2 Add unit tests at `agencyCacheInvalidators.test.ts`
-- [ ] 1.3 Run targeted invalidator unit tests
-- [ ] 1.4 Run `yarn typecheck`
-- [ ] 1.5 Run `yarn jest src/modules/prm`
-- [ ] 1.6 Run `yarn generate` to refresh subscriber index
-- [ ] 1.7 Commit Phase 1 (feat(prm): wire T0 agency cache invalidator subscribers)
+- [x] 1.1 Create five subscriber files for agency cache invalidation — ee897f6
+- [x] 1.2 Add unit tests at `agencyCacheInvalidators.test.ts` — ee897f6
+- [x] 1.3 Run targeted invalidator unit tests — 23/23 pass
+- [x] 1.4 Run `yarn typecheck` — clean
+- [x] 1.5 Run `yarn jest src/modules/prm` — 422/422 pass
+- [x] 1.6 Run `yarn generate` to refresh subscriber index — all 5 subscribers registered
+- [x] 1.7 Commit Phase 1 (feat(prm): wire T0 agency cache invalidator subscribers) — ee897f6
 
 ### Phase 2: B5 saga retry dashboard link + render test
 
