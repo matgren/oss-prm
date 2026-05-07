@@ -103,16 +103,16 @@ None. The fix is informed by:
 
 ### Phase 2: Ship the IT-9.4 integration test
 
-- [ ] 2.1 Copy TC-PRM-T2-004 spec from c54f4d6
-- [ ] 2.2 Un-fixme the test
-- [ ] 2.3 Remove stale STATUS comment block
-- [ ] 2.4 Run integration smoke (must pass)
-- [ ] 2.5 Commit Phase 2 (test(prm): un-fixme TC-PRM-T2-004 IT-9.4)
+- [x] 2.1 Copy TC-PRM-T2-004 spec from c54f4d6 — file already on develop (F3 fleet merged via 69f712f); copy was idempotent (byte-identical to develop's version)
+- [x] 2.2 Un-fixme the test — 8d6bac4
+- [x] 2.3 Remove stale STATUS comment block — 8d6bac4
+- [x] 2.4 Run integration smoke (must pass) — passed 979ms
+- [x] 2.5 Commit Phase 2 (test(prm): un-fixme TC-PRM-T2-004 IT-9.4) — 8d6bac4
 
 ### Phase 3: Tracker hygiene
 
-- [ ] 3.1 Strike IT-9.4 entry from POST-MVP-FOLLOW-UPS.md
-- [ ] 3.2 Commit Phase 3 (docs(postmvp): strike IT-9.4)
+- [x] 3.1 Strike IT-9.4 entry from POST-MVP-FOLLOW-UPS.md — 4e99973
+- [x] 3.2 Commit Phase 3 (docs(postmvp): strike IT-9.4) — 4e99973
 
 ### Phase 4: Validation gate + PR
 
