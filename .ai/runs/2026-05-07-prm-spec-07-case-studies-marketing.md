@@ -235,4 +235,4 @@ Commit message: `docs(runs): close prm-spec-07 run plan; spec implementation sta
 - [x] 6.1 Full gate green — typecheck=0, jest 33 suites / 309 tests, generate clean (`yarn mercato db generate` reports no changes). Integration `--no-reuse-env` fails at the existing Spec #5 migration step (`directory_organizations` FK ordering); not introduced by Spec #7.
 - [x] 6.2 Spec implementation-status section appended to SPEC-2026-04-23-case-studies-marketing.md §11
 - [x] 6.3 POST-MVP-FOLLOW-UPS "Spec #5 case-study picker" trimmed (commit 5)
-- [x] 6.4 Draft PR opened to `develop`
+- [x] 6.4 Draft PR opened to `develop` — https://github.com/matgren/oss-prm/pull/14
