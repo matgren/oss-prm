@@ -121,6 +121,18 @@ export async function POST(req: Request) {
     })
   }
 
+  // Migrate the CustomerUser to the Agency's Organization. In production the
+  // accept-invitation flow does this implicitly (`CustomerInvitationService`
+  // creates the user with `invitation.organizationId`, and the PRM invite
+  // route stamps `agency.organizationId` on the invitation). The test seam
+  // bypasses that path, so we mirror the post-accept state here — without it
+  // every portal route guarded by `agency.organizationId === auth.orgId`
+  // (e.g. `PATCH /api/prm/portal/agency/{id}/member/{memberId}`) returns 404.
+  if (customerUser.organizationId !== agency.organizationId) {
+    customerUser.organizationId = agency.organizationId
+    em.persist(customerUser)
+  }
+
   // Resolve and assign the customer role on CustomerUser (so the customer JWT
   // carries `partner_admin`/`partner_member` features end-to-end).
   const role = await findOneWithDecryption(

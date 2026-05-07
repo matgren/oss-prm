@@ -24,7 +24,15 @@ import { Prospect } from '../../../data/entities'
  *   GET  /api/prm/portal/prospects          → US3.3 own-agency list
  *   POST /api/prm/portal/prospects          → US3.1 register a Prospect
  */
-export const metadata = {}
+// Customer-portal route — auth is enforced inside the handler via
+// `requireCustomerAuth` (customer JWT). The framework `/api/[...slug]`
+// catch-all rejects requests without a *staff* JWT by default; setting
+// `requireAuth: false` on each method defers auth to the handler so the
+// customer JWT path can run.
+export const metadata = {
+  GET: { requireAuth: false },
+  POST: { requireAuth: false },
+}
 
 export function summariseProspect(p: Prospect, opts?: { canTransitionTo?: string[]; canEdit?: boolean }) {
   return {

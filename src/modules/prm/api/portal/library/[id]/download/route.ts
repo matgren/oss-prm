@@ -26,7 +26,14 @@ import { z } from 'zod'
  * the attachment (`/api/attachments/.../{file}`) — the route ACL on
  * that side rejects cross-tenant access.
  */
-export const metadata = {}
+// Customer-portal route — auth is enforced inside the handler via
+// `requireCustomerAuth` (customer JWT). The framework `/api/[...slug]`
+// catch-all rejects requests without a *staff* JWT by default; setting
+// `requireAuth: false` on each method defers auth to the handler so the
+// customer JWT path can run.
+export const metadata = {
+  GET: { requireAuth: false },
+}
 
 type RouteContext = { params: Promise<{ id: string }> | { id: string } }
 

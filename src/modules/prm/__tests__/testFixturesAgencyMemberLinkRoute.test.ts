@@ -190,6 +190,52 @@ describe('POST /api/prm/test-fixtures/agency-member-link', () => {
     expect(createdAgencyMember.activatedAt).toBeInstanceOf(Date)
   })
 
+  it('migrates the CustomerUser organizationId to the Agency organizationId', async () => {
+    // The PRM portal route guards (`agency.organizationId === auth.orgId`)
+    // require the customer's JWT `orgId` claim to match the agency's org. In
+    // production the accept-invitation flow does this implicitly; the test
+    // seam mirrors the post-accept state by writing
+    // `customerUser.organizationId = agency.organizationId` before flush.
+    process.env.OM_PRM_TEST_FIXTURES_ENABLED = '1'
+    getAuthFromRequestMock.mockResolvedValue({ tenantId: TENANT, orgId: ORG, sub: 'staff-1' })
+    findOneWithDecryptionMock
+      .mockResolvedValueOnce({
+        id: AGENCY,
+        tenantId: TENANT,
+        organizationId: 'agency-org-99', // distinct from staff `orgId`
+        status: 'active',
+      })
+      .mockResolvedValueOnce({ id: 'role-partner-admin', slug: 'partner_admin' })
+    const customerUser = { id: CUSTOMER_USER, tenantId: TENANT, organizationId: ORG }
+    containerEmFindOneMock
+      .mockResolvedValueOnce(customerUser)
+      .mockResolvedValueOnce(null) // no existing member
+      .mockResolvedValueOnce(null) // no existing role link
+
+    containerEmCreateMock.mockImplementation((cls: any, data: any) => {
+      if (cls?.name === 'AgencyMember') {
+        return { id: 'mem-new', ...data }
+      }
+      return { ...data }
+    })
+
+    const res = await POST(
+      makeRequest({
+        agencyId: AGENCY,
+        customerUserId: CUSTOMER_USER,
+        email: 'admin@example.test',
+        firstName: 'Adam',
+        lastName: 'Min',
+        roleSlug: 'partner_admin',
+      }),
+    )
+    expect(res.status).toBe(201)
+    // The persist call mutates the customerUser in-place before flush — assert
+    // the org field flipped to the agency's org.
+    expect(customerUser.organizationId).toBe('agency-org-99')
+    expect(containerEmFlushMock).toHaveBeenCalled()
+  })
+
   it('returns existing member with reused=true on second call (idempotent)', async () => {
     process.env.OM_PRM_TEST_FIXTURES_ENABLED = '1'
     getAuthFromRequestMock.mockResolvedValue({ tenantId: TENANT, orgId: ORG, sub: 'staff-1' })

@@ -296,9 +296,19 @@ export async function bootPartnerAgencyWithMembers(
     throw new Error('Staff token is missing tenantId; cannot boot partner agency')
   }
 
+  // Slug must satisfy `^[a-z0-9]+(?:-[a-z0-9]+)*$` (Spec #1 §3 invariant) — callers
+  // sometimes pass mixed-case suffixes (e.g. `${baseSuffix}-A`, `${baseSuffix}-B`)
+  // for human readability, so we normalize to lowercase + collapse non-slug chars
+  // to dashes here. Email + display name keep the original casing.
+  const slugSuffix = suffix
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
   const agencyId = await createAgencyFixture(request, staffToken, {
     name: `Portal Test Agency ${suffix}`,
-    slug: `portal-test-${suffix}`,
+    slug: `portal-test-${slugSuffix}`,
     tier,
   })
   if (options.onboarded !== false) {

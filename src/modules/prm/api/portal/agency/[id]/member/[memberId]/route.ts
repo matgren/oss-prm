@@ -15,7 +15,14 @@ import { summariseAgencyMember } from '../../../../../agency-member/route'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export const metadata = {}
+// Customer-portal route — auth is enforced inside the handler via
+// `requireCustomerAuth` (customer JWT). The framework `/api/[...slug]`
+// catch-all rejects requests without a *staff* JWT by default; setting
+// `requireAuth: false` on each method defers auth to the handler so the
+// customer JWT path can run.
+export const metadata = {
+  PATCH: { requireAuth: false },
+}
 
 export async function PATCH(
   req: Request,
