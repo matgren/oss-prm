@@ -586,3 +586,78 @@ export const listRfpsPortalSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
   tab: z.enum(['unread', 'responded', 'declined', 'all']).default('all'),
 })
+
+// ---------------------------------------------------------------------------
+// WIC ingestion (Spec #4 — wic-ingestion).
+// ---------------------------------------------------------------------------
+
+export const WIC_LEVELS = ['L1', 'L2', 'L3', 'L4'] as const
+export type WicLevel = (typeof WIC_LEVELS)[number]
+
+export const WIC_REJECTION_REASONS = [
+  'unknown_github_profile',
+  'ambiguous_github_profile',
+  'malformed_month',
+  'unknown_level',
+  'invalid_payload',
+] as const
+export type WicRejectionReason = (typeof WIC_REJECTION_REASONS)[number]
+
+export const WIC_RESOLUTION_ACTIONS = [
+  'accepted_after_fix',
+  'rolled_back',
+  'ignored',
+] as const
+export type WicResolutionAction = (typeof WIC_RESOLUTION_ACTIONS)[number]
+
+/**
+ * Envelope-level Zod schema for POST /api/prm/service/wic/imports/{batch_id}.
+ *
+ * Note: per §3.3, **row-level Zod failures are NOT 422s** — they become per-row audit-log
+ * entries with `rejection_reason='invalid_payload'`. Only envelope-shape failures (e.g.
+ * `rows` not an array, missing `script_version`) trigger 422 here. Use
+ * `wicImportRowEnvelopeSchema.safeParse` per row for permissive row-level checks.
+ */
+export const wicImportEnvelopeSchema = z.object({
+  script_version: z.string().min(1, 'script_version is required'),
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'month must be YYYY-MM'),
+  rows: z.array(z.unknown()).max(10_000, 'rows[] limit is 10,000 per batch'),
+})
+export type WicImportEnvelope = z.infer<typeof wicImportEnvelopeSchema>
+
+/**
+ * Per-row Zod schema. Failures here lead to per-row rejection (NOT 422). The route handler
+ * runs `wicImportRowSchema.safeParse(row)` for each row and routes the failure into
+ * `WicImportAuditLog` with `rejection_reason='invalid_payload'`.
+ */
+export const wicImportRowSchema = z.object({
+  row_index: z.coerce.number().int().min(0),
+  github_profile: z.string().trim().min(1).max(120),
+  person_display_name: z.string().trim().max(200).optional().nullable(),
+  contribution_month: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'contribution_month must be YYYY-MM-DD'),
+  wic_level: z.string().trim().min(1).max(8),
+  wic_score: z.coerce.number().finite(),
+  contribution_count: z.coerce.number().int().min(0).default(0),
+  bounty_bonus: z.coerce.number().finite().default(0),
+  why_bonus: z.string().max(2000).optional().nullable(),
+  what_included: z.string().max(8000).optional().nullable(),
+  what_excluded: z.string().max(8000).optional().nullable(),
+  computed_at: z.string().datetime({ offset: true }),
+})
+export type WicImportRow = z.infer<typeof wicImportRowSchema>
+
+/** Helper: returns true iff `YYYY-MM-DD` is the first day of its month. */
+export function isFirstOfMonth(isoDate: string): boolean {
+  const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return false
+  const day = Number.parseInt(m[3]!, 10)
+  return day === 1
+}
+
+/** Helper: extracts YYYY-MM from a YYYY-MM-DD string. */
+export function monthFromDate(isoDate: string): string | null {
+  const m = isoDate.match(/^(\d{4}-\d{2})-\d{2}$/)
+  return m ? m[1]! : null
+}
