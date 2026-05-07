@@ -12,6 +12,9 @@ import {
   type WorkflowDefinitionData,
 } from '@open-mercato/core/modules/workflows/data/entities'
 import { seedTopicsDictionary } from './lib/topicsDictionarySeed'
+import { seedIndustriesDictionary } from './lib/industriesDictionarySeed'
+import { seedServicesDictionary } from './lib/servicesDictionarySeed'
+import { seedTechnologiesDictionary } from './lib/technologiesDictionarySeed'
 
 /**
  * PRM module setup.
@@ -275,12 +278,21 @@ export const setup: ModuleSetupConfig = {
     await seedPartnerRoles(em as EntityManager, { tenantId, organizationId })
     await seedAttributionSagaWorkflow(em as EntityManager, { tenantId, organizationId })
     await seedTopicsDictionary(em as EntityManager, { tenantId, organizationId })
+    // Spec #1 §1.2 / §2 / §5.5 M3 / §11: Agency profile picklists.
+    // Independent dictionaries — order is immaterial. All idempotent.
+    await seedIndustriesDictionary(em as EntityManager, { tenantId, organizationId })
+    await seedServicesDictionary(em as EntityManager, { tenantId, organizationId })
+    await seedTechnologiesDictionary(em as EntityManager, { tenantId, organizationId })
   },
 
   async seedDefaults({ em, tenantId, organizationId }) {
     await seedPartnerRoles(em as EntityManager, { tenantId, organizationId })
     await seedAttributionSagaWorkflow(em as EntityManager, { tenantId, organizationId })
     await seedTopicsDictionary(em as EntityManager, { tenantId, organizationId })
+    // Spec #1 §1.2 / §2 / §5.5 M3 / §11: Agency profile picklists.
+    await seedIndustriesDictionary(em as EntityManager, { tenantId, organizationId })
+    await seedServicesDictionary(em as EntityManager, { tenantId, organizationId })
+    await seedTechnologiesDictionary(em as EntityManager, { tenantId, organizationId })
   },
 }
 
