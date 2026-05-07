@@ -240,6 +240,14 @@ export const setup: ModuleSetupConfig = {
       // Spec #5: OM PartnerOps owns RFP authoring + broadcast.
       'prm.rfp.create',
       'prm.rfp.publish',
+      // Spec #6: OM PartnerOps owns scoring, selection, and lifecycle. The
+      // `prm.rfp.reopen` permission carries the invariant #17 hard guard
+      // (`Path-B signed deal locks the RFP`) — even granting the feature
+      // does not bypass the runtime check.
+      'prm.rfp.score',
+      'prm.rfp.select',
+      'prm.rfp.close',
+      'prm.rfp.reopen',
     ],
   },
 

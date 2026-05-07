@@ -63,6 +63,14 @@ export const features = [
   // broadcast; v1 grants both to the OM PartnerOps `employee` staff role.
   { id: 'prm.rfp.create', title: 'Create + edit RFP drafts (B7)', module: 'prm' },
   { id: 'prm.rfp.publish', title: 'Publish + unpublish RFPs (B7)', module: 'prm' },
+
+  // RFP scoring & selection (Spec #6 — rfp-scoring-selection).
+  // Backend-only gates. `score` covers both manual record + LLM-assist draft.
+  // `reopen` carries the invariant #17 hard guard — no role bypass.
+  { id: 'prm.rfp.score', title: 'Score RFPResponse + LLM-assist draft (B7)', module: 'prm' },
+  { id: 'prm.rfp.select', title: 'Commit RFP winner selection (B7)', module: 'prm' },
+  { id: 'prm.rfp.close', title: 'Close an RFP (B7)', module: 'prm' },
+  { id: 'prm.rfp.reopen', title: 'Re-open a closed/selected RFP (B7) — Path-B-locked guard applies', module: 'prm' },
 ] as const
 
 export type PrmFeatureId = (typeof features)[number]['id']

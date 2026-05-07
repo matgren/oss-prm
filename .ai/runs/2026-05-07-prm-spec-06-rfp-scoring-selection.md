@@ -191,18 +191,18 @@ Commit: `docs(runs): close prm-spec-06 run plan; spec implementation status`
 
 ### Commit 0: Run plan
 
-- [ ] 0.1 Plan committed
+- [x] 0.1 Plan committed
 
 ### Commit 1: Entity + migration + validators + ACL features
 
-- [ ] 1.1 RfpResponseScore entity in entities.ts
-- [ ] 1.2 Migration (base) + indexes companion
-- [ ] 1.3 Add `reopened_deadline_at` column on prm_rfps + extend status enum to include `reopened`
-- [ ] 1.4 Validators (recordScore, selectWinner, closeRfp, reopenRfp)
-- [ ] 1.5 ACL features
-- [ ] 1.6 Error codes + events
-- [ ] 1.7 Unit tests
-- [ ] 1.8 typecheck + jest + generate green
+- [x] 1.1 RfpResponseScore entity in entities.ts
+- [x] 1.2 Migration (base) + indexes companion
+- [x] 1.3 Add `reopened_deadline_at` column on prm_rfps + extend status enum to include `reopened`
+- [x] 1.4 Validators (recordScore, selectWinner, closeRfp, reopenRfp)
+- [x] 1.5 ACL features
+- [x] 1.6 Error codes + events
+- [x] 1.7 Unit tests (18 cases / rfpScoreValidators.test.ts)
+- [x] 1.8 typecheck + jest 280/280 + generate green
 
 ### Commit 2: Append-only repo + record-score API
 

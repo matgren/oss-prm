@@ -461,7 +461,14 @@ export function isAttributionFrozen(status: string): boolean {
  * RFP broadcast & response (Spec #5)                                  *
  * ------------------------------------------------------------------ */
 
-export const RFP_STATUSES = ['draft', 'published', 'scoring', 'selection_made', 'closed'] as const
+export const RFP_STATUSES = [
+  'draft',
+  'published',
+  'scoring',
+  'selection_made',
+  'closed',
+  'reopened',
+] as const
 export type RfpStatus = (typeof RFP_STATUSES)[number]
 
 export const RFP_ELIGIBILITY_FILTERS = ['all_active', 'by_min_tier', 'explicit'] as const
@@ -586,6 +593,76 @@ export const listRfpsPortalSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
   tab: z.enum(['unread', 'responded', 'declined', 'all']).default('all'),
 })
+
+/* ------------------------------------------------------------------ *
+ * RFP scoring + selection (Spec #6 — rfp-scoring-selection)            *
+ * ------------------------------------------------------------------ */
+
+export const RFP_RESPONSE_SCORE_SOURCES = ['manual', 'llm_assisted'] as const
+export type RfpResponseScoreSource = (typeof RFP_RESPONSE_SCORE_SOURCES)[number]
+
+/**
+ * `POST /api/prm/rfp/{id}/responses/{rid}/score` payload (US5.6).
+ *
+ * Cross-field invariants:
+ *   - `source = 'llm_assisted'` ↔ `llm_model_id` non-null (Zod refine + DB
+ *     CHECK as defence-in-depth).
+ *   - `change_reason` is application-required iff version > 1 — server
+ *     enforces against existing rows; the schema accepts it as optional.
+ */
+export const recordRfpResponseScoreSchema = z
+  .object({
+    tech_fit_score: z.number().int().min(0).max(5),
+    domain_fit_score: z.number().int().min(0).max(5),
+    optional_score: z.number().int().min(0).max(5).nullable(),
+    include_optional: z.boolean(),
+    reasoning: z.string().min(10).max(8_000),
+    source: z.enum(RFP_RESPONSE_SCORE_SOURCES),
+    llm_model_id: z.string().min(1).max(256).nullable(),
+    change_reason: z.string().min(5).max(2_000).optional(),
+  })
+  .refine(
+    (d) => (d.source === 'manual' ? d.llm_model_id === null : d.llm_model_id !== null),
+    { message: 'llm_model_id must be present iff source = llm_assisted', path: ['llm_model_id'] },
+  )
+
+export type RecordRfpResponseScoreInput = z.infer<typeof recordRfpResponseScoreSchema>
+
+/**
+ * `POST /api/prm/rfp/{id}/select` payload (US5.7).
+ */
+export const selectRfpWinnerSchema = z.object({
+  winner_rfp_response_id: z.string().uuid(),
+  selection_reasoning: z.string().min(10).max(8_000),
+})
+
+export type SelectRfpWinnerInput = z.infer<typeof selectRfpWinnerSchema>
+
+/**
+ * `POST /api/prm/rfp/{id}/close` payload (US5.9).
+ *
+ * `close_reason` is application-required iff RFP has no selection at the
+ * time of close — server enforces against the persisted state.
+ */
+export const closeRfpSchema = z.object({
+  close_reason: z.string().min(5).max(2_000).optional(),
+})
+
+export type CloseRfpInput = z.infer<typeof closeRfpSchema>
+
+/**
+ * `POST /api/prm/rfp/{id}/reopen` payload (US5.10).
+ *
+ * `reopened_deadline_at` is the agency-side deadline by which revised
+ * responses must be submitted. The scheduled `RfpReopenedDeadlineExpiry`
+ * worker auto-transitions the RFP back to `scoring` when this passes.
+ */
+export const reopenRfpSchema = z.object({
+  reopen_reason: z.string().min(10).max(2_000),
+  reopened_deadline_at: z.coerce.date(),
+})
+
+export type ReopenRfpInput = z.infer<typeof reopenRfpSchema>
 
 // ---------------------------------------------------------------------------
 // WIC ingestion (Spec #4 — wic-ingestion).
