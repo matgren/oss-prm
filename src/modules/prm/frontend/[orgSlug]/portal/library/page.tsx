@@ -3,6 +3,7 @@ import * as React from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { ErrorMessage } from '@open-mercato/ui/backend/detail'
+import { PortalEmptyState } from '@open-mercato/ui/portal/components/PortalEmptyState'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
 /**
@@ -212,17 +213,13 @@ export default function PortalLibraryPage() {
         <div className="space-y-3">
           {loading ? <div className="text-sm text-muted-foreground">Loading…</div> : null}
           {!loading && items.length === 0 ? (
-            <div className="rounded-md border bg-muted/30 p-6 text-sm">
-              <h3 className="font-medium">
-                {t('prm.portal.library.empty.title', 'Nothing here yet')}
-              </h3>
-              <p className="text-muted-foreground">
-                {t(
-                  'prm.portal.library.empty.body',
-                  'Marketing publishes new resources regularly. Check back soon.',
-                )}
-              </p>
-            </div>
+            <PortalEmptyState
+              title={t('prm.portal.library.empty.title', 'Nothing here yet')}
+              description={t(
+                'prm.portal.library.empty.body',
+                'Marketing publishes new resources regularly. Check back soon.',
+              )}
+            />
           ) : null}
           <ul className="grid gap-3 md:grid-cols-2">
             {items.map((item) => (

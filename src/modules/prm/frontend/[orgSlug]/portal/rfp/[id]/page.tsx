@@ -3,6 +3,7 @@ import * as React from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { Alert, AlertDescription } from '@open-mercato/ui/primitives/alert'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
@@ -198,25 +199,22 @@ export default function PortalRfpDetailPage() {
       </header>
 
       {declined ? (
-        <div
-          className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
-          data-testid="rfp-declined-notice"
-        >
-          <p>
+        <Alert variant="warning" data-testid="rfp-declined-notice">
+          <AlertDescription>
             {broadcast.declinedAt
               ? t('prm.portal.rfp.detail.declinedNoticeOn', 'You declined this RFP on {date}.', {
                   date: formatDate(broadcast.declinedAt),
                 })
               : t('prm.portal.rfp.detail.declinedNotice', 'You declined this RFP.')}
-          </p>
-          {broadcast.declineReason ? (
-            <p className="mt-1 text-xs">
-              {t('prm.portal.rfp.detail.declinedNoticeWithReason', 'Reason: {reason}', {
-                reason: broadcast.declineReason,
-              })}
-            </p>
-          ) : null}
-        </div>
+            {broadcast.declineReason ? (
+              <span className="mt-1 block text-xs">
+                {t('prm.portal.rfp.detail.declinedNoticeWithReason', 'Reason: {reason}', {
+                  reason: broadcast.declineReason,
+                })}
+              </span>
+            ) : null}
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {lockReason && !declined ? (
