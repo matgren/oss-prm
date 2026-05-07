@@ -17,6 +17,8 @@
  *   import { getAuthToken } from '@open-mercato/core/testing/integration'
  */
 export {
+  // Cross-spec test isolation (POST-MVP follow-up — TRUNCATE PRM slice between specs).
+  resetPrmState,
   createAgencyFixture,
   deleteAgencyIfExists,
   setAgencyOnboardedFixture,

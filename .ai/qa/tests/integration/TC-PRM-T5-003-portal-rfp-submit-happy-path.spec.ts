@@ -5,6 +5,7 @@ import {
   createRfpDraftFixture,
   customerApiRequest,
   publishRfpFixture,
+  resetPrmState,
 } from '@/modules/prm/testing/integration'
 
 /**
@@ -27,6 +28,12 @@ import {
  * elevates it to a real HTTP-contract assertion.
  */
 test.describe('TC-PRM-T5-003: Spec #5 P10 submit happy path (§9.3)', () => {
+  // Cross-spec test isolation — TRUNCATE PRM tables before each test.
+  test.beforeEach(async ({ request }) => {
+    const token = await getAuthToken(request, 'admin')
+    await resetPrmState(request, token)
+  })
+
   test('PartnerAdmin can draft + submit a response on a broadcast RFP (idempotent)', async ({
     request,
   }) => {

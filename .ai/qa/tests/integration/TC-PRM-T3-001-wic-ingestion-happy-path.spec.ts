@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { apiRequest, getAuthToken, readJsonSafe } from '@open-mercato/core/testing/integration'
-import { createAgencyFixture, deleteAgencyIfExists } from '@/modules/prm/testing/integration'
+import { createAgencyFixture, deleteAgencyIfExists, resetPrmState } from '@/modules/prm/testing/integration'
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000'
 
@@ -106,6 +106,12 @@ async function inviteMemberWithGithub(
 }
 
 test.describe('TC-PRM-T3-001: WIC ingestion happy path + security guards', () => {
+  // Cross-spec test isolation — TRUNCATE PRM tables before each test.
+  test.beforeEach(async ({ request }) => {
+    const token = await getAuthToken(request, 'admin')
+    await resetPrmState(request, token)
+  })
+
   test('T1 — POST batch accepts a row that resolves to an active member (happy path)', async ({ request }) => {
     const token = await getAuthToken(request, 'admin')
     const suffix = Date.now().toString(36)

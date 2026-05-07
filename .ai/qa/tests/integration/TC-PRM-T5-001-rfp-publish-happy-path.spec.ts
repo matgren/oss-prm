@@ -5,6 +5,7 @@ import {
   setAgencyOnboardedFixture,
   createRfpDraftFixture,
   publishRfpFixture,
+  resetPrmState,
   unpublishRfpFixture,
 } from '@/modules/prm/testing/integration'
 
@@ -26,6 +27,15 @@ import {
  * the RFP API. No UI interaction — these are HTTP-level contract tests.
  */
 test.describe('TC-PRM-T5-001: RFP publish + unpublish happy paths (§9.1 #1, #2, #3, #5)', () => {
+  // Reset every PRM table between tests so cross-spec Agency leaks (T0/T1/T2/T3
+  // each seed onboarded ai_native+ Agencies and have no teardown) don't inflate
+  // the eligibility evaluator's broadcast set. Without this, §9.1 #1 fails with
+  // 4 broadcasted agencies (the 2 just-seeded by this test PLUS 2 leftovers).
+  test.beforeEach(async ({ request }) => {
+    const token = await getAuthToken(request, 'admin')
+    await resetPrmState(request, token)
+  })
+
   test('§9.1 #1 — by_min_tier publish broadcasts to ≥ ai_native (A + B), excludes C', async ({ request }) => {
     const token = await getAuthToken(request, 'admin')
     const suffix = Date.now().toString(36)

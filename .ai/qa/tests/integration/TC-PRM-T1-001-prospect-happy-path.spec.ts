@@ -5,6 +5,7 @@ import {
   createProspectFixture,
   customerApiRequest,
   getProspectViaPortalFixture,
+  resetPrmState,
   transitionProspectViaPortalFixture,
 } from '@/modules/prm/testing/integration'
 
@@ -32,6 +33,12 @@ import {
  * shipped) and outside this smoke's scope.
  */
 test.describe('TC-PRM-T1-001: Spec #2 §9 IT-9.1 — Prospect register/transition/widget happy path', () => {
+  // Cross-spec test isolation — TRUNCATE PRM tables before each test.
+  test.beforeEach(async ({ request }) => {
+    const token = await getAuthToken(request, 'admin')
+    await resetPrmState(request, token)
+  })
+
   test('PartnerAdmin registers Prospect, transitions qualified→contacted, dashboard reflects', async ({
     request,
   }) => {

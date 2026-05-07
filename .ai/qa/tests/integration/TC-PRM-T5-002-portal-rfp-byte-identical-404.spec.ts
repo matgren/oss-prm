@@ -5,6 +5,7 @@ import {
   createRfpDraftFixture,
   customerApiRequest,
   publishRfpFixture,
+  resetPrmState,
 } from '@/modules/prm/testing/integration'
 
 /**
@@ -44,6 +45,12 @@ import {
 const FAKE_UUID = '00000000-0000-4000-8000-000000000000'
 
 test.describe('TC-PRM-T5-002: Spec #5 invariant #15 — byte-identical 404 (§9.2 #7)', () => {
+  // Cross-spec test isolation — TRUNCATE PRM tables before each test.
+  test.beforeEach(async ({ request }) => {
+    const token = await getAuthToken(request, 'admin')
+    await resetPrmState(request, token)
+  })
+
   test('GET /api/prm/portal/rfp/{not-broadcast-to-me} body == GET /api/prm/portal/rfp/{fake UUID} body', async ({
     request,
   }) => {

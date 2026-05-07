@@ -6,6 +6,7 @@ import {
   createLicenseDealFixture,
   deleteAgencyIfExists,
   deleteLicenseDealIfExists,
+  resetPrmState,
 } from '@/modules/prm/testing/integration'
 
 /**
@@ -31,6 +32,12 @@ import {
  *     redirect path)
  */
 test.describe('TC-PRM-T0-002: PRM create-flow UI smoke', () => {
+  // Cross-spec test isolation — TRUNCATE PRM tables before each test.
+  test.beforeEach(async ({ request }) => {
+    const token = await getAuthToken(request, 'admin')
+    await resetPrmState(request, token)
+  })
+
   test('Agency create UI flow reaches detail page (no loading hang)', async ({ page, request }) => {
     await login(page, 'admin')
 
