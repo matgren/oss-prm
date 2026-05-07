@@ -59,6 +59,14 @@ const events = [
   { id: 'prm.wic_import.row_rejected', label: 'WIC import row rejected (Anti-Corruption Layer)', entity: 'wic_import', category: 'system' },
   { id: 'prm.wic_import.batch_completed', label: 'WIC import batch completed', entity: 'wic_import', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.wic_import.resolved', label: 'WIC import audit-log row resolved (B10)', entity: 'wic_import', category: 'system' },
+  // Compensation events for the three undoable WIC commands (Spec #4 §4.1 + §10.7
+  // "undo by default"). Spec §4.1 names `prm.wic.contribution_recorded.undone`
+  // explicitly; the other two ".undone" suffixes mirror the same convention so
+  // ops + cache invalidators have a uniform surface to subscribe to.
+  // ADDITIVE — frozen-list rule allows additive changes to the cross-spec event surface.
+  { id: 'prm.wic.contribution_recorded.undone', label: 'WIC contribution recorded — undone (compensation)', entity: 'wic_contribution', category: 'system', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.wic.contribution_superseded.undone', label: 'WIC contribution superseded — undone (compensation)', entity: 'wic_contribution', category: 'system', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.wic_import.resolved.undone', label: 'WIC import audit-log row resolution — undone (compensation)', entity: 'wic_import', category: 'system' },
 
   // RFP broadcast & response (Spec #5 — rfp-broadcast-response).
   // Cross-spec contract (FROZEN): Spec #6 subscribes to `prm.rfp_response.submitted` for
