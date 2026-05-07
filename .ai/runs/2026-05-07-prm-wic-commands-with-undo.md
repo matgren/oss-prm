@@ -109,9 +109,9 @@ Non-goals (do NOT touch):
 
 ### Phase 4: Service + route refactor
 
-- [ ] 4.1 Refactor `wicImportService.ts` to delegate to commands; remove v2-deferral comment
-- [ ] 4.2 Refactor audit-log resolve route to invoke `ResolveWicImportAuditLogCommand.execute`
-- [ ] 4.3 Verify 482-baseline tests still pass
+- [x] 4.1 Refactor `wicImportService.ts` to delegate to commands; remove v2-deferral comment — 791d401
+- [x] 4.2 Refactor audit-log resolve route to invoke `ResolveWicImportAuditLogCommand.execute` — 791d401
+- [x] 4.3 Verify 482-baseline tests still pass (full PRM 510 = 482 + 28 new) — 791d401
 
 ### Phase 5: Validation gate + PR
 
