@@ -46,13 +46,13 @@ Wave 1 in flight: F1 covers T0 IT-2..6, F2 covers T1 IT-9.2..9.8, F3 covers T2 I
 ### T1 WIP Scoreboard (SPEC-2026-04-23-wip-scoreboard.md §9)
 
 - ~~**IT-9.1 — Register → transition → widget update**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T1-001-prospect-happy-path.spec.ts` (P5 register + P6 transitions qualified→contacted + P2 dashboard aggregate reflects WIP yearly count + tier descriptor).
-- **IT-9.2 — Invariant #12 enforcement** — Illegal transition blocked with 409. Owner: QA team. Effort: per-test.
-- **IT-9.3 — Invariant #1 (`registered_at` immutability)** — PATCH with `registered_at` rejected. Owner: QA team. Effort: per-test.
-- **IT-9.4 — Projection consistency** — `ProspectCandidateIndex` keys match aggregate after edit + soft-delete. Owner: QA team. Effort: per-test.
-- **IT-9.5 — Tenant isolation** — Cross-agency Prospect leak blocked. Owner: QA team. Effort: per-test.
-- **IT-9.6 — PartnerMember author-scope** — Non-author cannot transition another member's Prospect. Owner: QA team. Effort: per-test.
-- **IT-9.7 — Agency `historical` cascade rejection** — POST Prospect on historical agency → 409. Owner: QA team. Effort: per-test.
-- **IT-9.8 — Dashboard widgets render correctly** — WIP / WIC / tier widgets with seeded data. Owner: QA team. Effort: per-test.
+- ~~**IT-9.2 — Invariant #12 enforcement**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T1-002-invariant-12-illegal-transition.spec.ts` (illegal `new→contacted` and terminal-state `lost→qualified` both return 409 `invalid_transition` with `{ fromStatus, toStatus }` details).
+- ~~**IT-9.3 — Invariant #1 (`registered_at` immutability)**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T1-003-registered-at-immutable.spec.ts` (camelCase + snake_case PATCH smuggling rejected with 400 `registered_at_immutable`; field byte-identical post-attempt).
+- ~~**IT-9.4 — Projection consistency**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T1-004-projection-consistency.spec.ts` (`prm_prospect_candidate_index` normalized keys + `current_status` mirror tracked through register + edit + transition via the B4 keyed-search route).
+- ~~**IT-9.5 — Tenant isolation**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T1-005-tenant-isolation.spec.ts` (cross-agency GET / PATCH transition / PATCH edit all return 404 `prospect_not_found`; portal list never includes the other agency's row).
+- ~~**IT-9.6 — PartnerMember author-scope**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T1-006-partner-member-author-scope.spec.ts` (invariant #12 C4: non-author member transition + edit both 403 `not_author_or_admin`; admin can transition; member can transition own-authored prospect).
+- ~~**IT-9.7 — Agency `historical` cascade rejection**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T1-007-historical-cascade-rejection.spec.ts` (post-historical POST `/api/prm/portal/prospects` returns 409 `agency_historical`).
+- ~~**IT-9.8 — Dashboard widgets render correctly**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T1-008-dashboard-widgets-render.spec.ts` (WIP yearly/monthly/byStatus exclude `lost` per invariant #14; WIC awaiting-shape descriptor; tier descriptor advertises `next` for `om_agency`).
 - **IT-9.9 — Cache invalidation** — *Blocked on the WIC dashboard cache wrapper trigger above.* Cache tag invalidated on transition. Owner: QA team. Effort: per-test.
 
 ### T2 Attribution Loop (SPEC-2026-04-23-attribution-loop.md §9)
