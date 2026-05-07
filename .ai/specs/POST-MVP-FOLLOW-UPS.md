@@ -35,15 +35,30 @@ Items here aren't owed work — they're triggers. Add a compound index / cache l
 
 Items here are cosmetic DS-compliance gaps (color tokens, text sizes, spacing). Bundle with adjacent UI work; not worth standalone fix commits.
 
-- **Hardcoded amber banner palette** — `border-amber-300 bg-amber-50 text-amber-900` for historical / lost-reason banners. 5 instances across `src/modules/prm/frontend/[orgSlug]/portal/dashboard/page.tsx:94`, `…/portal/agency/page.tsx:35`, `…/portal/members/page.tsx:97`, `…/portal/prospects/[id]/page.tsx:206`, `src/modules/prm/backend/license-deals/[id]/page.tsx:312`. Replace with semantic warning tokens once they exist in this OM version. Origin: T0/T1/T2 mixed. Effort: S.
-- **Hardcoded emerald onboarding chips** — `bg-emerald-50 text-emerald-800` on Contract / NDA / Onboarded chips. 3 instances in `src/modules/prm/frontend/[orgSlug]/portal/agency/page.tsx:138-140`. Migrate to a `StatusBadge` once a success token exists. Origin: T0. Effort: S.
-- **Hardcoded red LOST badge** — `bg-red-100 text-red-700` on the candidate "LOST" badge in `src/modules/prm/backend/license-deals/[id]/page.tsx:347`. Migrate to a destructive status token / `StatusBadge`. Origin: T2. Effort: S.
-- **Hardcoded `text-rose-700` error label** — was inlined as `<div className="… text-rose-700">{error}</div>` in 5 portal pages; the four critical ones already moved to `ErrorMessage`, but the inline error inside the prospect-detail "back to list" branch (`…/portal/prospects/[id]/page.tsx:176`) still reads `text-rose-700` after the swap. Verify all rose-700 usages have moved to semantic tokens. Origin: T0/T1. Effort: S.
-- **Raw `<select>` filters and form fields** — 11 instances across `src/modules/prm/backend/page.tsx:133,150`, `src/modules/prm/backend/prospects/page.tsx:155`, `src/modules/prm/backend/license-deals/page.tsx:179,198`, `src/modules/prm/backend/prm/wic-issues/page.tsx:243,262` (T4), `src/modules/prm/frontend/[orgSlug]/portal/prospects/page.tsx:206,242,259`, `src/modules/prm/frontend/[orgSlug]/portal/agency/page.tsx:191`. This OM version (0.4.x) does not ship a `Select` primitive — core modules (e.g. customers pipeline) use raw `<select>` with the same hand-rolled `h-8/h-9 rounded-md border border-input` classes. Migrate when an OM `Select` primitive lands. Origin: T0/T1/T2/T4. Effort: M.
+> **Tracker correction (2026-05-07).** Several DS items previously claimed `Alert`,
+> `StatusBadge`, `PortalEmptyState`, and `--status-warning/error/success-*` tokens
+> were unavailable in this OM version. They are NOT — the primitives ship at
+> `node_modules/@open-mercato/ui/src/primitives/{alert,status-badge}.tsx` and
+> `node_modules/@open-mercato/ui/src/portal/components/PortalEmptyState.tsx`,
+> and the semantic CSS variables live in `src/app/globals.css`. The PRM
+> partner-portal sites that depended on those primitives were migrated in
+> `feat/prm-portal-ds-migration` (DS Guardian audit follow-up) — the trigger
+> was a real dark-mode UX regression: the app toggles `.dark` from a cookie
+> at `src/app/layout.tsx:40`, and the legacy hand-rolled `bg-amber-50
+> text-amber-900` banners had no `dark:` overrides, so they rendered
+> illegibly for any partner using dark mode. Items below are the genuinely
+> blocked ones (no shipping primitive in OM 0.4.x) and the out-of-scope ones
+> (backend pages — not part of the portal-only PR) — bundle with the next
+> backend / DS pass.
+
+- **Hardcoded amber banner palette in BACKEND license-deals page** — `border-amber-300 bg-amber-50 text-amber-900` at `src/modules/prm/backend/license-deals/[id]/page.tsx:312`. The four PORTAL instances were migrated to `<Alert variant="warning">` in `feat/prm-portal-ds-migration`. The remaining backend instance can adopt the same primitive — Alert and the warning tokens both ship today. Origin: T2. Effort: S.
+- **Hardcoded red LOST badge** — `bg-red-100 text-red-700` on the candidate "LOST" badge in `src/modules/prm/backend/license-deals/[id]/page.tsx:347`. Migrate to `<StatusBadge variant="error">` (or `destructive` Alert if it grows a description) — both primitives are available now. Origin: T2. Effort: S.
+- **Hardcoded `text-rose-700` error label** — was inlined as `<div className="… text-rose-700">{error}</div>` in 5 portal pages; the four critical ones already moved to `ErrorMessage`, but the inline error inside the prospect-detail "back to list" branch (`…/portal/prospects/[id]/page.tsx:176`) still reads `text-rose-700`. Out of scope for `feat/prm-portal-ds-migration` (different code path — this lives in the missing-record state, not the rendered detail tree). Verify all rose-700 usages have moved to semantic tokens. Origin: T0/T1. Effort: S.
+- **Raw `<select>` filters and form fields** — 11 instances across `src/modules/prm/backend/page.tsx:133,150`, `src/modules/prm/backend/prospects/page.tsx:155`, `src/modules/prm/backend/license-deals/page.tsx:179,198`, `src/modules/prm/backend/prm/wic-issues/page.tsx:243,262` (T4), `src/modules/prm/frontend/[orgSlug]/portal/prospects/page.tsx:206,242,259`, `src/modules/prm/frontend/[orgSlug]/portal/agency/page.tsx:191`. This OM version (0.4.x) does not ship a `Select` primitive — core modules (e.g. customers pipeline) use raw `<select>` with the same hand-rolled `h-8/h-9 rounded-md border border-input` classes. **Genuinely blocked.** Migrate when an OM `Select` primitive lands. Origin: T0/T1/T2/T4. Effort: M.
 - **Raw `<input type="month">` filter** — 1 instance in `src/modules/prm/frontend/[orgSlug]/portal/prospects/page.tsx:278`. No date-range / month primitive currently used in PRM; bundle with a future date-input refresh. Origin: T1. Effort: S.
 - **Raw `<input type="radio">` candidate picker** — 1 instance in `src/modules/prm/backend/license-deals/[id]/page.tsx:331`. No Radio primitive in this OM version; the surrounding card-style pick-row layout matches existing OM core patterns. Migrate when a `Radio` / `RadioGroup` primitive lands. Origin: T2. Effort: S.
-- **Hardcoded `border-l-2 border-primary/60` quote box** — `src/modules/prm/backend/license-deals/[id]/page.tsx:185` uses raw primary tint for an attribution-reasoning callout. Promote to a `Callout` or `Alert` primitive when one fits. Origin: T2. Effort: S.
-- **Raw `<table>` lists** — `src/modules/prm/backend/[id]/page.tsx:315`, `…/portal/members/page.tsx:169`, `…/portal/prospects/page.tsx:293`. Each is a small read-only list (members / prospects); OQ-010 explicitly opts out of `DataTable` for portal surfaces. Tracker has no DS-blocker but switch to `DataTable` for the backend-facing members tab once a "compact" variant is available. Origin: T0/T1. Effort: M.
+- **Hardcoded `border-l-2 border-primary/60` quote box** — `src/modules/prm/backend/license-deals/[id]/page.tsx:185` uses raw primary tint for an attribution-reasoning callout. Could move to `<Alert variant="default">` or `<Alert variant="info">` now that Alert ships — the only reason to wait is whether a dedicated `Callout` primitive ships first. Origin: T2. Effort: S.
+- **Raw `<table>` lists** — `src/modules/prm/backend/[id]/page.tsx:315`, `…/portal/members/page.tsx:169`, `…/portal/prospects/page.tsx:293`. Each is a small read-only list (members / prospects); OQ-010 explicitly opts out of `DataTable` for portal surfaces. Tracker has no DS-blocker but switch to `DataTable` for the backend-facing members tab once a "compact" variant is available. **Architectural opt-out, not blocked.** Origin: T0/T1. Effort: M.
 
 ## Playwright integration tests (deferred — require live Postgres + ESP fixture)
 
