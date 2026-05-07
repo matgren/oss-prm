@@ -58,6 +58,16 @@ class FakeEm {
         ) ?? null
       )
     }
+    if (ctorName === 'RfpBroadcast') {
+      return (
+        this.broadcasts.find(
+          (b) =>
+            (where.rfpId === undefined || b.rfpId === where.rfpId) &&
+            (where.agencyId === undefined || b.agencyId === where.agencyId) &&
+            (where.organizationId === undefined || b.organizationId === where.organizationId),
+        ) ?? null
+      )
+    }
     return null
   }
 
@@ -616,5 +626,108 @@ describe('RfpService.submitResponse / unsubmitResponse', () => {
     )
     expect(result.reverted).toBe(false)
     expect(result.response.status).toBe('draft')
+  })
+})
+
+describe('RfpService.declineBroadcast / undeclineBroadcast', () => {
+  async function publishedWithBroadcast(): Promise<{
+    em: FakeEm
+    service: RfpService
+    rfpId: string
+  }> {
+    const em = new FakeEm()
+    seedAgency(em, 'agency-A', 'ai_native')
+    const service = new RfpService(em as any)
+    const created = await service.createDraft(makeCreateInput(), {
+      tenantId: TENANT,
+      organizationId: ORG,
+      userId: USER,
+    })
+    await service.publish(
+      created.id,
+      {},
+      { tenantId: TENANT, organizationId: ORG, userId: USER },
+    )
+    return { em, service, rfpId: created.id }
+  }
+
+  it('decline with reason — sets declined_at + decline_reason and emits event (§9.4 #20)', async () => {
+    const { em, service, rfpId } = await publishedWithBroadcast()
+    const result = await service.declineBroadcast(
+      rfpId,
+      'agency-A',
+      { decline_reason: 'capacity' },
+      { organizationId: ORG },
+    )
+    expect(result.declined).toBe(true)
+    expect(result.broadcast.declinedAt).toBeInstanceOf(Date)
+    expect(result.broadcast.declineReason).toBe('capacity')
+    expect(em.broadcasts[0]!.declinedAt).toBeInstanceOf(Date)
+  })
+
+  it('decline without reason is allowed (§9.4 #21)', async () => {
+    const { service, rfpId } = await publishedWithBroadcast()
+    const result = await service.declineBroadcast(
+      rfpId,
+      'agency-A',
+      { decline_reason: null },
+      { organizationId: ORG },
+    )
+    expect(result.declined).toBe(true)
+    expect(result.broadcast.declineReason).toBeNull()
+  })
+
+  it('idempotent decline returns declined=false on the second call', async () => {
+    const { service, rfpId } = await publishedWithBroadcast()
+    await service.declineBroadcast(
+      rfpId,
+      'agency-A',
+      { decline_reason: 'capacity' },
+      { organizationId: ORG },
+    )
+    const second = await service.declineBroadcast(
+      rfpId,
+      'agency-A',
+      { decline_reason: 'still busy' },
+      { organizationId: ORG },
+    )
+    expect(second.declined).toBe(false)
+    // First reason preserved — idempotency does not overwrite.
+    expect(second.broadcast.declineReason).toBe('capacity')
+  })
+
+  it('rejects decline once RFP has moved past published (§9.4 #23)', async () => {
+    const { em, service, rfpId } = await publishedWithBroadcast()
+    em.rfps[0]!.status = 'scoring'
+    await expect(
+      service.declineBroadcast(rfpId, 'agency-A', {}, { organizationId: ORG }),
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('rejects decline when no broadcast row exists (cross-Agency probe)', async () => {
+    const { service, rfpId } = await publishedWithBroadcast()
+    await expect(
+      service.declineBroadcast(rfpId, 'agency-X-not-broadcast', {}, { organizationId: ORG }),
+    ).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('undecline pre-deadline clears declined_at + decline_reason (§9.4 #22)', async () => {
+    const { service, rfpId } = await publishedWithBroadcast()
+    await service.declineBroadcast(
+      rfpId,
+      'agency-A',
+      { decline_reason: 'misclick' },
+      { organizationId: ORG },
+    )
+    const result = await service.undeclineBroadcast(rfpId, 'agency-A', { organizationId: ORG })
+    expect(result.reverted).toBe(true)
+    expect(result.broadcast.declinedAt).toBeNull()
+    expect(result.broadcast.declineReason).toBeNull()
+  })
+
+  it('idempotent undecline on a non-declined broadcast returns reverted=false', async () => {
+    const { service, rfpId } = await publishedWithBroadcast()
+    const result = await service.undeclineBroadcast(rfpId, 'agency-A', { organizationId: ORG })
+    expect(result.reverted).toBe(false)
   })
 })

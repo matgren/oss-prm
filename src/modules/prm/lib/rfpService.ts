@@ -663,6 +663,121 @@ export class RfpService {
     return { response, reverted: true }
   }
 
+  /**
+   * Portal-side: decline a broadcast (US5.5).
+   *
+   * Sets `RfpBroadcast.declined_at` + `decline_reason`. Allowed only while
+   * `RFP.status = 'published'` (cannot decline retroactively once scoring or
+   * selection has started — §9.4 #23). Idempotent: a row already declined
+   * returns successfully without re-emitting `prm.rfp_broadcast.declined`.
+   *
+   * Decline is an Agency-level decision (PartnerAdmin only) — that role
+   * scope is enforced at the route layer.
+   */
+  async declineBroadcast(
+    rfpId: string,
+    agencyId: string,
+    args: { decline_reason?: string | null },
+    scope: { organizationId: string },
+  ): Promise<{ broadcast: RfpBroadcast; declined: boolean }> {
+    const rfp = await this.em.findOne(
+      Rfp,
+      { id: rfpId, organizationId: scope.organizationId, deletedAt: null } as any,
+    )
+    if (!rfp) {
+      throw new PrmDomainError(PRM_ERROR_CODES.NOT_FOUND, 'RFP not found', 404)
+    }
+    if (rfp.status !== 'published') {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        `Cannot decline — RFP status is "${rfp.status}". Decline is only available while published.`,
+        409,
+      )
+    }
+    const broadcast = await this.em.findOne(
+      RfpBroadcast,
+      { rfpId, agencyId, organizationId: scope.organizationId } as any,
+    )
+    if (!broadcast) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.RFP_BROADCAST_NOT_FOUND,
+        'Broadcast not found for this Agency',
+        404,
+      )
+    }
+    if (broadcast.declinedAt) {
+      // Idempotent — caller may retry on a flaky network.
+      return { broadcast, declined: false }
+    }
+    const now = new Date()
+    broadcast.declinedAt = now
+    broadcast.declineReason = args.decline_reason ?? null
+    broadcast.updatedAt = now
+    this.em.persist(broadcast)
+    await this.em.flush()
+
+    await safeEmit('prm.rfp_broadcast.declined', {
+      broadcast_id: broadcast.id,
+      rfp_id: rfpId,
+      agency_id: agencyId,
+      decline_reason: broadcast.declineReason,
+    })
+    return { broadcast, declined: true }
+  }
+
+  /**
+   * Portal-side: reverse a decline (§3.3 idempotency table).
+   *
+   * Allowed only while `RFP.status = 'published'`. Clears `declined_at` +
+   * `decline_reason`. Idempotent on a never-declined broadcast.
+   */
+  async undeclineBroadcast(
+    rfpId: string,
+    agencyId: string,
+    scope: { organizationId: string },
+  ): Promise<{ broadcast: RfpBroadcast; reverted: boolean }> {
+    const rfp = await this.em.findOne(
+      Rfp,
+      { id: rfpId, organizationId: scope.organizationId, deletedAt: null } as any,
+    )
+    if (!rfp) {
+      throw new PrmDomainError(PRM_ERROR_CODES.NOT_FOUND, 'RFP not found', 404)
+    }
+    if (rfp.status !== 'published') {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        `Cannot reverse decline — RFP status is "${rfp.status}". Only available while published.`,
+        409,
+      )
+    }
+    const broadcast = await this.em.findOne(
+      RfpBroadcast,
+      { rfpId, agencyId, organizationId: scope.organizationId } as any,
+    )
+    if (!broadcast) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.RFP_BROADCAST_NOT_FOUND,
+        'Broadcast not found for this Agency',
+        404,
+      )
+    }
+    if (!broadcast.declinedAt) {
+      return { broadcast, reverted: false }
+    }
+    broadcast.declinedAt = null
+    broadcast.declineReason = null
+    broadcast.updatedAt = new Date()
+    this.em.persist(broadcast)
+    await this.em.flush()
+
+    await safeEmit('prm.rfp_broadcast.undeclined', {
+      broadcast_id: broadcast.id,
+      rfp_id: rfpId,
+      agency_id: agencyId,
+    })
+    return { broadcast, reverted: true }
+  }
+
   private async loadRfpForWrite(rfpId: string, organizationId: string): Promise<Rfp> {
     const rfp = await this.em.findOne(Rfp, { id: rfpId, organizationId, deletedAt: null } as any)
     if (!rfp) {

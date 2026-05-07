@@ -286,22 +286,16 @@ export default function PortalRfpDetailPage() {
         />
       ) : null}
 
-      {!declined && isViewable ? (
-        <section className="rounded-md border p-4 text-sm" data-testid="rfp-decline-section">
-          <Button
-            type="button"
-            variant="outline"
-            disabled
-            data-testid="rfp-decline-cta"
-            title={
-              isResponseable
-                ? undefined
-                : t('prm.portal.rfp.detail.cta.declineDisabled', 'Decline (locked)')
-            }
-          >
-            {t('prm.portal.rfp.detail.cta.decline', 'Decline this RFP')}
-          </Button>
-        </section>
+      {isViewable ? (
+        <DeclineSection
+          rfpId={rfp.id}
+          isResponseable={isResponseable}
+          declinedAt={broadcast.declinedAt}
+          declineReason={broadcast.declineReason}
+          onChange={(nextBroadcast) =>
+            setData((prev) => (prev ? { ...prev, broadcast: { ...prev.broadcast, ...nextBroadcast } } : prev))
+          }
+        />
       ) : null}
     </div>
   )
@@ -640,6 +634,179 @@ async function persistDraft(
     return { ok: false, error: 'Failed to save draft.' }
   }
   return res.result
+}
+
+type DeclineSectionProps = {
+  rfpId: string
+  isResponseable: boolean
+  declinedAt: string | null
+  declineReason: string | null
+  onChange: (next: { declinedAt: string | null; declineReason: string | null }) => void
+}
+
+function DeclineSection({
+  rfpId,
+  isResponseable,
+  declinedAt,
+  declineReason,
+  onChange,
+}: DeclineSectionProps) {
+  const t = useT()
+  const [open, setOpen] = React.useState(false)
+  const [reason, setReason] = React.useState('')
+  const [submitting, setSubmitting] = React.useState(false)
+  const declined = declinedAt !== null
+
+  const handleDecline = async () => {
+    setSubmitting(true)
+    try {
+      const result = await readApiResultOrThrow<{
+        ok: true
+        id: string
+        declinedAt: string | null
+        declineReason: string | null
+        declined: boolean
+      }>(`/api/prm/portal/rfp/${rfpId}/decline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decline_reason: reason.trim() ? reason.trim() : null }),
+      })
+      onChange({ declinedAt: result.declinedAt, declineReason: result.declineReason })
+      flash(t('prm.portal.rfp.detail.decline.flash.declined', 'RFP declined.'), 'success')
+      setOpen(false)
+      setReason('')
+    } catch (err) {
+      flash(
+        err instanceof Error
+          ? err.message
+          : t('prm.portal.rfp.detail.decline.flash.error', 'Decline failed.'),
+        'error',
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleUndecline = async () => {
+    setSubmitting(true)
+    try {
+      const result = await readApiResultOrThrow<{
+        ok: true
+        id: string
+        declinedAt: string | null
+        declineReason: string | null
+        reverted: boolean
+      }>(`/api/prm/portal/rfp/${rfpId}/undecline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      onChange({ declinedAt: result.declinedAt, declineReason: result.declineReason })
+      flash(t('prm.portal.rfp.detail.decline.flash.undeclined', 'Decline reversed.'), 'success')
+    } catch (err) {
+      flash(
+        err instanceof Error
+          ? err.message
+          : t('prm.portal.rfp.detail.decline.flash.undeclineError', 'Could not reverse decline.'),
+        'error',
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (declined) {
+    return (
+      <section className="rounded-md border p-4 text-sm" data-testid="rfp-decline-section">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={submitting || !isResponseable}
+          onClick={handleUndecline}
+          data-testid="rfp-undecline-cta"
+        >
+          {t('prm.portal.rfp.detail.cta.undecline', 'Undo decline')}
+        </Button>
+      </section>
+    )
+  }
+
+  if (!open) {
+    return (
+      <section className="rounded-md border p-4 text-sm" data-testid="rfp-decline-section">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!isResponseable}
+          onClick={() => setOpen(true)}
+          data-testid="rfp-decline-cta"
+          title={
+            isResponseable
+              ? undefined
+              : t('prm.portal.rfp.detail.cta.declineDisabled', 'Decline (locked)')
+          }
+        >
+          {t('prm.portal.rfp.detail.cta.decline', 'Decline this RFP')}
+        </Button>
+      </section>
+    )
+  }
+
+  return (
+    <section
+      className="space-y-3 rounded-md border p-4 text-sm"
+      data-testid="rfp-decline-section"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && !submitting) {
+          setOpen(false)
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !submitting) {
+          void handleDecline()
+        }
+      }}
+    >
+      <div>
+        <h3 className="font-medium">{t('prm.portal.rfp.detail.decline.title', 'Decline RFP')}</h3>
+        <p className="text-xs text-muted-foreground">
+          {t('prm.portal.rfp.detail.decline.subtitle', 'Optional: a short note for OM PartnerOps.')}
+        </p>
+      </div>
+      <Textarea
+        className="min-h-24"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder={t(
+          'prm.portal.rfp.detail.decline.placeholder',
+          'e.g. capacity, conflict of interest, out of scope',
+        )}
+        data-testid="rfp-decline-reason"
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={submitting}
+          onClick={() => {
+            setOpen(false)
+            setReason('')
+          }}
+          data-testid="rfp-decline-cancel"
+        >
+          {t('prm.portal.rfp.detail.cta.cancel', 'Cancel')}
+        </Button>
+        <Button
+          type="button"
+          disabled={submitting}
+          onClick={handleDecline}
+          data-testid="rfp-decline-submit"
+        >
+          {submitting
+            ? t('prm.portal.rfp.detail.cta.declineSubmit', 'Confirm decline') + '…'
+            : t('prm.portal.rfp.detail.cta.declineSubmit', 'Confirm decline')}
+        </Button>
+      </div>
+    </section>
+  )
 }
 
 function BackLink({ t }: { t: ReturnType<typeof useT> }) {
