@@ -27,6 +27,17 @@ export {
   createRfpDraftFixture,
   publishRfpFixture,
   unpublishRfpFixture,
+  // Portal-side prospect helpers (T1 / T2 §9 smokes — POST-MVP follow-up).
+  getProspectViaPortalFixture,
+  transitionProspectViaPortalFixture,
+  // Backend license-deal attribution helpers (T2 §9 smoke).
+  attributeLicenseDealFixture,
+  listGoldenRuleCandidatesFixture,
+} from './fixtures'
+
+export type {
+  PortalProspectSummary,
+  AttributeLicenseDealInput,
 } from './fixtures'
 
 export {

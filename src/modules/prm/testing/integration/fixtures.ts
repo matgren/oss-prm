@@ -316,3 +316,240 @@ export async function unpublishRfpFixture(
   }>(response)
   return { status: response.status(), body: json }
 }
+
+/* -------------------------------------------------------------------------- *
+ * Portal-side prospect helpers (Spec #2 §3.2 — used by T1/T2 §9 smokes)
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Shape of the prospect summary returned by both
+ * `GET  /api/prm/portal/prospects/{id}` and the PATCH responses.
+ *
+ * We only declare the fields the §9 smokes assert on. Surfaced verbatim from
+ * `summariseProspect` in `src/modules/prm/api/portal/prospects/route.ts`.
+ */
+export type PortalProspectSummary = {
+  id: string
+  agencyId: string
+  organizationId: string
+  companyName: string
+  contactName: string
+  contactEmail: string
+  source: string
+  status: string
+  lostReason: string | null
+  notes: string | null
+  registeredAt: string
+  statusChangedAt: string
+  registeredByAgencyMemberId: string
+  canEdit?: boolean
+  canTransitionTo?: string[]
+}
+
+/**
+ * GET `/api/prm/portal/prospects/{id}` as a partner_admin / partner_member.
+ *
+ * Used by saga-polling specs (T2) to read the prospect's `status` after the
+ * attribution saga walks it to `won`. The portal route already enforces
+ * own-agency scope; the caller's `customerToken` carries the agency context.
+ *
+ * Imports the customer-portal `customerApiRequest` helper from `./customerAuth`
+ * to keep parity with the customer JWT header contract.
+ */
+export async function getProspectViaPortalFixture(
+  request: APIRequestContext,
+  customerToken: string,
+  prospectId: string,
+): Promise<PortalProspectSummary> {
+  const { customerApiRequest } = await import('./customerAuth')
+  const response = await customerApiRequest(request, 'GET', `/api/prm/portal/prospects/${prospectId}`, {
+    customerToken,
+  })
+  const body = await readJsonSafe<{ ok?: true; prospect?: PortalProspectSummary }>(response)
+  expect(
+    response.status(),
+    `GET /api/prm/portal/prospects/${prospectId} should return 200; got ${response.status()} body=${JSON.stringify(body)}`,
+  ).toBe(200)
+  if (!body?.prospect) {
+    throw new Error(
+      `GET /api/prm/portal/prospects/${prospectId} returned 200 but no prospect — body=${JSON.stringify(body)}`,
+    )
+  }
+  return body.prospect
+}
+
+/**
+ * PATCH `/api/prm/portal/prospects/{id}` with the `kind: 'transition'` discriminator.
+ *
+ * Two-step flow because the portal API requires `ifMatchStatusChangedAt` for
+ * optimistic concurrency (Spec #2 invariant #15 / OQ-018 — concurrent
+ * editors must see a 409 instead of silently overwriting):
+ *
+ *   1. GET the current prospect to capture `statusChangedAt`.
+ *   2. PATCH with that token + the requested `toStatus`.
+ *
+ * Returns the post-transition prospect summary so callers can chain assertions.
+ *
+ * `toStatus` is constrained to portal-allowed transitions (`won` is system-only
+ * and walked via the attribution saga in T2).
+ */
+export async function transitionProspectViaPortalFixture(
+  request: APIRequestContext,
+  customerToken: string,
+  prospectId: string,
+  toStatus: 'qualified' | 'contacted' | 'lost' | 'dormant',
+  options: { lostReason?: string } = {},
+): Promise<PortalProspectSummary> {
+  const { customerApiRequest } = await import('./customerAuth')
+  // Step 1: read current statusChangedAt for the optimistic-concurrency token.
+  const current = await getProspectViaPortalFixture(request, customerToken, prospectId)
+  const data: Record<string, unknown> = {
+    kind: 'transition',
+    toStatus,
+    ifMatchStatusChangedAt: current.statusChangedAt,
+  }
+  if (toStatus === 'lost') {
+    if (!options.lostReason) {
+      throw new Error('transitionProspectViaPortalFixture: lostReason is required when toStatus="lost"')
+    }
+    data.lostReason = options.lostReason
+  }
+  const response = await customerApiRequest(
+    request,
+    'PATCH',
+    `/api/prm/portal/prospects/${prospectId}`,
+    { customerToken, data },
+  )
+  const body = await readJsonSafe<{ ok?: true; prospect?: PortalProspectSummary }>(response)
+  expect(
+    response.status(),
+    `PATCH /api/prm/portal/prospects/${prospectId} (toStatus=${toStatus}) should return 200; got ${response.status()} body=${JSON.stringify(body)}`,
+  ).toBe(200)
+  if (!body?.prospect) {
+    throw new Error(
+      `PATCH /api/prm/portal/prospects/${prospectId} returned 200 but no prospect — body=${JSON.stringify(body)}`,
+    )
+  }
+  return body.prospect
+}
+
+/* -------------------------------------------------------------------------- *
+ * Backend license-deal helpers (Spec #3 §3.1 — used by T2 §9 smoke)
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Discriminated input payload for `POST /api/prm/license-deal/{id}/attribute`.
+ * Mirrors `attributeLicenseDealSchema` in `src/modules/prm/data/validators.ts`.
+ *
+ * Only Path A is exercised by the T2 happy-path smoke (Golden Rule auto-pick),
+ * but Path B / Path C shapes are exposed so future smokes can reuse the helper.
+ */
+export type AttributeLicenseDealInput =
+  | {
+      attribution_path: 'A'
+      prospect_id: string
+      golden_rule_default_prospect_id: string
+      attribution_reasoning?: string
+      competing_prospect_ids_to_retire?: string[]
+    }
+  | { attribution_path: 'B'; rfp_id: string }
+  | { attribution_path: 'C'; attributed_agency_id: string; attribution_reasoning: string }
+
+/**
+ * POST `/api/prm/license-deal/{id}/attribute` with the staff `admin` token.
+ *
+ * Returns the 202 envelope so callers can assert `sagaCorrelationKey` +
+ * `licenseDeal.attributedAgencyId`. The backend route runs the saga inline
+ * (idempotent) so the response already reflects the attributed snapshot —
+ * the T2 smoke still polls portal `/min` for defence-in-depth against
+ * workers-not-running regressions.
+ */
+export async function attributeLicenseDealFixture(
+  request: APIRequestContext,
+  token: string,
+  licenseDealId: string,
+  input: AttributeLicenseDealInput,
+): Promise<{
+  status: number
+  body: {
+    ok?: boolean
+    licenseDealId?: string
+    sagaCorrelationKey?: string
+    emittedEvents?: string[]
+    licenseDeal?: { id: string; attributedAgencyId?: string | null; status?: string; attributionPath?: string }
+    error?: { code: string; message: string; details?: Record<string, unknown> }
+  } | null
+}> {
+  const response = await apiRequest(
+    request,
+    'POST',
+    `/api/prm/license-deal/${encodeURIComponent(licenseDealId)}/attribute`,
+    { token, data: input as unknown as Record<string, unknown> },
+  )
+  const json = await readJsonSafe<{
+    ok?: boolean
+    licenseDealId?: string
+    sagaCorrelationKey?: string
+    emittedEvents?: string[]
+    licenseDeal?: { id: string; attributedAgencyId?: string | null; status?: string; attributionPath?: string }
+    error?: { code: string; message: string; details?: Record<string, unknown> }
+  }>(response)
+  return { status: response.status(), body: json }
+}
+
+/**
+ * GET `/api/prm/license-deal/golden-rule-candidates?clientCompanyName=...`.
+ *
+ * Used by the T2 smoke to resolve the deterministic `golden_rule_default_prospect_id`
+ * for the Path A attribute call. The route returns ordered candidates with exactly
+ * one `isDefaultPick: true` row (oldest non-lost match) — invariant #14.
+ */
+export async function listGoldenRuleCandidatesFixture(
+  request: APIRequestContext,
+  token: string,
+  query: { clientCompanyName: string; contactEmail?: string; limit?: number },
+): Promise<
+  Array<{
+    prospectId: string
+    agencyId: string
+    organizationId: string
+    companyName: string
+    contactName: string
+    contactEmail: string
+    status: string
+    registeredAt: string
+    registeredByAgencyMemberId: string
+    isDefaultPick: boolean
+  }>
+> {
+  const params = new URLSearchParams()
+  params.set('clientCompanyName', query.clientCompanyName)
+  if (query.contactEmail) params.set('contactEmail', query.contactEmail)
+  if (query.limit !== undefined) params.set('limit', String(query.limit))
+  const response = await apiRequest(
+    request,
+    'GET',
+    `/api/prm/license-deal/golden-rule-candidates?${params.toString()}`,
+    { token },
+  )
+  const body = await readJsonSafe<{
+    ok?: boolean
+    candidates?: Array<{
+      prospectId: string
+      agencyId: string
+      organizationId: string
+      companyName: string
+      contactName: string
+      contactEmail: string
+      status: string
+      registeredAt: string
+      registeredByAgencyMemberId: string
+      isDefaultPick: boolean
+    }>
+  }>(response)
+  expect(
+    response.status(),
+    `GET /api/prm/license-deal/golden-rule-candidates should return 200; got ${response.status()} body=${JSON.stringify(body)}`,
+  ).toBe(200)
+  return body?.candidates ?? []
+}
