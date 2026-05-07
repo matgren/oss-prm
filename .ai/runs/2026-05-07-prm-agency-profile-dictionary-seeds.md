@@ -150,9 +150,10 @@ All slugs kebab-case (`saas`, `e-commerce`, `fintech`, `node-js`, `dot-net`, etc
 ### Phase 4: PR + auto-review
 
 - [x] 4.1 Open PR + labels + summary body — PR #22 (https://github.com/matgren/oss-prm/pull/22)
-- [ ] 4.2 `auto-review-pr` autofix pass
-- [ ] 4.3 Comprehensive summary comment
+- [~] 4.2 `auto-review-pr` autofix pass — **skipped per explicit user instruction** ("Do not invoke other agent skills.")
+- [x] 4.3 Comprehensive summary comment — see PR #22
 
 ## Changelog
 
 - 2026-05-07 — plan drafted; branch claimed off `origin/develop` @ `a317ea7`.
+- 2026-05-07 — PR #22 opened (https://github.com/matgren/oss-prm/pull/22); status flipped to `complete` after final summary comment posted. Validation gate (typecheck + 491-test PRM jest suite + build) green. `auto-review-pr` autofix pass deliberately skipped per explicit user instruction; reviewer can run `/auto-review-pr 22` separately.
