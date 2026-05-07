@@ -124,8 +124,8 @@ If any step fails, fix-forward in a new commit; do not amend.
 
 ### Phase 1: Ship the stub route + unit test
 
-- [ ] 1.1 Create `src/modules/prm/api/customers/people/route.ts`
-- [ ] 1.2 Create `src/modules/prm/__tests__/customersPeopleStubRoute.test.ts`
+- [x] 1.1 Create `src/modules/prm/api/customers/people/route.ts` — 1119ca4
+- [x] 1.2 Create `src/modules/prm/__tests__/customersPeopleStubRoute.test.ts` — 1119ca4
 
 ### Phase 2: Remove customers from src/modules.ts + refresh generated artefacts
 
