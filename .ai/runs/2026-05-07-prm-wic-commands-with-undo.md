@@ -93,9 +93,9 @@ Non-goals (do NOT touch):
 
 ### Phase 1: Compensation events + RecordWicContributionCommand
 
-- [ ] 1.1 Register three `*.undone` compensation events in `src/modules/prm/events.ts`
-- [ ] 1.2 Create `src/modules/prm/commands/wic/recordWicContribution.ts` with execute + undo
-- [ ] 1.3 Add unit tests at `src/modules/prm/__tests__/wicRecordContributionCommand.test.ts`
+- [x] 1.1 Register three `*.undone` compensation events in `src/modules/prm/events.ts` — 481e2ab
+- [x] 1.2 Create `src/modules/prm/commands/wic/recordWicContribution.ts` with execute + undo — 481e2ab
+- [x] 1.3 Add unit tests at `src/modules/prm/__tests__/wicRecordContributionCommand.test.ts` (7 tests; full PRM suite 482→489) — 481e2ab
 
 ### Phase 2: SupersedeWicContributionCommand
 
