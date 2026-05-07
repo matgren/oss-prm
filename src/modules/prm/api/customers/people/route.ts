@@ -38,8 +38,19 @@ const stubListResponseSchema = z.object({
  * probe logs in as `admin@acme.com` (which has `*` features) so feature gates
  * are not required here. We deliberately do NOT add `requireFeatures` so the
  * stub works even if the customers ACL feature catalogue is not loaded.
+ *
+ * Path override: `path` pins the registered route key to `/customers/people`
+ * (the catch-all at `src/app/api/[...slug]/route.ts` strips the `/api/` prefix
+ * before matching, so the manifest path uses the post-strip form). Without
+ * this override, the module-registry generator
+ * (`@open-mercato/cli` → generators/module-registry.ts → `reqSegs = [modId,
+ * ...segs]`) would namespace the route under the PRM module id and register
+ * it as `/prm/customers/people`, which the readiness probe (`GET /api/customers/people`)
+ * never hits. `resolveApiPathFromMetadata` (same file) honors `metadata.path`
+ * to override the module-prefix convention — the supported escape hatch.
  */
 export const metadata = {
+  path: '/customers/people',
   GET: { requireAuth: true },
 }
 

@@ -9,13 +9,16 @@ import { Migration } from '@mikro-orm/migrations'
  *       - Invariant #8 CHECK: `published_url IS NULL OR may_publish_on_om_website = TRUE`.
  *       - Partial index serving Spec #5 P10 picker (`agency_id WHERE deleted_at IS NULL`).
  *       - Partial index serving B8 publish-flag triage.
- *       - FKs to `directory_organizations` + `prm_agencies`.
+ *       - FKs to `organizations` + `prm_agencies`. (Directory core declares the table
+ *         as `organizations`; an earlier draft incorrectly referenced
+ *         `directory_organizations` which broke ephemeral migrate. Fixed in line with
+ *         Migration20260506224954's precedent comment.)
  *   - `prm_marketing_materials`:
  *       - Enum CHECKs: `material_type`, `visibility`, `min_tier`.
  *       - Cross-field CHECK: `min_tier` required iff `visibility = 'tier_gated'`.
  *       - Cross-field CHECK: `unpublished_at IS NULL OR published_at IS NOT NULL`.
  *       - Partial index serving the live-and-tier-gated query.
- *       - FK to `directory_organizations`.
+ *       - FK to `organizations` (same correction as above).
  *
  * Additive only. No DROP / ALTER COLUMN.
  */
@@ -27,7 +30,7 @@ export class Migration20260507062343_prm_case_study_marketing_material_indexes e
       `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_case_studies_published_url_requires_flag_check') then alter table "prm_case_studies" add constraint "prm_case_studies_published_url_requires_flag_check" check ("published_url" is null or "may_publish_on_om_website" = true); end if; end $$;`,
     )
     this.addSql(
-      `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_case_studies_organization_fk') then alter table "prm_case_studies" add constraint "prm_case_studies_organization_fk" foreign key ("organization_id") references "directory_organizations" ("id") on delete restrict; end if; end $$;`,
+      `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_case_studies_organization_fk') then alter table "prm_case_studies" add constraint "prm_case_studies_organization_fk" foreign key ("organization_id") references "organizations" ("id") on delete restrict; end if; end $$;`,
     )
     this.addSql(
       `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_case_studies_agency_fk') then alter table "prm_case_studies" add constraint "prm_case_studies_agency_fk" foreign key ("agency_id") references "prm_agencies" ("id") on delete restrict; end if; end $$;`,
@@ -56,7 +59,7 @@ export class Migration20260507062343_prm_case_study_marketing_material_indexes e
       `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_marketing_materials_unpublished_after_published_check') then alter table "prm_marketing_materials" add constraint "prm_marketing_materials_unpublished_after_published_check" check ("unpublished_at" is null or "published_at" is not null); end if; end $$;`,
     )
     this.addSql(
-      `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_marketing_materials_organization_fk') then alter table "prm_marketing_materials" add constraint "prm_marketing_materials_organization_fk" foreign key ("organization_id") references "directory_organizations" ("id") on delete restrict; end if; end $$;`,
+      `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_marketing_materials_organization_fk') then alter table "prm_marketing_materials" add constraint "prm_marketing_materials_organization_fk" foreign key ("organization_id") references "organizations" ("id") on delete restrict; end if; end $$;`,
     )
     // Live-and-tier-gated hot path: serves the P11 portal query.
     this.addSql(

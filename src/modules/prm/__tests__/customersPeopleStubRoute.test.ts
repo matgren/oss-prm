@@ -116,7 +116,22 @@ describe('GET /api/customers/people (integration-test readiness stub)', () => {
     // Metadata is what the framework reads at route-registration time. Keep
     // this test so any accidental drop of the gate fails CI loudly.
     const { metadata } = await import('../api/customers/people/route')
-    expect(metadata).toEqual({ GET: { requireAuth: true } })
+    expect(metadata.GET).toEqual({ requireAuth: true })
+  })
+
+  it('pins the registered route key to /customers/people via metadata.path', async () => {
+    // CRITICAL: without `metadata.path`, the module-registry generator would
+    // namespace the route under the PRM module id and register it as
+    // `/prm/customers/people`, which the readiness probe (`GET /api/customers/people`)
+    // never hits.
+    //
+    // The catch-all at `src/app/api/[...slug]/route.ts` strips the `/api/` prefix
+    // before matching against the manifest, so the registered path uses the
+    // post-strip form (`/customers/people`). See
+    // @open-mercato/cli/src/lib/generators/module-registry.ts
+    // (`resolveApiPathFromMetadata` honours `metadata.path`).
+    const { metadata } = await import('../api/customers/people/route')
+    expect(metadata.path).toBe('/customers/people')
   })
 
   it('exports an OpenAPI doc for the GET method', async () => {
