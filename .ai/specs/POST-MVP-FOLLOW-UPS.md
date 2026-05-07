@@ -20,6 +20,7 @@ This is the source of truth for follow-up work — when an item ships, delete th
 - **Spec #5 markdown editor primitive (P10 / P3 / P8)** — `packages/ui` does not ship a markdown editor in this OM version; Spec #5 currently uses plain `Textarea` with a "Markdown supported" hint (the read view in P10 already pre-renders user content in a monospace whitespace-pre block). Promote to a real editor (`@uiw/react-md-editor` or similar) when an OM primitive lands; the upgrade is purely additive — same field shapes, same draft route. Origin: SPEC-2026-04-23-rfp-broadcast-response.md §8.1 R1. Owner: TBD. Effort: M.
 - **Spec #5 §9.1 #4 partial-insert rollback test** — Requires a DB-error injection hook in the publish handler that is not yet wired. Origin: SPEC-2026-04-23-rfp-broadcast-response.md §9.1 #4 / Spec #5 run plan C1.10. Owner: TBD. Effort: S.
 - **Spec #5 §9.6 perf smoke (eligibility evaluator at 500 agencies)** — Pure-function evaluator currently has unit-level coverage at 14 cases. Add a Postgres-backed perf smoke once we have a 500-agency seed fixture in place. Origin: SPEC-2026-04-23-rfp-broadcast-response.md §9.6 #27 + §8.1 R2. Owner: TBD. Effort: S.
+- **PRM portal organizationId mismatch (T0 + T5 cross-cutting)** — Surfaced by the §9 IT-1 / IT-9.1 happy-path smokes (PR `feat/prm-t0-t1-t2-happy-path-smokes`). PRM creates one Organization per Agency (`agencyService.createAgencyWithOrganization`), so a real partner accepted via `CustomerInvitationService.acceptInvitation` lives in the *agency's* org. But several portal routes scope reads by `auth.orgId` (e.g., the `assertBroadcastedOrNotFound` lookup against `Rfp.organizationId` and the `agency.organizationId === auth.orgId` guard in `PATCH /api/prm/portal/agency/[id]/member/[memberId]`). RFPs are seeded by staff (in the staff org), so the customer-org-vs-RFP-org match relies on the seam keeping the customer in the staff org — which is the opposite of production. The test seam (`POST /api/prm/test-fixtures/agency-member-link`) currently leaves the customer in the staff org so T5-002/T5-003 stay green; the trade-off is that T0-001's profile-fill leg and any future cross-org portal smoke is deferred. Fix: scope portal RFP visibility by `tenantId + broadcast.agencyId` (drop the org filter on the central RFP table), and migrate the customer to the agency's org in the seam. ~~25-40 LOC across 2-3 routes + the seam~~. Origin: TC-PRM-T0-001 commit chain. Owner: TBD. Effort: M.
 
 ## Performance watchlist
 
@@ -45,7 +46,7 @@ Items here are cosmetic DS-compliance gaps (color tokens, text sizes, spacing). 
 
 ### T0 Agency Foundation (SPEC-2026-04-23-agency-foundation.md §9)
 
-- **IT-1 — Happy path onboarding** — OMPartnerOps creates Agency, invites PartnerAdmin, accepts invite, fills profile (US1.1, US1.2, US1.4, US2.1). Owner: QA team. Effort: per-test.
+- ~~**IT-1 — Happy path onboarding**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T0-001-agency-happy-path.spec.ts` (Agency creation + invite + accept seam + cooldown probe + portal /me — covers US1.1, US1.2, US1.4 auth path, US2.1). The "fills profile" leg of US1.4 is deferred until the org-vs-route mismatch follow-up below lands.
 - **IT-2 — Duplicate GH-profile rejection (L-010)** — 409 with privacy-preserving message; no Agency name leaked (US1.2, US1.5, invariant #5). Owner: QA team. Effort: per-test.
 - **IT-3 — Admin-only field 403 from portal** — `PATCH /api/prm/portal/agency/{id}` with `tier` field rejected (US1.3, US2.1, invariant #6). Owner: QA team. Effort: per-test.
 - **IT-4 — Lockout recovery (US1.6)** — OMPartnerOps promotes a `partner_member` to `partner_admin` via B2 Members tab. Owner: QA team. Effort: per-test.
@@ -54,7 +55,7 @@ Items here are cosmetic DS-compliance gaps (color tokens, text sizes, spacing). 
 
 ### T1 WIP Scoreboard (SPEC-2026-04-23-wip-scoreboard.md §9)
 
-- **IT-9.1 — Register → transition → widget update** — Full P5/P6/P2 happy path. Owner: QA team. Effort: per-test.
+- ~~**IT-9.1 — Register → transition → widget update**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T1-001-prospect-happy-path.spec.ts` (P5 register + P6 transitions qualified→contacted + P2 dashboard aggregate reflects WIP yearly count + tier descriptor).
 - **IT-9.2 — Invariant #12 enforcement** — Illegal transition blocked with 409. Owner: QA team. Effort: per-test.
 - **IT-9.3 — Invariant #1 (`registered_at` immutability)** — PATCH with `registered_at` rejected. Owner: QA team. Effort: per-test.
 - **IT-9.4 — Projection consistency** — `ProspectCandidateIndex` keys match aggregate after edit + soft-delete. Owner: QA team. Effort: per-test.
@@ -66,7 +67,7 @@ Items here are cosmetic DS-compliance gaps (color tokens, text sizes, spacing). 
 
 ### T2 Attribution Loop (SPEC-2026-04-23-attribution-loop.md §9)
 
-- **IT-9.1 — Path A happy path → MIN update** — Saga completes within 10min; Prospect → won; portal MIN reflects deal. Owner: QA team. Effort: per-test.
+- ~~**IT-9.1 — Path A happy path → MIN update**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T2-001-attribution-happy-path.spec.ts` (Path A attribute + Golden Rule default-pick + saga poll for `won` (≤30s, real saga, no stub) + portal MIN aggregate reflects bucketed annual value).
 - **IT-9.2 — Golden Rule override with reasoning** — Non-default pick captures reasoning; `attribution_overridden` event fired. Owner: QA team. Effort: per-test.
 - **IT-9.3 — Reverse attribution round trip** — LIFO compensation; Prospect reverts to qualified. Owner: QA team. Effort: per-test.
 - **IT-9.4 — Path-B hard guard (cross-spec coordination with Spec #6)** — `RfpPathBLockSubscriber` writes `is_path_b_locked = true`; Spec #6 reads + enforces. Owner: QA team (jointly with Spec #6 QA). Effort: per-test.

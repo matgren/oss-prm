@@ -240,6 +240,6 @@ Commit: `docs: trim POST-MVP follow-ups now covered by smoke suite + cross-refer
 
 ### Phase 5: Validation gate + POST-MVP trim
 
-- [ ] 5.1 Full gate: typecheck + jest src/modules/prm + test:integration:ephemeral filtered ×2 + build
-- [ ] 5.2 Trim POST-MVP-FOLLOW-UPS.md IT-1/IT-9.1(T1)/IT-9.1(T2) entries
-- [ ] 5.3 Cross-reference dropped Phases 3/4/5 of 2026-05-06 run plan
+- [x] 5.1 Full gate: typecheck (clean) + jest src/modules/prm (43 suites / 408 tests) + test:integration:ephemeral filtered ×2 (7/7 specs green twice — T0-001 + T1-001 + T2-001 + T5-002 ×3 + T5-003) + build (compile success)
+- [x] 5.2 Trim POST-MVP-FOLLOW-UPS.md IT-1/IT-9.1(T1)/IT-9.1(T2) entries (struck through with shipped-spec links) + new entry for the org-vs-route mismatch follow-up
+- [x] 5.3 Cross-reference dropped Phases 3/4/5 of 2026-05-06 run plan (all six dropped steps marked as PICKED UP with commit refs)
