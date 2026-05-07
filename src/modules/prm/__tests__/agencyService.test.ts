@@ -168,3 +168,90 @@ describe('AgencyService', () => {
     },
   )
 })
+
+describe('AgencyService.updateAgency — optimistic concurrency (ifMatchVersion)', () => {
+  // POST-MVP follow-up — mirrors the LicenseDeal.version reference pattern.
+  // The `ifMatchVersion` token is OPTIONAL (backwards-compat); when present,
+  // mismatches raise STATUS_CONFLICT (409). Every successful update bumps
+  // `version + 1`.
+
+  const TENANT = 'tenant-1'
+  const AGENCY_ID = 'agency-1'
+
+  function seedAgency(em: FakeEntityManager, overrides: Partial<Persisted> = {}): void {
+    em.setSeed('agency', [
+      {
+        id: AGENCY_ID,
+        tenantId: TENANT,
+        organizationId: 'org-1',
+        name: 'Acme',
+        slug: 'acme',
+        headquartersCountry: 'US',
+        tier: 'om_agency',
+        status: 'active',
+        contractSigned: false,
+        ndaSigned: false,
+        onboarded: false,
+        industries: [],
+        services: [],
+        techCapabilities: [],
+        version: 1,
+        deletedAt: null,
+        ...overrides,
+      },
+    ])
+  }
+
+  it('succeeds when ifMatchVersion matches; bumps version + 1', async () => {
+    const em = new FakeEntityManager()
+    seedAgency(em, { version: 5 })
+    const svc = new AgencyService(em as any)
+
+    const updated = await svc.updateAgency(
+      AGENCY_ID,
+      { name: 'Acme Inc.', ifMatchVersion: 5 },
+      { tenantId: TENANT },
+    )
+
+    expect(updated.name).toBe('Acme Inc.')
+    expect(updated.version).toBe(6)
+  })
+
+  it('rejects with STATUS_CONFLICT (409) when ifMatchVersion mismatches', async () => {
+    const em = new FakeEntityManager()
+    seedAgency(em, { version: 5 })
+    const svc = new AgencyService(em as any)
+
+    await expect(
+      svc.updateAgency(
+        AGENCY_ID,
+        { name: 'Acme Inc.', ifMatchVersion: 4 },
+        { tenantId: TENANT },
+      ),
+    ).rejects.toMatchObject({ code: PRM_ERROR_CODES.STATUS_CONFLICT, status: 409 })
+
+    // Verify the row was NOT mutated on the conflict path (no flush, no version bump).
+    const row = (em.rows.get('agency') ?? [])[0]
+    expect(row.name).toBe('Acme')
+    expect(row.version).toBe(5)
+  })
+
+  it(
+    'succeeds without ifMatchVersion (backwards-compat — token is optional); ' +
+      'still bumps version + 1',
+    async () => {
+      const em = new FakeEntityManager()
+      seedAgency(em, { version: 3 })
+      const svc = new AgencyService(em as any)
+
+      const updated = await svc.updateAgency(
+        AGENCY_ID,
+        { description: 'New description' },
+        { tenantId: TENANT },
+      )
+
+      expect(updated.description).toBe('New description')
+      expect(updated.version).toBe(4)
+    },
+  )
+})

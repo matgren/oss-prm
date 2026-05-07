@@ -46,6 +46,11 @@ export const updateAgencyBackendSchema = z
     contractSigned: z.boolean().optional(),
     ndaSigned: z.boolean().optional(),
     onboarded: z.boolean().optional(),
+    /**
+     * Optimistic concurrency token — `version` returned by GET. Optional for
+     * backwards-compatibility; when present, mismatches raise 409 status_conflict.
+     */
+    ifMatchVersion: z.number().int().nonnegative().optional(),
   })
   .strict()
 
@@ -67,6 +72,11 @@ export const updateAgencyPortalSchema = z
     industries: dictionaryIdArray.optional(),
     services: dictionaryIdArray.optional(),
     techCapabilities: dictionaryIdArray.optional(),
+    /**
+     * Optimistic concurrency token — `version` returned by GET. Optional for
+     * backwards-compatibility; when present, mismatches raise 409 status_conflict.
+     */
+    ifMatchVersion: z.number().int().nonnegative().optional(),
   })
   .strict()
 

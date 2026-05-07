@@ -51,6 +51,8 @@ function summariseAgency(agency: Agency) {
     contractSigned: agency.contractSigned,
     ndaSigned: agency.ndaSigned,
     onboarded: agency.onboarded,
+    /** Optimistic-concurrency token — clients echo back as `ifMatchVersion` on PATCH. */
+    version: agency.version,
     createdAt: agency.createdAt.toISOString(),
     updatedAt: agency.updatedAt.toISOString(),
   }
