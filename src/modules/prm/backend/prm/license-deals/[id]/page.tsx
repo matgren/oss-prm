@@ -3,8 +3,10 @@ import * as React from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
+import { Alert, AlertDescription, AlertTitle } from '@open-mercato/ui/primitives/alert'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
+import { StatusBadge } from '@open-mercato/ui/primitives/status-badge'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { cn } from '@open-mercato/shared/lib/utils'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
@@ -207,12 +209,14 @@ function AttributedSummary({ deal }: { deal: LicenseDeal }) {
         {deal.rfpId ? <Row label="RFP ID" value={deal.rfpId} /> : null}
       </dl>
       {deal.attributionReasoning ? (
-        <div className="mt-3 rounded border-l-2 border-primary/60 bg-muted/50 p-3 text-sm">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+        <Alert variant="info" className="mt-3">
+          <AlertTitle className="text-xs uppercase tracking-wide text-muted-foreground">
             {t('prm.licenseDeals.fields.attributionReasoning', 'Attribution reasoning')}
-          </div>
-          <p className="mt-1 whitespace-pre-wrap">{deal.attributionReasoning}</p>
-        </div>
+          </AlertTitle>
+          <AlertDescription className="mt-1 whitespace-pre-wrap">
+            {deal.attributionReasoning}
+          </AlertDescription>
+        </Alert>
       ) : null}
       <SagaInstanceLink deal={deal} />
     </section>
@@ -397,12 +401,14 @@ function PathAPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: 
   if (loading) return <LoadingMessage label={t('prm.licenseDeals.attribute.loading', 'Loading candidates…')} />
   if (candidates.length === 0) {
     return (
-      <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-        {t(
-          'prm.licenseDeals.attribute.A.empty',
-          'No matching Prospects found by Golden Rule. Switch to Path B (RFP) or Path C (Direct).',
-        )}
-      </p>
+      <Alert variant="warning">
+        <AlertDescription>
+          {t(
+            'prm.licenseDeals.attribute.A.empty',
+            'No matching Prospects found by Golden Rule. Switch to Path B (RFP) or Path C (Direct).',
+          )}
+        </AlertDescription>
+      </Alert>
     )
   }
   return (
@@ -432,9 +438,9 @@ function PathAPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: 
                   </span>
                 ) : null}
                 {c.status === 'lost' ? (
-                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                  <StatusBadge variant="error">
                     {t('prm.licenseDeals.attribute.A.lostBadge', 'LOST')}
-                  </span>
+                  </StatusBadge>
                 ) : (
                   <span className="rounded-full border px-2 py-0.5 text-xs">{c.status}</span>
                 )}
