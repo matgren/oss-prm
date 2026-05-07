@@ -552,4 +552,55 @@ We document this deviation here so the compliance reviewer sees it, agrees it's 
 
 ---
 
+## 11. Implementation Status (T6 — 2026-05-07)
+
+Implemented in standalone-app under `src/modules/prm/...` (paths differ from
+Appendix A's `packages/prm/...` notation — the standalone template uses
+`src/modules/<id>/`). Branch: `feat/prm-spec-06-rfp-scoring-selection`.
+Tracking plan: `.ai/runs/2026-05-07-prm-spec-06-rfp-scoring-selection.md`.
+
+| Section | Status | Notes |
+|---|---|---|
+| §3.1 Record score | ✅ | `POST /api/prm/rfp/{id}/responses/{rid}/score`. Append-only via `RfpResponseScoreRepo.insertNextVersion`. Auto-transitions RFP `published → scoring` on first score. |
+| §3.2 LLM draft | ✅ | `POST /api/prm/rfp/{id}/responses/{rid}/score/draft-llm`. Uses `llmProviderRegistry.resolveFirstConfigured` from `@open-mercato/shared/lib/ai`. Returns 503 when no provider configured. |
+| §3.3 Select winner | ✅ | `POST /api/prm/rfp/{id}/select`. Graph save. First-time emits `prm.rfp.selection_made`; re-selection emits `prm.rfp.selection_changed`. |
+| §3.4 Close | ✅ | `POST /api/prm/rfp/{id}/close`. Terminal lifecycle. `close_reason` required when no selection. |
+| §3.5 Reopen | ✅ | `POST /api/prm/rfp/{id}/reopen`. **Invariant #17 hard guard**: read-model fast-fail + live `SELECT EXISTS` re-check. NO bypass. |
+| §3.6 B11 audit | ✅ | `GET /api/prm/rfp/{id}/broadcasts` + backend page `/backend/prm/rfp-audit/[id]` (DataTable, navHidden). |
+| §4.1 Commands | ✅ | Service methods on `RfpService` (graph save explicit; undo via §10.1 v+1 insert pattern documented). |
+| §4.2 Events | ✅ | All 7 declared in `events.ts`. App-Spec alias `prm.rfp_response.scored` deliberately not shipped (no consumer binds to either name). |
+| §4.3 Subscribers | ✅ | `RfpSelectionNotifier` (binds both selection_made + selection_changed); `ChallengeRoundRevisionUnlocker` (reopened_for_scoring → per-response available_for_revision); `RfpReopenedDeadlineExpiry` worker (cron `*/15 * * * *`). |
+| §5.1 RfpResponseScore table | ✅ | `prm_rfp_response_scores` with score-range CHECKs, source enum, llm_model_id pairing, reasoning min length, FKs. |
+| §5.2 `reopened_deadline_at` | ✅ | Additive nullable column on `prm_rfps`. |
+| §5.3 `is_path_b_locked` (read-model) | ➡️ | Read in §3.5 hard guard. Owned by Spec #3 (already shipped). |
+| §5.4 `vw_rfp_response_latest_scores` view | ⚠️ | Skipped — Postgres view replaced by `RfpResponseScoreRepo.findLatestForResponses` ORM-level multi-fetch. View can be added later if read perf justifies. |
+| §6 ACL features | ✅ | `prm.rfp.score / .select / .close / .reopen` granted to OM PartnerOps `employee` role. |
+| §10.1 Append-only deviation | ✅ | Documented; repo exposes only `insertNextVersion`, no `update`/`remove`. |
+| §9 Integration tests | ⚠️ | Service-tier coverage (45 jest cases) covers all happy paths + invariant #17 both branches + LLM mock + selection fan-out + worker. Playwright integration tests are deferred per the POST-MVP Customer-portal Playwright auth helper item — staff routes use `getAuthFromRequest` which has Playwright fixtures upstream, but the portal `available_for_revision` cross-spec test (§9.6 IT-XSPEC-02) requires the same auth helper that's still in flight on PR-A. |
+
+### Cross-spec impact
+
+- **Spec #3 (attribution-loop):** No code changes here. Spec #6 reads
+  `Rfp.isPathBLocked` (written by Spec #3's `RfpPathBLockSubscriber` on
+  `prm.license_deal.status_changed`) for the cheap branch of the hard
+  guard, plus a live `SELECT EXISTS` against `prm_license_deals` for
+  defence-in-depth.
+- **Spec #5 (rfp-broadcast-response):** Additive — new column
+  `reopened_deadline_at` on `prm_rfps` and one new enum value `reopened`
+  on the `prm_rfps_status_check` constraint. Spec #5's portal P10 revise
+  CTA already keys on the RFP status (no Spec #5 code change required).
+
+### Deferred POST-MVP
+
+- §5.4 read-model view (perf optimisation — not yet justified).
+- §9 Playwright integration tests (waiting on the customer-portal auth
+  helper PR; staff-tier flows have unit/service coverage at 334/334
+  cases).
+- B7 backend RFP detail page integration — RFP staff backend page itself
+  doesn't exist yet (Spec #5 shipped portal-only). The B11 audit page
+  ships standalone; integration into a unified RFP detail surface is
+  POST-MVP.
+
+---
+
 *End of SPEC-2026-04-23 — RFP Scoring, Selection, Lifecycle.*

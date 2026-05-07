@@ -38,6 +38,8 @@ function buildPortalAgencyView(
     industries: agency.industries,
     services: agency.services,
     techCapabilities: agency.techCapabilities,
+    /** Optimistic-concurrency token — portal echoes back as `ifMatchVersion` on PATCH. */
+    version: agency.version,
   }
   // Admin-only `_prm` block — gated on `prm.agency.read_admin_fields` (OQ-020).
   // Mirrors the response enricher; the enricher path runs when this route is

@@ -188,6 +188,12 @@ export class AgencyService {
   /**
    * Apply a partial update + emit field-diff events. Caller is responsible for
    * authorization (admin-only field guards live in the route layer).
+   *
+   * Optimistic concurrency: when `patch.ifMatchVersion` is provided, the service
+   * compares it against the persisted `agency.version` and raises `STATUS_CONFLICT`
+   * (409) on mismatch. The token is OPTIONAL for backwards-compat — clients that
+   * don't send it still succeed. Every successful update bumps `version + 1`.
+   * Mirrors the reference pattern in `licenseDealService` (POST-MVP follow-up).
    */
   async updateAgency(
     id: string,
@@ -197,6 +203,18 @@ export class AgencyService {
     const agency = await this.findById(id, scope)
     if (!agency) {
       throw new PrmDomainError(PRM_ERROR_CODES.AGENCY_NOT_FOUND, 'Agency not found', 404)
+    }
+
+    if (
+      'ifMatchVersion' in patch &&
+      typeof patch.ifMatchVersion === 'number' &&
+      patch.ifMatchVersion !== agency.version
+    ) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.STATUS_CONFLICT,
+        'Agency was modified by another user — refresh and retry',
+        409,
+      )
     }
 
     const before = {
@@ -235,6 +253,7 @@ export class AgencyService {
     if ('ndaSigned' in patch) agency.ndaSigned = !!patch.ndaSigned
     if ('onboarded' in patch) agency.onboarded = !!patch.onboarded
     agency.updatedAt = new Date()
+    agency.version += 1
 
     await this.em.flush()
 

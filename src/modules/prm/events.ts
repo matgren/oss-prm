@@ -77,6 +77,24 @@ const events = [
   { id: 'prm.rfp_response.submitted', label: 'RFP response submitted', entity: 'rfp_response', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.rfp_response.unsubmitted', label: 'RFP response unsubmitted (undo)', entity: 'rfp_response', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
 
+  // RFP scoring & selection (Spec #6 — rfp-scoring-selection).
+  // Cross-spec contract (FROZEN once shipped):
+  //   - `prm.rfp_response_score.recorded` is the canonical "score recorded"
+  //     event (App-Spec used `prm.rfp_response.scored` historically — that
+  //     name is intentionally NOT shipped; no consumer depends on it).
+  //   - `prm.rfp.selection_made` is the first-time-select signal; re-selects
+  //     emit `prm.rfp.selection_changed` instead.
+  //   - `prm.rfp.reopened_for_scoring` is the trigger for the
+  //     ChallengeRoundRevisionUnlocker subscriber.
+  //   - `prm.rfp.reopened_deadline_expired` is the scheduler's success signal.
+  { id: 'prm.rfp_response_score.recorded', label: 'RFP response score recorded (append-only v+1)', entity: 'rfp_response_score', category: 'lifecycle', clientBroadcast: true },
+  { id: 'prm.rfp.selection_made', label: 'RFP winner selected (first-time)', entity: 'rfp', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.rfp.selection_changed', label: 'RFP winner re-selected (compensating)', entity: 'rfp', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.rfp.closed', label: 'RFP closed (terminal)', entity: 'rfp', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.rfp.reopened_for_scoring', label: 'RFP re-opened for scoring (challenge round)', entity: 'rfp', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.rfp_response.available_for_revision', label: 'RFP response available for revision (challenge round)', entity: 'rfp_response', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.rfp.reopened_deadline_expired', label: 'RFP reopened deadline expired (auto → scoring)', entity: 'rfp', category: 'system' },
+
   // Case studies + marketing library (Spec #7 — case-studies-marketing).
   // Cross-spec contract (FROZEN): the cache invalidator subscribers below depend
   // on the published / unpublished / updated triple. The publication-flag

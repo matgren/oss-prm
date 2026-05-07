@@ -123,33 +123,48 @@ export async function deleteLicenseDealIfExists(
 }
 
 /**
- * Prospect creation fixture — placeholder.
+ * Prospect creation fixture (portal-side).
  *
- * Prospect WRITES are portal-only (`POST /api/prm/portal/prospects`). The
+ * Prospect WRITES are portal-only (`POST /api/prm/portal/prospects`); the
  * backend list at `/api/prm/prospects` is read-only by design (Spec #2 §3.2,
  * "B4 — Cross-agency Prospect read-only list").
  *
- * To seed a Prospect via API a partner-admin customer token is required,
- * which depends on a customer-portal auth helper that is not yet shipped in
- * `@open-mercato/core/testing/integration`. Filling this in is owed work
- * (see Phase 4 of the run plan). Calling this fixture today throws so
- * tests fail loud rather than silently skip the partner-admin path.
+ * Pass a partner-admin / partner-member CustomerUser JWT obtained via
+ * `bootPartnerAgencyWithMembers(...)` (returned as `.admin.token` /
+ * `.member.token`). The portal route resolves the Agency from the caller's
+ * `AgencyMember` row, so an `agencyId` argument is intentionally not part of
+ * the public surface — it would be ignored anyway.
+ *
+ * Backwards-compatibility: the legacy stub used to throw "not yet
+ * implemented"; existing call sites passing a staff token will get a clear
+ * error from the API (401/403) instead of a silent success.
  */
 export async function createProspectFixture(
-  _request: APIRequestContext,
-  _token: string,
-  _input: {
-    agencyId: string
+  request: APIRequestContext,
+  customerToken: string,
+  input: {
     companyName: string
     contactName: string
     contactEmail: string
     source?: 'agency_owned' | 'event' | 'other'
   },
 ): Promise<string> {
-  throw new Error(
-    'createProspectFixture is not yet implemented — needs a partner-admin portal token. ' +
-      'Track the customer-portal auth helper in the run plan (Phase 4).',
-  )
+  const data: Record<string, unknown> = {
+    companyName: input.companyName,
+    contactName: input.contactName,
+    contactEmail: input.contactEmail,
+    ...(input.source ? { source: input.source } : {}),
+  }
+  const response = await apiRequest(request, 'POST', '/api/prm/portal/prospects', {
+    token: customerToken,
+    data,
+  })
+  const body = await readJsonSafe<{ ok?: true; id?: string; prospect?: { id?: string } }>(response)
+  expect(
+    response.status(),
+    `POST /api/prm/portal/prospects should return 201; got ${response.status()} body=${JSON.stringify(body)}`,
+  ).toBe(201)
+  return expectId(body?.id ?? body?.prospect?.id, 'Prospect creation response should include id')
 }
 
 export async function deleteProspectIfExists(

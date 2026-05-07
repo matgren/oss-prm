@@ -91,6 +91,15 @@ export class Agency {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
+
+  /**
+   * Optimistic-concurrency token — bumped on every aggregate write. Mirrors the
+   * `LicenseDeal.version` reference implementation. Backend + portal PATCH
+   * routes accept an optional `ifMatchVersion` token; mismatches raise
+   * `STATUS_CONFLICT` (409). Default `1` so existing rows backfill safely.
+   */
+  @Property({ type: 'integer', default: 1 })
+  version: number = 1
 }
 
 /**
@@ -598,6 +607,17 @@ export class Rfp {
   @Property({ name: 'closed_at', type: Date, nullable: true })
   closedAt?: Date | null
 
+  /**
+   * Spec #6 — challenge round / re-open deadline (US5.10).
+   *
+   * Set by `RfpService.reopenRfp` to a future timestamp; cleared by close
+   * or by the `RfpReopenedDeadlineExpiry` worker when it expires (auto-
+   * transitions the RFP back to `scoring`). Always NULL when status is
+   * not `reopened`.
+   */
+  @Property({ name: 'reopened_deadline_at', type: Date, nullable: true })
+  reopenedDeadlineAt?: Date | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
@@ -724,6 +744,85 @@ export class RfpResponse {
   /** Stamped by Spec #6 on challenge-round resubmits (out of scope here). */
   @Property({ name: 'challenge_round_updated_at', type: Date, nullable: true })
   challengeRoundUpdatedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+}
+
+/**
+ * PRM `RfpResponseScore` aggregate (Spec #6 — rfp-scoring-selection).
+ *
+ * **APPEND-ONLY** per invariant #18. Each re-score inserts a new row with
+ * `version = max(version) + 1` for the same `rfp_response_id`. Rows are
+ * NEVER updated and NEVER deleted. The application-layer repository
+ * (`RfpResponseScoreRepo`) exposes only `insertNextVersion()`; all reads
+ * surface latest-version-by-default with optional history. Cross-spec
+ * contract — Spec #6 owns the entity end-to-end.
+ *
+ * Source enum (`manual` / `llm_assisted`) telemeters human-vs-LLM scoring
+ * mix per OQ-009. `llm_model_id` is required iff `source = 'llm_assisted'`
+ * (Zod refine + DB CHECK as defence-in-depth).
+ *
+ * `change_reason` is application-required iff `version > 1` (the
+ * "undo via v+1 insert" pattern documented in spec §10.1). Enforced at
+ * the command layer, not the DB — keeps the invariant in the language
+ * the team lives in.
+ *
+ * Score values are integer 0..5 (DB CHECK). `optional_score` is nullable
+ * for RFPs that have no third dimension.
+ */
+@Entity({ tableName: 'prm_rfp_response_scores' })
+@Unique({ properties: ['rfpResponseId', 'version'], name: 'prm_rfp_response_scores_response_version_uniq' })
+export class RfpResponseScore {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Index()
+  @Property({ name: 'rfp_response_id', type: 'uuid' })
+  rfpResponseId!: string
+
+  /** 1, 2, 3, … per `rfp_response_id`. UNIQUE `(rfp_response_id, version)`. */
+  @Property({ name: 'version', type: 'integer' })
+  version!: number
+
+  /** OM staff `user_id` who recorded the score. */
+  @Property({ name: 'scored_by_user_id', type: 'uuid' })
+  scoredByUserId!: string
+
+  /** 0..5 — DB CHECK enforced. */
+  @Property({ name: 'tech_fit_score', type: 'smallint' })
+  techFitScore!: number
+
+  /** 0..5 — DB CHECK enforced. */
+  @Property({ name: 'domain_fit_score', type: 'smallint' })
+  domainFitScore!: number
+
+  /** 0..5 — nullable. NULL when the rubric has no third dimension. */
+  @Property({ name: 'optional_score', type: 'smallint', nullable: true })
+  optionalScore?: number | null
+
+  @Property({ name: 'include_optional', type: 'boolean', default: false })
+  includeOptional: boolean = false
+
+  /** Required (min 10 chars at the validator level). */
+  @Property({ type: 'text' })
+  reasoning!: string
+
+  /** Enum CHECK (DB-side): `manual` / `llm_assisted`. */
+  @Property({ type: 'text' })
+  source!: string
+
+  /** Required iff `source = 'llm_assisted'`. */
+  @Property({ name: 'llm_model_id', type: 'text', nullable: true })
+  llmModelId?: string | null
+
+  /** Required iff `version > 1` (app-level — see spec §10.1). */
+  @Property({ name: 'change_reason', type: 'text', nullable: true })
+  changeReason?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

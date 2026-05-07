@@ -42,6 +42,17 @@ export const PRM_ERROR_CODES = {
   RFP_BROADCAST_NOT_FOUND: 'rfp_broadcast_not_found',
   RFP_RESPONSE_NOT_FOUND: 'rfp_response_not_found',
   NOT_FOUND: 'not_found',
+  // Spec #6 — rfp-scoring-selection. FROZEN once shipped.
+  CHANGE_REASON_REQUIRED: 'change_reason_required',
+  RFP_NOT_ACCEPTING_SCORES: 'rfp_not_accepting_scores',
+  RESPONSE_NOT_SUBMITTED: 'response_not_submitted',
+  NO_SCORED_RESPONSES: 'no_scored_responses',
+  WINNER_NOT_SCORED: 'winner_not_scored',
+  PATH_B_SIGNED_DEAL_LOCK: 'path_b_signed_deal_lock',
+  INVALID_RFP_TRANSITION: 'invalid_rfp_transition',
+  CLOSE_REASON_REQUIRED: 'close_reason_required',
+  DEADLINE_IN_PAST: 'deadline_in_past',
+  LLM_UNAVAILABLE: 'llm_unavailable',
   // Spec #7 — case-studies-marketing. FROZEN once shipped.
   CASE_STUDY_NOT_FOUND: 'case_study_not_found',
   CASE_STUDY_PUBLISHED_GUARD: 'case_study_published_guard',
