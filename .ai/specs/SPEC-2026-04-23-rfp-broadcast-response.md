@@ -571,6 +571,7 @@ The portal API interceptor (Spec #1) already rejects writes to `RFP.*` from port
 | C3d — P10 submit + unsubmit | Done | 2026-05-07 | Author-scope (M1's draft, M2's submit → 403) at route layer. Service guards: `RFP.status='published'`, `tech_experience` + `domain_experience` non-empty, deadline check, idempotent for already-submitted. 9 service-test cases. |
 | C4 — Decline flow (US5.5) | Done | 2026-05-07 | PartnerAdmin-only at route layer. Service guards: `RFP.status='published'` (R6 pattern), idempotent for already-declined. 8 service-test cases (§9.4 #20-#23 + cross-agency probe). |
 | C5 — Final gate + spec status | Done | 2026-05-07 | typecheck=0, jest 21 suites / 189 tests, generate clean. POST-MVP-FOLLOW-UPS extended with 5 entries (customer-portal Playwright auth helper, case-study picker, markdown editor primitive, §9.1 #4 partial-insert rollback, §9.6 perf smoke). |
+| C6 — §9.6 perf-smoke at 500 agencies | Done | 2026-05-07 | Pure-function evaluator (14 unit cases) elevated to a Postgres-backed Playwright smoke `TC-PRM-T5-PERF-001`. Reusable 500-agency synthetic roster generator at `src/modules/prm/testing/fixtures/perfAgencyRoster.ts` (FROZEN tier mix 250/150/75/25; reusable for future 5k-agency perf work via `size` arg). Bulk-seed seam at `POST /api/prm/test-fixtures/bulk-seed-agencies` keeps setup <1s. Threshold: 2s per §9.6 #27 (generous — smoke not benchmark). |
 
 ### Run plan reference
 
@@ -579,7 +580,7 @@ The portal API interceptor (Spec #1) already rejects writes to `RFP.*` from port
 ### Test surface summary
 
 - **Unit (jest):** 21 suites, 189 tests across PRM. New for Spec #5: `rfpEligibility.test.ts` (14), `rfpService.test.ts` (33), `rfpVisibility.test.ts` (7).
-- **Integration (Playwright):** TC-PRM-T5-001 covers §9.1 #1, #2, #3, #5. §9.1 #4 (DB-error injection), §9.1 #6 (undo-refused-after-first-open), §9.2-§9.5 deferred until customer-portal Playwright auth helper lands (POST-MVP-FOLLOW-UPS).
+- **Integration (Playwright):** TC-PRM-T5-001 covers §9.1 #1, #2, #3, #5. TC-PRM-T5-PERF-001 covers §9.6 #27. §9.1 #4 (DB-error injection), §9.1 #6 (undo-refused-after-first-open), §9.2-§9.5 deferred until customer-portal Playwright auth helper lands (POST-MVP-FOLLOW-UPS).
 
 ### Cross-spec contracts shipped
 

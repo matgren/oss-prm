@@ -56,3 +56,6 @@ export type {
   PartnerAgencyMember,
   PartnerAgencyFixture,
 } from './customerAuth'
+
+export { bulkSeedAgenciesFixture } from './perfAgencyBulkSeed'
+export type { BulkSeedAgenciesResult } from './perfAgencyBulkSeed'
