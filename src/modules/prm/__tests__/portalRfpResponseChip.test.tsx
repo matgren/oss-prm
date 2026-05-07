@@ -52,6 +52,15 @@ describe('PRM portal — RfpResponseStatusChip (DS migration: success StatusBadg
     expect(className).not.toMatch(/border-emerald/)
   })
 
+  it('does NOT override the DS text-size scale with an arbitrary `text-[Npx]` token', () => {
+    // DS Guardian rule (Medium): arbitrary text sizes break the OM scale.
+    // The Badge primitive ships `text-xs` by default — the chip must inherit
+    // that rather than re-declaring a one-off pixel value.
+    const tree = asReactElement(RfpResponseStatusChip({ status: 'submitted' }))
+    const className = (tree.props as { className?: string }).className ?? ''
+    expect(className).not.toMatch(/text-\[\d+px\]/)
+  })
+
   it('preserves the data-testid hook for existing Playwright fixtures', () => {
     const tree = asReactElement(RfpResponseStatusChip({ status: 'submitted' }))
     const inner = asReactElement((tree.props as { children?: React.ReactNode }).children as React.ReactNode)

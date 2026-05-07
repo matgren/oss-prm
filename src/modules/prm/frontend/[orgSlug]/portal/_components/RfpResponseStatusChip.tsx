@@ -33,7 +33,7 @@ export function RfpResponseStatusChip({ status, t }: RfpResponseStatusChipProps)
   const entry = defaults[status]
   const label = t ? t(entry.key, entry.fallback) : entry.fallback
   return (
-    <StatusBadge variant="success" className="text-[11px]">
+    <StatusBadge variant="success">
       <span data-testid="rfp-badge-responded">{label}</span>
     </StatusBadge>
   )
