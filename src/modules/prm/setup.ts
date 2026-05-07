@@ -11,6 +11,7 @@ import {
   WorkflowDefinition,
   type WorkflowDefinitionData,
 } from '@open-mercato/core/modules/workflows/data/entities'
+import { seedTopicsDictionary } from './lib/topicsDictionarySeed'
 
 /**
  * PRM module setup.
@@ -265,11 +266,13 @@ export const setup: ModuleSetupConfig = {
   async onTenantCreated({ em, tenantId, organizationId }) {
     await seedPartnerRoles(em as EntityManager, { tenantId, organizationId })
     await seedAttributionSagaWorkflow(em as EntityManager, { tenantId, organizationId })
+    await seedTopicsDictionary(em as EntityManager, { tenantId, organizationId })
   },
 
   async seedDefaults({ em, tenantId, organizationId }) {
     await seedPartnerRoles(em as EntityManager, { tenantId, organizationId })
     await seedAttributionSagaWorkflow(em as EntityManager, { tenantId, organizationId })
+    await seedTopicsDictionary(em as EntityManager, { tenantId, organizationId })
   },
 }
 

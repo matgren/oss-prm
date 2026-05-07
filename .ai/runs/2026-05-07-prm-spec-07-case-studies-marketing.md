@@ -206,11 +206,11 @@ Commit message: `docs(runs): close prm-spec-07 run plan; spec implementation sta
 
 ### Commit 3: B8 CaseStudy admin + topics dictionary seed
 
-- [ ] 3.1 B8 backend page (cross-Agency list + publication-flag toggle)
-- [ ] 3.2 B8 detail page
-- [ ] 3.3 `topics` dictionary seed in `setup.ts`
-- [ ] 3.4 Unit tests
-- [ ] 3.5 Gate green
+- [x] 3.1 B8 backend page (cross-Agency list + publication-flag toggle)
+- [x] 3.2 B8 detail page (read-only narrative + flag/url editor)
+- [x] 3.3 `topics` dictionary seed in `lib/topicsDictionarySeed.ts` + wired into `setup.seedDefaults`
+- [x] 3.4 Unit tests — setupTopicsDictionary.test.ts (3 cases: canonical slug list, first-call insert, idempotent re-run)
+- [x] 3.5 Gate green — typecheck clean; jest 297/297 across 31 suites
 
 ### Commit 4: P11 Marketing Library + tier gate
 
