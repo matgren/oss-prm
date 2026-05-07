@@ -222,9 +222,9 @@ Commit: `docs: trim POST-MVP follow-ups now covered by smoke suite + cross-refer
 
 ### Phase 2: T0 smoke (Agency happy path)
 
-- [ ] 2.1 Create TC-PRM-T0-001-agency-happy-path.spec.ts (create + invite + accept seam + profile)
-- [ ] 2.2 Run twice — green both times
-- [ ] 2.3 Surface any real bug; do NOT stub
+- [x] 2.1 Create TC-PRM-T0-001-agency-happy-path.spec.ts (create + invite + accept seam + profile) — 3d8e935
+- [x] 2.2 Run twice — green both times — 3d8e935
+- [x] 2.3 Surface real bugs (4 found, all fixed — see commit message): migration FK refs, portal route auth metadata, slug normalization, seam org migration — 3d8e935
 
 ### Phase 3: T1 smoke (Prospect happy path)
 
