@@ -10,6 +10,7 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { cn } from '@open-mercato/shared/lib/utils'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { PartnerStatusBanner } from '../_components/PartnerStatusBanner'
 
 type TierRequirement = {
   tier: string
@@ -98,17 +99,6 @@ function ScopeToggle(props: { value: ScopeMode; onChange: (v: ScopeMode) => void
       >
         {props.t('prm.portal.dashboard.toggle.yearly', 'This year')}
       </Button>
-    </div>
-  )
-}
-
-function HistoricalBanner({ t }: { t: (k: string, fb?: string) => string }) {
-  return (
-    <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-      {t(
-        'prm.portal.dashboard.banner.historical',
-        'Your partnership is historical — most actions are paused. Contact OM PartnerOps to reactivate.',
-      )}
     </div>
   )
 }
@@ -204,7 +194,12 @@ export default function PortalDashboardPage() {
         </p>
       </header>
 
-      {data.agency.status === 'historical' ? <HistoricalBanner t={t} /> : null}
+      <PartnerStatusBanner
+        status={data.agency.status}
+        t={t}
+        messageKey="prm.portal.dashboard.banner.historical"
+        message="Your partnership is historical — most actions are paused. Contact OM PartnerOps to reactivate."
+      />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {/* WIP widget */}

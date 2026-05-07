@@ -7,6 +7,7 @@ import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { PartnerStatusBanner } from '../_components/PartnerStatusBanner'
 
 type AgencyView = {
   id: string
@@ -31,15 +32,6 @@ type AgencyView = {
 }
 
 const TEAM_SIZE_BUCKETS = ['1-5', '6-20', '21-50', '51-100', '100+'] as const
-
-function PartnerStatusBanner({ status }: { status?: string }) {
-  if (status !== 'historical') return null
-  return (
-    <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-      Your partnership is historical — contact OM PartnerOps to reactivate.
-    </div>
-  )
-}
 
 export default function PortalAgencyProfilePage() {
   const t = useT()
@@ -126,7 +118,13 @@ export default function PortalAgencyProfilePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-6">
-      <PartnerStatusBanner status={agency._prm?.status} />
+      <PartnerStatusBanner
+        status={agency._prm?.status}
+        t={t}
+        messageKey="prm.portal.agency.banner.historical"
+        message="Your partnership is historical — contact OM PartnerOps to reactivate."
+        className="mb-4"
+      />
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">{agency.name}</h1>

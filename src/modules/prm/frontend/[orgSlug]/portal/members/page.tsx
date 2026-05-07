@@ -6,6 +6,7 @@ import { Input } from '@open-mercato/ui/primitives/input'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { PartnerStatusBanner } from '../_components/PartnerStatusBanner'
 
 type Member = {
   id: string
@@ -95,11 +96,12 @@ export default function PortalMembersPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-6">
-      {agencyStatus === 'historical' ? (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Your partnership is historical — member management is paused.
-        </div>
-      ) : null}
+      <PartnerStatusBanner
+        status={agencyStatus}
+        t={t}
+        messageKey="prm.portal.members.banner.historical"
+        message="Your partnership is historical — member management is paused."
+      />
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{t('prm.portal.members.title', 'Members')}</h1>
         {isPartnerAdmin ? (

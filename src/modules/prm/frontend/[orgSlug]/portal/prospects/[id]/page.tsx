@@ -3,6 +3,7 @@ import * as React from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { Alert, AlertDescription, AlertTitle } from '@open-mercato/ui/primitives/alert'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
@@ -202,10 +203,10 @@ export default function PortalProspectDetailPage() {
       </header>
 
       {prospect.status === 'lost' && prospect.lostReason ? (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <div className="font-medium">{t('prm.portal.prospects.detail.lostReason', 'Lost reason')}</div>
-          <div className="mt-1">{prospect.lostReason}</div>
-        </div>
+        <Alert variant="warning">
+          <AlertTitle>{t('prm.portal.prospects.detail.lostReason', 'Lost reason')}</AlertTitle>
+          <AlertDescription>{prospect.lostReason}</AlertDescription>
+        </Alert>
       ) : null}
 
       {allowedTransitions.length > 0 && canEdit ? (
