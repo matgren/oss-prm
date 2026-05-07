@@ -15,6 +15,8 @@ import {
 } from '../data/validators'
 import type { PrmEventId } from '../events'
 import { safeEmit } from './safeEmit'
+import * as RecordWicContribution from '../commands/wic/recordWicContribution'
+import * as SupersedeWicContribution from '../commands/wic/supersedeWicContribution'
 
 type ContainerLike = { resolve?: <T = unknown>(name: string) => T }
 
@@ -66,9 +68,11 @@ function emitWithContainer(
  *   tied to the latter is fine because each row's invalidation is independent
  *   and observing rows 0..N-1 before N is consistent with the n8n contract.
  *
- *   Aspirational `RecordWicContributionCommand.undo` for selective abort-
- *   recovery (Spec §4.1) is deferred to v2; with the per-row + UNIQUE replay
- *   design, it is not required for v1 correctness.
+ *   The atomic write for an accepted row is delegated to
+ *   `RecordWicContributionCommand.execute`; the supersession flip on a
+ *   pre-existing active row is delegated to `SupersedeWicContributionCommand.execute`.
+ *   Both commands ship with `undo` semantics (Spec §4.1 + §10.7) so OM
+ *   PartnerOps can roll back from B10 when n8n floods bad data.
  */
 
 export type WicAcceptedRow = {
@@ -205,9 +209,11 @@ function buildAuditLogFromRaw(
  * Return `WicProcessedRow` so the route handler can build the response payload.
  *
  * Side effects:
- *   - Persists exactly one of: a new `WicContribution`, a `WicImportAuditLog`, OR
- *     (for supersession) a new `WicContribution` AND a status flip on the previous row.
- *   - Emits domain events via `safeEmit` (best-effort — never blocks the import on
+ *   - For an accepted row: invokes `RecordWicContributionCommand.execute` (insert + emit).
+ *   - For a superseded row: invokes `RecordWicContributionCommand.execute` then
+ *     `SupersedeWicContributionCommand.execute` to flip the previous row.
+ *   - For a rejected row: persists a `WicImportAuditLog` row + emits `prm.wic_import.row_rejected`.
+ *   - All event emits go through `safeEmit` (best-effort — never blocks the import on
  *     event-bus failure).
  */
 export async function processWicRow(
@@ -407,76 +413,56 @@ export async function processWicRow(
     contributionMonth,
   )
 
-  const newContribution = em.create(WicContribution, {
-    tenantId: ctx.tenantId,
-    organizationId: ctx.organizationId,
-    agencyId: resolved.member.agencyId, // SNAPSHOT — invariant #13
-    agencyMemberId: resolved.member.id,
-    githubProfile: resolved.member.githubProfile, // SNAPSHOT — invariant #13
-    contributionMonth,
-    wicLevel: row.wic_level as WicLevel,
-    wicScore: row.wic_score.toString(),
-    contributionCount: row.contribution_count,
-    bountyBonus: row.bounty_bonus.toString(),
-    whyBonus: row.why_bonus ?? null,
-    whatIncluded: row.what_included ?? null,
-    whatExcluded: row.what_excluded ?? null,
-    scriptVersion: ctx.scriptVersion,
-    importBatchId: ctx.importBatchId,
-    rowIndex: row.row_index,
-    computedAt: new Date(row.computed_at),
-    importedAt: new Date(),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as any)
-  em.persist(newContribution)
+  // Delegate the atomic INSERT + `prm.wic.contribution_recorded` to
+  // `RecordWicContributionCommand.execute`. This closes the v2 deferral that
+  // previously sat in this file (lines 69-71 of the pre-Spec-#4-§4
+  // implementation): undo of an inserted row is now a first-class operation.
+  const recorded = await RecordWicContribution.execute(
+    {
+      tenantId: ctx.tenantId,
+      organizationId: ctx.organizationId,
+      agencyId: resolved.member.agencyId, // SNAPSHOT — invariant #13
+      agencyMemberId: resolved.member.id,
+      githubProfile: resolved.member.githubProfile, // SNAPSHOT — invariant #13
+      contributionMonth,
+      wicLevel: row.wic_level as WicLevel,
+      wicScore: row.wic_score.toString(),
+      contributionCount: row.contribution_count,
+      bountyBonus: row.bounty_bonus.toString(),
+      whyBonus: row.why_bonus ?? null,
+      whatIncluded: row.what_included ?? null,
+      whatExcluded: row.what_excluded ?? null,
+      scriptVersion: ctx.scriptVersion,
+      importBatchId: ctx.importBatchId,
+      rowIndex: row.row_index,
+      computedAt: new Date(row.computed_at),
+    },
+    { em, container: ctx.container ?? null },
+  )
 
   if (previous) {
-    previous.supersededById = newContribution.id
-    previous.archivedAt = new Date()
-    em.persist(previous)
-    await em.flush()
-    emitWithContainer(ctx.container ?? null, 'prm.wic.contribution_superseded', {
-      previousContributionId: previous.id,
-      newContributionId: newContribution.id,
-      agencyId: previous.agencyId,
-      agencyMemberId: previous.agencyMemberId,
-      contributionMonth: previous.contributionMonth.toISOString(),
-    })
-    emitWithContainer(ctx.container ?? null, 'prm.wic.contribution_recorded', {
-      contributionId: newContribution.id,
-      agencyId: newContribution.agencyId,
-      agencyMemberId: newContribution.agencyMemberId,
-      githubProfile: newContribution.githubProfile,
-      contributionMonth: newContribution.contributionMonth.toISOString(),
-      wicLevel: newContribution.wicLevel ?? null,
-      wicScore: newContribution.wicScore,
-      importBatchId: newContribution.importBatchId,
-      rowIndex: newContribution.rowIndex,
-      importedAt: newContribution.importedAt.toISOString(),
-    })
+    // Delegate the supersession flip + `prm.wic.contribution_superseded` event
+    // to `SupersedeWicContributionCommand.execute`. The command accepts the
+    // already-loaded `previous` row to avoid a second SELECT in the import hot path.
+    await SupersedeWicContribution.execute(
+      {
+        tenantId: ctx.tenantId,
+        organizationId: ctx.organizationId,
+        previousContributionId: previous.id,
+        newContributionId: recorded.contributionId,
+        previous,
+      },
+      { em, container: ctx.container ?? null },
+    )
     return {
       status: 'superseded',
       rowIndex: row.row_index,
-      contributionId: newContribution.id,
+      contributionId: recorded.contributionId,
       previousContributionId: previous.id,
     }
   }
 
-  await em.flush()
-  emitWithContainer(ctx.container ?? null, 'prm.wic.contribution_recorded', {
-    contributionId: newContribution.id,
-    agencyId: newContribution.agencyId,
-    agencyMemberId: newContribution.agencyMemberId,
-    githubProfile: newContribution.githubProfile,
-    contributionMonth: newContribution.contributionMonth.toISOString(),
-    wicLevel: newContribution.wicLevel ?? null,
-    wicScore: newContribution.wicScore,
-    importBatchId: newContribution.importBatchId,
-    rowIndex: newContribution.rowIndex,
-    importedAt: newContribution.importedAt.toISOString(),
-  })
-  return { status: 'accepted', rowIndex: row.row_index, contributionId: newContribution.id }
+  return { status: 'accepted', rowIndex: row.row_index, contributionId: recorded.contributionId }
 }
 
 /**
@@ -532,4 +518,3 @@ export async function processWicBatch(
     rows,
   }
 }
-
