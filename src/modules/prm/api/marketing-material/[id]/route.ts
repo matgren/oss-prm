@@ -8,7 +8,7 @@ import {
   type MarketingMaterialService,
   toMarketingMaterialDto,
 } from '../../../lib/marketingMaterialService'
-import { PrmDomainError, toPrmErrorBody } from '../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../lib/errors'
 
 /**
  * B9 — backend Marketing Material detail / update / hard-delete.
@@ -37,7 +37,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     const m = await service.getById(params.id, { organizationId: auth.orgId })
     return NextResponse.json({ ok: true, material: toMarketingMaterialDto(m) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err
@@ -69,7 +69,7 @@ export async function PUT(req: Request, ctx: RouteContext) {
     const m = await service.update(params.id, parsed.data, { organizationId: auth.orgId })
     return NextResponse.json({ ok: true, material: toMarketingMaterialDto(m) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err
@@ -88,7 +88,7 @@ export async function DELETE(req: Request, ctx: RouteContext) {
     await service.delete(params.id, { organizationId: auth.orgId })
     return NextResponse.json({ ok: true }, { status: 200 })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

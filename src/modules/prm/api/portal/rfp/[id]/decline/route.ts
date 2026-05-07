@@ -9,7 +9,7 @@ import { CustomerRbacService } from '@open-mercato/core/modules/customer_account
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { declineRfpBroadcastSchema } from '../../../../../data/validators'
-import { PrmDomainError } from '../../../../../lib/errors'
+import { isPrmDomainError } from '../../../../../lib/errors'
 import type { AgencyMemberService } from '../../../../../lib/agencyMemberService'
 import type { RfpService } from '../../../../../lib/rfpService'
 import {
@@ -113,7 +113,7 @@ export async function POST(
       declined,
     })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(
         {
           ok: false,

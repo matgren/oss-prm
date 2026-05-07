@@ -10,7 +10,7 @@ import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib
 import { hasFeature } from '@open-mercato/shared/security/features'
 import { updateAgencyPortalSchema, ADMIN_ONLY_AGENCY_FIELDS } from '../../../../data/validators'
 import type { AgencyService } from '../../../../lib/agencyService'
-import { PRM_ERROR_CODES, PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
+import { PRM_ERROR_CODES, isPrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 import { summariseAgency } from '../../../agency/route'
 import { safeEmit } from '../../../../lib/safeEmit'
 
@@ -185,7 +185,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const summary = summariseAgency(updated)
     return NextResponse.json({ ok: true, agency: buildPortalAgencyView(summary, auth.resolvedFeatures) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

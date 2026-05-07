@@ -11,7 +11,7 @@ import {
   type MarketingMaterialService,
   toMarketingMaterialDto,
 } from '../../lib/marketingMaterialService'
-import { PrmDomainError, toPrmErrorBody } from '../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../lib/errors'
 
 /**
  * B9 — backend Marketing Material list + create (Spec #7 §3.3 / US7.1).
@@ -81,7 +81,7 @@ export async function POST(req: Request) {
     const m = await service.create(parsed.data, { organizationId: auth.orgId, userId: auth.sub })
     return NextResponse.json({ ok: true, material: toMarketingMaterialDto(m) }, { status: 201 })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

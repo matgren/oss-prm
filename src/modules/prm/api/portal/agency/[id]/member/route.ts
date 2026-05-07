@@ -13,7 +13,7 @@ import { portalInviteAgencyMemberSchema } from '../../../../../data/validators'
 import type { AgencyService } from '../../../../../lib/agencyService'
 import type { AgencyMemberService } from '../../../../../lib/agencyMemberService'
 import type { ReinviteCooldownService } from '../../../../../lib/reinviteCooldownService'
-import { PRM_ERROR_CODES, PrmDomainError, toPrmErrorBody } from '../../../../../lib/errors'
+import { PRM_ERROR_CODES, isPrmDomainError, toPrmErrorBody } from '../../../../../lib/errors'
 import { sendPartnerInviteEmail } from '../../../../../emails/sendPartnerInviteEmail'
 import { summariseAgencyMember } from '../../../../agency-member/route'
 import { AgencyMember } from '../../../../../data/entities'
@@ -201,7 +201,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       { status: 201 },
     )
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

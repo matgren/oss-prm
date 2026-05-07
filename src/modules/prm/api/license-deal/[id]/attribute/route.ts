@@ -7,7 +7,7 @@ import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib
 import { attributeLicenseDealSchema } from '../../../../data/validators'
 import type { LicenseDealService } from '../../../../lib/licenseDealService'
 import { runInlineSaga } from '../../../../lib/attributionSaga'
-import { PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 import { summariseLicenseDeal } from '../../route'
 
 /**
@@ -103,7 +103,7 @@ export async function POST(req: Request) {
       { status: 202 },
     )
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

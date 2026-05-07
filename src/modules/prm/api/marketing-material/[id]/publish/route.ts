@@ -7,7 +7,7 @@ import {
   type MarketingMaterialService,
   toMarketingMaterialDto,
 } from '../../../../lib/marketingMaterialService'
-import { PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 
 /**
  * B9 — publish action (Spec #7 §4.1 / US7.1).
@@ -38,7 +38,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     )
     return NextResponse.json({ ok: true, material: toMarketingMaterialDto(m) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

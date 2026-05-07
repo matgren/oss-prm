@@ -11,7 +11,7 @@ import { hasFeature } from '@open-mercato/shared/security/features'
 import { updateProspectSchema } from '../../../../data/validators'
 import type { AgencyMemberService } from '../../../../lib/agencyMemberService'
 import type { ProspectService, ProspectActor } from '../../../../lib/prospectService'
-import { PRM_ERROR_CODES, PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
+import { PRM_ERROR_CODES, isPrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 import { summariseProspect } from '../route'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -213,7 +213,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       }),
     })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

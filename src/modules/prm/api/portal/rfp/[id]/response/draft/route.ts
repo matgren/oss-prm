@@ -10,7 +10,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import type { RateLimiterService } from '@open-mercato/shared/lib/ratelimit/service'
 import { draftRfpResponseSchema } from '../../../../../../data/validators'
-import { PrmDomainError } from '../../../../../../lib/errors'
+import { isPrmDomainError } from '../../../../../../lib/errors'
 import type { AgencyMemberService } from '../../../../../../lib/agencyMemberService'
 import type { RfpService } from '../../../../../../lib/rfpService'
 import {
@@ -144,7 +144,7 @@ export async function POST(
       emitted,
     })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(
         { ok: false, error: { code: err.code, message: err.message } },
         { status: err.status },

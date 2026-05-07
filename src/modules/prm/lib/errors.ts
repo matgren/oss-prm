@@ -78,6 +78,49 @@ export class PrmDomainError extends Error {
   }
 }
 
+/**
+ * Tag-based type guard for `PrmDomainError`.
+ *
+ * **Why not `err instanceof PrmDomainError`?** Under Next.js Turbopack
+ * production bundling the service-side chunk and the route-side chunk can
+ * each receive their own copy of `PrmDomainError`. The prototype chains
+ * diverge, so an error thrown from `RfpService.publish` does not satisfy
+ * `instanceof PrmDomainError` when caught in the route handler — even
+ * though `err.name === 'PrmDomainError'` and the error's structural shape
+ * (`code`, `status`, `message`) is identical. The route handler then falls
+ * through to its `throw err` branch and Next.js surfaces a bare 500 with
+ * `body=null`, masking the intended structured envelope (e.g. 409
+ * `validation_failed`).
+ *
+ * Jest does not reproduce this because ts-jest puts all module copies in
+ * one CommonJS graph, so prototype identity holds. Production-shaped
+ * builds (Turbopack, Webpack server bundles) can split the same class
+ * across chunks.
+ *
+ * The guard checks the tag name + a minimal structural shape so a
+ * sibling-chunk `PrmDomainError` is recognised correctly. It deliberately
+ * keeps the surface narrow — no string matching of error messages, no
+ * pattern matching on stack traces. If something walks like a
+ * `PrmDomainError` and quacks like a `PrmDomainError` (`name`, `code`,
+ * numeric `status`), it is treated as one.
+ */
+export function isPrmDomainError(err: unknown): err is PrmDomainError {
+  if (!err || typeof err !== 'object') return false
+  if (err instanceof PrmDomainError) return true
+  const candidate = err as {
+    name?: unknown
+    code?: unknown
+    status?: unknown
+    message?: unknown
+  }
+  return (
+    candidate.name === 'PrmDomainError' &&
+    typeof candidate.code === 'string' &&
+    typeof candidate.status === 'number' &&
+    typeof candidate.message === 'string'
+  )
+}
+
 /** Standard envelope used by all PRM routes for error responses. */
 export function toPrmErrorBody(err: PrmDomainError): {
   ok: false

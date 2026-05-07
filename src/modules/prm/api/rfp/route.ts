@@ -8,7 +8,7 @@ import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib
 import { Rfp } from '../../data/entities'
 import { createRfpDraftSchema, listRfpsBackendSchema, RFP_STATUSES } from '../../data/validators'
 import type { RfpService } from '../../lib/rfpService'
-import { PrmDomainError, toPrmErrorBody } from '../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../lib/errors'
 
 /**
  * Backend RFP CRUD route (Spec #5 §3.1).
@@ -120,7 +120,7 @@ export async function POST(req: Request) {
     })
     return NextResponse.json({ ok: true, id: rfp.id, rfp: summariseRfp(rfp) }, { status: 201 })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

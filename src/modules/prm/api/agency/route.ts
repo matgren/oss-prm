@@ -8,7 +8,7 @@ import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib
 import { Agency } from '../../data/entities'
 import { createAgencySchema } from '../../data/validators'
 import type { AgencyService } from '../../lib/agencyService'
-import { PrmDomainError, toPrmErrorBody } from '../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../lib/errors'
 
 /**
  * Backend Agency CRUD route.
@@ -129,7 +129,7 @@ export async function POST(req: Request) {
     })
     return NextResponse.json({ ok: true, agency: summariseAgency(agency) }, { status: 201 })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

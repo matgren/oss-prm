@@ -5,7 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { closeRfpSchema } from '../../../../data/validators'
 import type { RfpService } from '../../../../lib/rfpService'
-import { PrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../../lib/errors'
 
 /**
  * POST /api/prm/rfp/{id}/close — Spec #6 §3.4 (US5.9). Terminal lifecycle.
@@ -56,7 +56,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       final_selected_agency_id: result.finalSelectedAgencyId,
     })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

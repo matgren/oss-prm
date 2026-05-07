@@ -5,7 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { updateAgencyBackendSchema } from '../../../data/validators'
 import type { AgencyService } from '../../../lib/agencyService'
-import { PrmDomainError, toPrmErrorBody, PRM_ERROR_CODES } from '../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody, PRM_ERROR_CODES } from '../../../lib/errors'
 import { summariseAgency } from '../route'
 
 export const metadata = {
@@ -74,7 +74,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     })
     return NextResponse.json({ ok: true, agency: summariseAgency(agency) })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

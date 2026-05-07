@@ -15,7 +15,7 @@ import {
 } from '../../../data/validators'
 import type { AgencyMemberService } from '../../../lib/agencyMemberService'
 import type { ProspectService, ProspectActor } from '../../../lib/prospectService'
-import { PRM_ERROR_CODES, PrmDomainError, toPrmErrorBody } from '../../../lib/errors'
+import { PRM_ERROR_CODES, isPrmDomainError, toPrmErrorBody } from '../../../lib/errors'
 import { Prospect } from '../../../data/entities'
 
 /**
@@ -193,7 +193,7 @@ export async function POST(req: Request) {
       { status: 201 },
     )
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

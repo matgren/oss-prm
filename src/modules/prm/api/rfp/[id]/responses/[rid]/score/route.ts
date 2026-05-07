@@ -5,7 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { recordRfpResponseScoreSchema } from '../../../../../../data/validators'
 import type { RfpService } from '../../../../../../lib/rfpService'
-import { PrmDomainError, toPrmErrorBody } from '../../../../../../lib/errors'
+import { isPrmDomainError, toPrmErrorBody } from '../../../../../../lib/errors'
 
 /**
  * POST /api/prm/rfp/{id}/responses/{rid}/score — Spec #6 §3.1 (US5.6).
@@ -69,7 +69,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       is_initial_score_on_rfp: result.isInitialScoreOnRfp,
     })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err

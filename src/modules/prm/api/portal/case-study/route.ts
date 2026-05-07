@@ -18,7 +18,7 @@ import {
   toCaseStudyDto,
 } from '../../../lib/caseStudyService'
 import type { AgencyMemberService } from '../../../lib/agencyMemberService'
-import { PRM_ERROR_CODES, PrmDomainError, toPrmErrorBody } from '../../../lib/errors'
+import { PRM_ERROR_CODES, isPrmDomainError, toPrmErrorBody } from '../../../lib/errors'
 import { safeEmit } from '../../../lib/safeEmit'
 
 /**
@@ -151,7 +151,7 @@ export async function POST(req: Request) {
     })
     return NextResponse.json({ ok: true, caseStudy: toCaseStudyDto(cs) }, { status: 201 })
   } catch (err) {
-    if (err instanceof PrmDomainError) {
+    if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
     }
     throw err
