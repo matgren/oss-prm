@@ -2,7 +2,7 @@
 
 **Branch:** `feat/prm-portal-ds-migration`
 **Base:** `develop` (`a317ea7`)
-**Status:** in-progress
+**Status:** complete — PR #21 (https://github.com/matgren/oss-prm/pull/21)
 
 ## Goal
 
@@ -173,10 +173,11 @@ Rewrite the "Design system follow-ups" section header with a one-paragraph corre
 
 ### Phase 6: Open PR + auto-review-pr loop
 
-- [ ] 6.1 Open PR; apply `review` + `feature` labels; post short label rationale comments
-- [ ] 6.2 Run `auto-review-pr` autofix pass; address actionable findings (if any)
-- [ ] 6.3 Post comprehensive summary comment
+- [x] 6.1 Open PR (#21); apply `review` + `feature` labels; post short label rationale comments — pr-21
+- [x] 6.2 SKIPPED — auto-review-pr autofix pass per explicit launching-message instruction ("Do not invoke other agent skills (no om-auto-review-pr)").
+- [x] 6.3 Post comprehensive summary comment — pr-21
 
 ## Changelog
 
 - 2026-05-07 — Plan created on `feat/prm-portal-ds-migration`.
+- 2026-05-07 — All 6 phases complete; PR #21 opened against `develop` (https://github.com/matgren/oss-prm/pull/21). Final test count 528/528 (was 482/482; +46). `auto-review-pr` autofix pass intentionally skipped per launching-message instruction.
