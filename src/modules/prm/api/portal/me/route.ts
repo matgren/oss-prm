@@ -11,8 +11,16 @@ import { summariseAgencyMember } from '../../agency-member/route'
  * Convenience endpoint for the portal shell — resolves the current `CustomerUser` to
  * its (active) `AgencyMember` and `Agency`, so portal pages can navigate to
  * `/portal/agency/{id}` and `/portal/members/{id}` without a separate lookup.
+ *
+ * Customer-portal route — auth is enforced inside the handler via
+ * `requireCustomerAuth` (customer JWT). The framework's `/api/[...slug]`
+ * catch-all rejects requests without a *staff* JWT by default; setting
+ * `requireAuth: false` defers auth to the handler and prevents a spurious
+ * 401 before customer auth even runs.
  */
-export const metadata = {}
+export const metadata = {
+  GET: { requireAuth: false },
+}
 
 export async function GET(req: Request) {
   let auth

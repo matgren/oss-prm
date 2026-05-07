@@ -190,6 +190,50 @@ describe('POST /api/prm/test-fixtures/agency-member-link', () => {
     expect(createdAgencyMember.activatedAt).toBeInstanceOf(Date)
   })
 
+  it('does NOT migrate the CustomerUser organizationId in this seam (deferred — see route.ts comments)', async () => {
+    // Tracking the deliberate non-migration. In production the
+    // accept-invitation flow flips the user's org to the agency's org. The
+    // test seam currently leaves the customer in the staff org so the
+    // existing T5 portal/RFP visibility test does not regress. See
+    // `route.ts` deferred-fix comment block + the TC-PRM-T0-001 commit body
+    // for the full chain. When the route-side org-scope fix lands, this test
+    // flips to assert the migration.
+    process.env.OM_PRM_TEST_FIXTURES_ENABLED = '1'
+    getAuthFromRequestMock.mockResolvedValue({ tenantId: TENANT, orgId: ORG, sub: 'staff-1' })
+    findOneWithDecryptionMock
+      .mockResolvedValueOnce({
+        id: AGENCY,
+        tenantId: TENANT,
+        organizationId: 'agency-org-99', // distinct from staff `orgId`
+        status: 'active',
+      })
+      .mockResolvedValueOnce({ id: 'role-partner-admin', slug: 'partner_admin' })
+    const customerUser = { id: CUSTOMER_USER, tenantId: TENANT, organizationId: ORG }
+    containerEmFindOneMock
+      .mockResolvedValueOnce(customerUser)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+
+    containerEmCreateMock.mockImplementation((cls: any, data: any) => {
+      if (cls?.name === 'AgencyMember') return { id: 'mem-new', ...data }
+      return { ...data }
+    })
+
+    const res = await POST(
+      makeRequest({
+        agencyId: AGENCY,
+        customerUserId: CUSTOMER_USER,
+        email: 'admin@example.test',
+        firstName: 'Adam',
+        lastName: 'Min',
+        roleSlug: 'partner_admin',
+      }),
+    )
+    expect(res.status).toBe(201)
+    // The customer org is NOT flipped — see the deferred-fix comment in route.ts.
+    expect(customerUser.organizationId).toBe(ORG)
+  })
+
   it('returns existing member with reused=true on second call (idempotent)', async () => {
     process.env.OM_PRM_TEST_FIXTURES_ENABLED = '1'
     getAuthFromRequestMock.mockResolvedValue({ tenantId: TENANT, orgId: ORG, sub: 'staff-1' })

@@ -32,7 +32,15 @@ import { safeEmit } from '../../../lib/safeEmit'
  * #6. Diagnostic event `prm.agency.admin_field_access_rejected` emitted
  * for OM-staff visibility (same pattern as Spec #1's Agency portal guard).
  */
-export const metadata = {}
+// Customer-portal route — auth is enforced inside the handler via
+// `requireCustomerAuth` (customer JWT). The framework `/api/[...slug]`
+// catch-all rejects requests without a *staff* JWT by default; setting
+// `requireAuth: false` on each method defers auth to the handler so the
+// customer JWT path can run.
+export const metadata = {
+  GET: { requireAuth: false },
+  POST: { requireAuth: false },
+}
 
 export async function GET(req: Request) {
   let auth

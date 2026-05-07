@@ -28,7 +28,14 @@ import {
  *
  * Visibility gate runs first — silent 404 (invariant #15).
  */
-export const metadata = {}
+// Customer-portal route — auth is enforced inside the handler via
+// `requireCustomerAuth` (customer JWT). The framework `/api/[...slug]`
+// catch-all rejects requests without a *staff* JWT by default; setting
+// `requireAuth: false` on each method defers auth to the handler so the
+// customer JWT path can run.
+export const metadata = {
+  POST: { requireAuth: false },
+}
 
 export async function POST(
   req: Request,

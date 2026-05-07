@@ -247,21 +247,21 @@ Both fixes are server-side; the HTTP contract for `POST /api/prm/agency` is unch
 
 ### Phase 3: T0 smoke (Agency happy path)
 
-- [ ] 3.1 Create TC-PRM-T0-001-agency-happy-path.spec.ts — DROPPED THIS PR (blocked on Phase 2.4 bug)
-- [ ] 3.2 Run twice — green both times — DROPPED
-- [ ] 3.3 Address any surfaced bug or document as TODO bug — DROPPED
+- [x] 3.1 Create TC-PRM-T0-001-agency-happy-path.spec.ts — PICKED UP in `.ai/runs/2026-05-07-prm-t0-t1-t2-happy-path-smokes.md` Phase 2 (commit 3d8e935)
+- [x] 3.2 Run twice — green both times — PICKED UP (verified twice green via test:integration:ephemeral)
+- [x] 3.3 Address any surfaced bug or document as TODO bug — PICKED UP — 4 real bugs found and fixed: migration FK refs, portal route auth metadata, slug normalization, deferred org-vs-route mismatch (tracked in POST-MVP-FOLLOW-UPS.md)
 
 ### Phase 4: T1 smoke (Prospect happy path)
 
-- [ ] 4.1 Implement seedAgencyForTesting() — DROPPED THIS PR (needs portal token + Phase 2.4 fix)
-- [ ] 4.2 Implement loginAsPartnerAdmin() — DROPPED (no shipped customer-portal auth helper)
-- [ ] 4.3 Create TC-PRM-T1-001-prospect-happy-path.spec.ts — DROPPED
-- [ ] 4.4 Run twice — green both times — DROPPED
+- [x] 4.1 Implement seedAgencyForTesting() — PICKED UP via `bootPartnerAgencyWithMembers` (already shipped in helper PR-A)
+- [x] 4.2 Implement loginAsPartnerAdmin() — PICKED UP via `loginCustomer` (already shipped in helper PR-A)
+- [x] 4.3 Create TC-PRM-T1-001-prospect-happy-path.spec.ts — PICKED UP (commit d99b54d)
+- [x] 4.4 Run twice — green both times — PICKED UP
 
 ### Phase 5: T2 smoke (Attribution Path A + MIN)
 
-- [ ] 5.1 Create TC-PRM-T2-001-attribution-happy-path.spec.ts — DROPPED THIS PR
-- [ ] 5.2 Saga completes within 30s — DROPPED
+- [x] 5.1 Create TC-PRM-T2-001-attribution-happy-path.spec.ts — PICKED UP (commit 3d0f57d)
+- [x] 5.2 Saga completes within 30s — PICKED UP (saga walks Prospect to `won` in <1s in the ephemeral runner)
 
 ### Phase 6: Update om-implement-spec gate
 
