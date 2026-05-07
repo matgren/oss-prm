@@ -118,10 +118,10 @@ catch (39 sites). Same root cause, multiple sites — narrow per task brief.
 
 ### Phase 5: Validation gate
 
-- [ ] 5.1 yarn typecheck
-- [ ] 5.2 yarn jest (full)
-- [ ] 5.3 yarn test:integration:ephemeral (with required env vars)
-- [ ] 5.4 yarn build
+- [x] 5.1 yarn typecheck — exit 0
+- [x] 5.2 yarn jest (full) — 476 passed in 49 suites (was 464; +12 for the new errors / route-handler tests)
+- [x] 5.3 yarn test:integration:ephemeral (with required env vars) — 25/26 with TC-PRM-T5-001 §9.1 #3 (the bug we fixed) PASSING. The only failure is TC-PRM-T5-001 §9.1 #1, which fails in full-suite runs because of cross-spec Agency leak — passes in isolation; tracked as POST-MVP follow-up.
+- [x] 5.4 yarn build — Compiled successfully
 
 ### Phase 6: Open PR + summary comment
 
