@@ -6,6 +6,7 @@ import { Agency } from '../data/entities'
 import { AGENCY_TIERS, type AgencyTier, type CreateAgencyInput } from '../data/validators'
 import { PRM_ERROR_CODES, PrmDomainError, isUniqueViolation } from './errors'
 import { safeEmit } from './safeEmit'
+import { withAtomicFlush } from './atomicFlush'
 
 /**
  * Domain helper for the `Agency` aggregate.
@@ -65,37 +66,55 @@ export class AgencyService {
     // contract is unchanged (POST /api/prm/agency body still does not carry an
     // organizationId); this UUID never leaves the service.
     const organizationId = randomUUID()
-    const organization = this.em.create(Organization, {
-      id: organizationId,
-      tenant,
-      name: input.name,
-      slug: input.slug,
-      isActive: true,
-      createdAt: new Date(),
-    } as any)
-    this.em.persist(organization)
+    let agency!: Agency
 
-    const agency = this.em.create(Agency, {
-      tenantId: scope.tenantId,
-      organizationId,
-      name: input.name,
-      slug: input.slug,
-      headquartersCountry: input.headquartersCountry,
-      tier: input.tier,
-      status: 'active',
-      industries: [],
-      services: [],
-      techCapabilities: [],
-      contractSigned: false,
-      ndaSigned: false,
-      onboarded: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as any)
-    this.em.persist(agency)
-
+    // Atomicity (POST-MVP fix, PR #1 review Medium #1): wrap the Organization +
+    // Agency inserts in a single DB transaction. If the Agency insert is rejected
+    // after the Organization is persisted (e.g. unique-violation race on
+    // `prm_agencies_tenant_slug_uniq` between the pre-check above and the actual
+    // insert, or any future trigger), MikroORM 6.x does NOT auto-wrap a multi-
+    // entity flush in a transaction — without this wrapper a partial commit is
+    // theoretically possible (Organization row leaks without a matching Agency).
+    // `withAtomicFlush(..., { transaction: true })` opens an explicit BEGIN/COMMIT
+    // and rolls every change back on throw.
     try {
-      await this.em.flush()
+      await withAtomicFlush(
+        this.em,
+        [
+          () => {
+            const organization = this.em.create(Organization, {
+              id: organizationId,
+              tenant,
+              name: input.name,
+              slug: input.slug,
+              isActive: true,
+              createdAt: new Date(),
+            } as any)
+            this.em.persist(organization)
+          },
+          () => {
+            agency = this.em.create(Agency, {
+              tenantId: scope.tenantId,
+              organizationId,
+              name: input.name,
+              slug: input.slug,
+              headquartersCountry: input.headquartersCountry,
+              tier: input.tier,
+              status: 'active',
+              industries: [],
+              services: [],
+              techCapabilities: [],
+              contractSigned: false,
+              ndaSigned: false,
+              onboarded: false,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            } as any)
+            this.em.persist(agency)
+          },
+        ],
+        { transaction: true },
+      )
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new PrmDomainError(
