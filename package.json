@@ -19,6 +19,7 @@
     "test": "jest --config jest.config.cjs",
     "test:integration": "npx playwright test --config .ai/qa/tests/playwright.config.ts",
     "test:integration:ephemeral": "mercato test:integration",
+    "test:integration:ephemeral:queued": "bash scripts/ephemeral-queue.sh",
     "generate": "mercato generate",
     "db:generate": "mercato db generate",
     "db:migrate": "mercato db migrate",
