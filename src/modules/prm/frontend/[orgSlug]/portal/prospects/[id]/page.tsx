@@ -10,6 +10,7 @@ import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { LostReasonDialog } from '../../_components/LostReasonDialog'
 
 type Prospect = {
   id: string
@@ -240,56 +241,17 @@ export default function PortalProspectDetailPage() {
       ) : null}
 
       {showLostDialog ? (
-        <section
-          className="rounded-md border border-rose-300 bg-rose-50 p-4"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              setShowLostDialog(false)
-              setLostReason('')
-            }
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              void transition('lost', lostReason)
-            }
+        <LostReasonDialog
+          reason={lostReason}
+          onReasonChange={setLostReason}
+          onConfirm={(reason) => void transition('lost', reason)}
+          onCancel={() => {
+            setShowLostDialog(false)
+            setLostReason('')
           }}
-        >
-          <h3 className="mb-2 text-sm font-semibold">
-            {t('prm.portal.prospects.detail.lostDialog.title', 'Mark prospect as lost')}
-          </h3>
-          <p className="mb-2 text-xs text-muted-foreground">
-            {t(
-              'prm.portal.prospects.detail.lostDialog.help',
-              'A reason of at least 10 characters is required for audit purposes.',
-            )}
-          </p>
-          <Textarea
-            className="min-h-20 w-full"
-            value={lostReason}
-            placeholder={t('prm.portal.prospects.detail.lostDialog.placeholder', 'Why are we losing this prospect?')}
-            onChange={(e) => setLostReason(e.target.value)}
-          />
-          <div className="mt-2 flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setShowLostDialog(false)
-                setLostReason('')
-              }}
-            >
-              {t('prm.portal.prospects.detail.lostDialog.cancel', 'Cancel')}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={transitioning === 'lost' || lostReason.trim().length < 10}
-              onClick={() => void transition('lost', lostReason)}
-            >
-              {transitioning === 'lost'
-                ? t('prm.portal.prospects.detail.lostDialog.saving', 'Saving…')
-                : t('prm.portal.prospects.detail.lostDialog.confirm', 'Mark lost')}
-            </Button>
-          </div>
-        </section>
+          submitting={transitioning === 'lost'}
+          t={t}
+        />
       ) : null}
 
       <form
