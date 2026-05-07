@@ -104,8 +104,8 @@ Non-goals (do NOT touch):
 
 ### Phase 3: ResolveWicImportAuditLogCommand
 
-- [ ] 3.1 Create `src/modules/prm/commands/wic/resolveWicImportAuditLog.ts` with execute + undo
-- [ ] 3.2 Add unit tests at `src/modules/prm/__tests__/wicResolveAuditLogCommand.test.ts`
+- [x] 3.1 Create `src/modules/prm/commands/wic/resolveWicImportAuditLog.ts` with execute + undo — b7948a1
+- [x] 3.2 Add unit tests at `src/modules/prm/__tests__/wicResolveAuditLogCommand.test.ts` (10 tests; full PRM suite 498→508) — b7948a1
 
 ### Phase 4: Service + route refactor
 
