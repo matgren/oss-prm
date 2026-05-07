@@ -133,6 +133,12 @@ test.describe('TC-PRM-T2-001: Spec #3 §9 IT-9.1 — Path A attribution + saga +
       .toBe('won')
 
     // ---- Step 6: Portal MIN aggregate reflects the deal (US4.5).
+    // NB: portal MIN scopes by `auth.orgId` (staff org, since the test seam
+    // currently leaves the customer in the staff org — see notes in
+    // `agency-member-link/route.ts` and TC-PRM-T0-001 commit). The MIN deal
+    // is in the staff org, so the lookup matches; this test exercises the
+    // same code path partner agencies hit in production AFTER the org-vs-
+    // route mismatch follow-up lands.
     const minResponse = await customerApiRequest(
       request,
       'GET',
