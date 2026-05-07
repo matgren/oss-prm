@@ -134,11 +134,46 @@ If any step fails, fix-forward in a new commit; do not amend.
 
 ### Phase 3: Full validation gate
 
-- [ ] 3.1 `yarn typecheck`
-- [ ] 3.2 `yarn test`
-- [ ] 3.3 `yarn test:integration:ephemeral` (CRITICAL)
+- [x] 3.1 `yarn typecheck` — 1f89ecb (clean exit 0)
+- [x] 3.2 `yarn test` — 1f89ecb (43 suites / 406 tests passed)
+- [ ] 3.3 `yarn test:integration:ephemeral` (CRITICAL) — running after Phase 4 fixes
 - [ ] 3.4 `yarn build`
+
+### Phase 4: Validation-gate blocker fixes (folded into this PR)
+
+- [x] 4.1 Fix `directory_organizations` → `organizations` in
+      Migration20260507062343 + Migration20260507100001 (pre-existing bug from T7;
+      confirmed on `origin/develop`).
+- [x] 4.2 Add `metadata.path = '/customers/people'` to stub route +
+      pinning unit test (without this the route is registered under the module
+      prefix as `/prm/customers/people` and the probe never hits the stub).
 
 ## Changelog
 
 - 2026-05-07: plan drafted.
+- 2026-05-07: Phase 1 + Phase 2 landed. Validation gate uncovered two pre-existing blockers
+  on `develop` that needed fixing inside this PR to prove the stub works:
+
+  **Blocker A — broken FK refs in T7 migrations.**
+  Migration20260507062343 + Migration20260507100001 reference `directory_organizations`
+  but the directory module declares the table as `organizations`. The earlier
+  Migration20260506224954 already documents the same fix verbatim ("Directory core
+  module declares the table as `organizations` (not `directory_organizations`); the
+  original reference here failed at migrate time and blocked all ephemeral Playwright
+  runs."). Confirmed bug exists on `origin/develop` with customers enabled (ran
+  `yarn test:integration:ephemeral` from develop directly — same failure). Fix is
+  mechanical: SQL string `directory_organizations` → `organizations` in the two
+  newer migrations. Without this fix the validation gate could not run on either
+  branch, so this PR cannot prove the customers-drop is correct without including it.
+
+  **Blocker B — module-prefix collision on stub URL.**
+  The framework's module-registry generator namespaces all `@app` routes under the
+  module id by default (`reqSegs = [modId, ...segs]`), so a route at
+  `src/modules/prm/api/customers/people/route.ts` would register as
+  `/prm/customers/people` (not `/customers/people`). The probe expects
+  `GET /api/customers/people`. Fix: set `metadata.path = '/customers/people'` on
+  the stub route, which is the supported escape hatch in `resolveApiPathFromMetadata`
+  (same generator file). The catch-all at `src/app/api/[...slug]/route.ts` strips
+  the `/api/` prefix before matching the manifest, so the registered path uses
+  the post-strip form. Added a unit test that pins this contract so any future
+  drift fails CI loudly.
