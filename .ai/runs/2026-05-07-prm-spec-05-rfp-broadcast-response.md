@@ -206,4 +206,4 @@ Commit: `docs(runs): close prm-spec-05 run plan; spec implementation status; tri
 - [x] 5.1 Full gate green — typecheck=0, jest 21 suites / 189 tests, generate clean
 - [x] 5.2 Spec implementation status table — added §11 to spec
 - [x] 5.3 POST-MVP-FOLLOW-UPS — added 5 new entries (customer-portal auth helper, case-study picker, markdown editor, §9.1 #4, §9.6 perf smoke); DI guardrail already trimmed in 39b4304
-- [ ] 5.4 PR opened
+- [x] 5.4 PR opened — #5 (https://github.com/matgren/oss-prm/pull/5)
