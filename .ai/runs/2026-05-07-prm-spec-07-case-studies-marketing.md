@@ -191,18 +191,18 @@ Commit message: `docs(runs): close prm-spec-07 run plan; spec implementation sta
 - [x] 1.10 Unit tests — caseStudyService.test.ts + 3 new rfpService cross-spec tests; jest 278/278 across 29 suites
 - [x] 1.11 typecheck + jest + generate green
 
-### Commit 2: MarketingMaterial entity + B9 backend admin
+### Commit 2: MarketingMaterial service + B9 backend admin
 
-- [ ] 2.1 Entity (`MarketingMaterial`)
-- [ ] 2.2 Migration + `_indexes` companion
-- [ ] 2.3 Validators
-- [ ] 2.4 ACL features (`prm.marketing_material.read/write/publish`)
-- [ ] 2.5 `MarketingMaterialService`
-- [ ] 2.6 Backend API routes (list/create/get/update/delete/publish/unpublish)
-- [ ] 2.7 B9 backend pages (list + new + edit)
-- [ ] 2.8 Events added (created/updated/published/unpublished)
-- [ ] 2.9 Unit tests
-- [ ] 2.10 Gate green
+- [x] 2.1 Entity (`MarketingMaterial`) shipped in commit 1's auto-generated migration
+- [x] 2.2 Migration + `_indexes` companion (CHECK + live partial idx) shipped in commit 1
+- [x] 2.3 Validators (create/update/unpublish/listBackend/listLibraryPortal)
+- [x] 2.4 ACL features (`prm.marketing_material.read/write/publish`) shipped in commit 1
+- [x] 2.5 `MarketingMaterialService` (DI .proxy()) — create/update/publish/unpublish/delete/list/listPublishedForViewer
+- [x] 2.6 Backend API routes (list/create/get/update/delete/publish/unpublish)
+- [x] 2.7 B9 backend pages (list + new + edit)
+- [x] 2.8 Events added (created/updated/published/unpublished) shipped in commit 1
+- [x] 2.9 Unit tests — marketingMaterialService.test.ts (16 cases inc. tier gate happy/below/at/no-tier; topic post-filter; lifecycle invariants); jest 294/294
+- [x] 2.10 Gate green (typecheck + jest)
 
 ### Commit 3: B8 CaseStudy admin + topics dictionary seed
 
