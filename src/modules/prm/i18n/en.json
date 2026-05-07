@@ -332,6 +332,11 @@
   "prm.licenseDeals.unreverse.dialog.targetHint.pending": "Target status: pending. Use to release a signed deal back to pending so it can be reversed.",
   "prm.licenseDeals.delete.confirm": "Soft-delete this pending license deal?",
   "prm.licenseDeals.delete.flash.success": "License deal deleted.",
+  "prm.licenseDeals.delete.dialog.title": "Delete license deal?",
+  "prm.licenseDeals.delete.dialog.body": "Soft-delete this pending license deal? The record stays in the database for audit but disappears from active views. Only pending deals can be deleted.",
+  "prm.licenseDeals.delete.dialog.cancel": "Cancel",
+  "prm.licenseDeals.delete.dialog.confirm": "Delete (soft)",
+  "prm.licenseDeals.delete.dialog.saving": "Deleting…",
 
   "prm.min.title": "MIN Attribution",
   "prm.min.description": "Yearly Minimum Income Network attribution from this Agency's licensed deals.",

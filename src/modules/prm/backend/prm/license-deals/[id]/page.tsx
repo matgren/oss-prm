@@ -12,6 +12,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { ReasonDialog, type ReasonDialogCopy } from './reasonDialog'
+import { ConfirmDialog, type ConfirmDialogCopy } from './confirmDialog'
 
 type LicenseDeal = {
   id: string
@@ -549,6 +550,7 @@ function ActionsBar({
   const [error, setError] = React.useState<string | null>(null)
   const [reverseOpen, setReverseOpen] = React.useState(false)
   const [unreverseTarget, setUnreverseTarget] = React.useState<'signed' | 'pending' | null>(null)
+  const [softDeleteOpen, setSoftDeleteOpen] = React.useState(false)
 
   const reverseCopy: ReasonDialogCopy = {
     title: t('prm.licenseDeals.reverse.dialog.title', 'Reverse attribution'),
@@ -650,18 +652,29 @@ function ActionsBar({
   }
 
   async function softDelete() {
-    if (!window.confirm(t('prm.licenseDeals.delete.confirm', 'Soft-delete this pending license deal?'))) return
     setBusy(true)
     setError(null)
     try {
       await apiCallOrThrow(`/api/prm/license-deal/${deal.id}`, { method: 'DELETE' })
       flash(t('prm.licenseDeals.delete.flash.success', 'License deal deleted.'), 'success')
+      setSoftDeleteOpen(false)
       onDeleted()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete')
     } finally {
       setBusy(false)
     }
+  }
+
+  const softDeleteCopy: ConfirmDialogCopy = {
+    title: t('prm.licenseDeals.delete.dialog.title', 'Delete license deal?'),
+    body: t(
+      'prm.licenseDeals.delete.dialog.body',
+      'Soft-delete this pending license deal? The record stays in the database for audit but disappears from active views. Only pending deals can be deleted.',
+    ),
+    cancel: t('prm.licenseDeals.delete.dialog.cancel', 'Cancel'),
+    confirm: t('prm.licenseDeals.delete.dialog.confirm', 'Delete (soft)'),
+    saving: t('prm.licenseDeals.delete.dialog.saving', 'Deleting…'),
   }
 
   return (
@@ -697,7 +710,7 @@ function ActionsBar({
           </Button>
         ) : null}
         {deal.status === 'pending' ? (
-          <Button onClick={softDelete} disabled={busy} variant="destructive">
+          <Button onClick={() => setSoftDeleteOpen(true)} disabled={busy} variant="destructive">
             {t('prm.licenseDeals.actions.delete', 'Delete (soft)')}
           </Button>
         ) : null}
@@ -732,6 +745,14 @@ function ActionsBar({
               )}
         </p>
       </ReasonDialog>
+      <ConfirmDialog
+        open={softDeleteOpen}
+        copy={softDeleteCopy}
+        busy={busy}
+        onConfirm={() => void softDelete()}
+        onCancel={() => setSoftDeleteOpen(false)}
+        testId="soft-delete-dialog"
+      />
     </section>
   )
 }
