@@ -7,8 +7,8 @@ import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib
 import { WIC_RESOLUTION_ACTIONS } from '../../../../../data/validators'
 import {
   execute as executeResolve,
-  WicAuditLogAlreadyResolvedError,
-  WicAuditLogNotFoundError,
+  isWicAuditLogAlreadyResolvedError,
+  isWicAuditLogNotFoundError,
 } from '../../../../../commands/wic/resolveWicImportAuditLog'
 
 /**
@@ -90,10 +90,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       },
     })
   } catch (err) {
-    if (err instanceof WicAuditLogNotFoundError) {
+    if (isWicAuditLogNotFoundError(err)) {
       return NextResponse.json({ ok: false, error: 'Audit log row not found' }, { status: 404 })
     }
-    if (err instanceof WicAuditLogAlreadyResolvedError) {
+    if (isWicAuditLogAlreadyResolvedError(err)) {
       return NextResponse.json(
         { ok: false, error: 'Already resolved', resolvedAt: err.resolvedAt },
         { status: 409 },
