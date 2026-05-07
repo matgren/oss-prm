@@ -206,6 +206,17 @@ import type { ApiInterceptor } from '@open-mercato/shared/lib/crud/api-intercept
 | `yarn build` | Build for production |
 | `yarn mercato eject <module>` | Copy a core module into `src/modules/` |
 
+## Integration test environment
+
+`yarn test:integration:ephemeral` (which runs `mercato test:integration`) requires PRM-specific env vars to be set, otherwise 13 of 26 tests silently return `404` / `"WIC import secret not configured"` and mask real bugs. Both vars are commented out in `.env.example` — uncomment them (or export them in your test shell) before running the suite:
+
+| Env var | Enables |
+|---|---|
+| `OM_PRM_TEST_FIXTURES_ENABLED=1` | The test-only seam `POST /api/prm/test-fixtures/agency-member-link` used by the customer-portal Playwright auth helper. Without it the route returns a byte-identical `404` and ~half the portal tests fail. |
+| `OM_PRM_WIC_IMPORT_SECRET=<32+ char secret>` | The `X-Om-Import-Secret` header check on `/api/prm/service/wic/*`. Without it the WIC ingestion routes return `503 "WIC import secret not configured"` and T3 ingestion tests fail. |
+
+See `.env.example` (PRM WIC Ingestion + PRM Test Fixtures blocks) for the canonical values and rotation notes.
+
 ## Architecture Rules
 
 - NO direct ORM relationships between modules — use foreign key IDs
