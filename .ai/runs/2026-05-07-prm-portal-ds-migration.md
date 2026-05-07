@@ -139,15 +139,15 @@ Rewrite the "Design system follow-ups" section header with a one-paragraph corre
 
 ### Phase 0: Plan + branch claim
 
-- [ ] 0.1 Land plan on the new branch as the first commit
+- [x] 0.1 Land plan on the new branch as the first commit — b3287a0
 
 ### Phase 1: Banners → Alert (warning)
 
-- [ ] 1.1 Migrate `agency/page.tsx` historical banner + tests
-- [ ] 1.2 Migrate `dashboard/page.tsx` historical banner + tests
-- [ ] 1.3 Migrate `members/page.tsx` historical banner + tests
-- [ ] 1.4 Migrate `prospects/[id]/page.tsx` lost-reason banner + tests
-- [ ] 1.5 Migrate `rfp/[id]/page.tsx` declined notice + tests
+- [x] 1.1 Migrate `agency/page.tsx` historical banner + tests — 33351bf
+- [x] 1.2 Migrate `dashboard/page.tsx` historical banner + tests — 33351bf
+- [x] 1.3 Migrate `members/page.tsx` historical banner + tests — 33351bf
+- [x] 1.4 Migrate `prospects/[id]/page.tsx` lost-reason banner + tests — 33351bf
+- [x] 1.5 Migrate `rfp/[id]/page.tsx` declined notice + tests — 33351bf
 
 ### Phase 2: Error card → Alert (destructive)
 
