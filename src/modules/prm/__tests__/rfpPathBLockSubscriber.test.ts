@@ -131,9 +131,10 @@ afterEach(() => {
 })
 
 describe('RfpPathBLockSubscriber — payload guards', () => {
-  it('no-ops when tenantId or rfpId is missing (no DI lookup)', async () => {
+  it('no-ops when tenantId, organizationId, or rfpId is missing (no DI lookup)', async () => {
     const ctx = { resolve: jest.fn() }
     await handler({ ...buildPayload(), tenantId: undefined } as any, ctx as any)
+    await handler({ ...buildPayload(), organizationId: undefined } as any, ctx as any)
     await handler({ ...buildPayload(), rfpId: null } as any, ctx as any)
     expect(ctx.resolve).not.toHaveBeenCalled()
   })
@@ -221,11 +222,13 @@ describe('RfpPathBLockSubscriber — branch 3: both present', () => {
     expect(dealsRecord.whereNullCalls).toEqual(['deleted_at'])
 
     // Wrote the lock flag = true to the matching RFP row.
+    // Note: `prm_rfps` is organization-scoped (no tenant_id column), so the
+    // UPDATE filters by `organization_id`, not `tenant_id`.
     const rfpsRecord = rfpsBuilder.inspect()
     expect(rfpsRecord.whereCalls).toEqual(
       expect.arrayContaining([
         ['id', 'rfp-9'],
-        ['tenant_id', 'tenant-1'],
+        ['organization_id', 'org-1'],
       ]),
     )
     expect(rfpsRecord.updateCall).toMatchObject({ is_path_b_locked: true })
