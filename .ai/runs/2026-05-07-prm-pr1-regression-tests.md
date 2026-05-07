@@ -58,7 +58,7 @@ The fake EM lives in the test file (or a sibling test helper) to keep it scoped 
 
 ### Phase 1: Real-Awilix DI resolution test
 
-- [ ] 1.1 Add `agencyService.diResolution.test.ts` covering each PRM destructured-param registration end-to-end with a real Awilix container
+- [x] 1.1 Add `agencyService.diResolution.test.ts` covering each PRM destructured-param registration end-to-end with a real Awilix container — 31be238
 
 ### Phase 2: Pre-flush UUID coherence test
 
