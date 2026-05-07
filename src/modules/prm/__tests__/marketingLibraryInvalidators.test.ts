@@ -103,14 +103,24 @@ describe('Cache invalidator subscribers (Spec #7 §4.3 / OQ-019)', () => {
     expect(calls).toEqual([])
   })
 
-  it('agency.tier_changed invalidates the per-Agency tier-prefixed tag set', async () => {
+  it('agency.tier_changed invalidates the enumerated per-Agency tier tag set (cache.deleteByTags has no wildcards)', async () => {
     const calls: CalledTags = []
     const cache = makeCache(calls)
     await tierChangedHandle(
       { agency_id: 'agency-A', fromTier: 'om_agency', toTier: 'ai_native' },
       makeCtx(cache),
     )
-    expect(calls).toEqual([['prm:agency:agency-A:tier:*']])
+    // Tag scheme MUST match what `api/portal/library/route.ts` writes; the
+    // helper `allAgencyTierTags` is the single source of truth.
+    expect(calls).toEqual([
+      [
+        'prm:agency:agency-A:tier:om_agency',
+        'prm:agency:agency-A:tier:ai_native',
+        'prm:agency:agency-A:tier:ai_native_expert',
+        'prm:agency:agency-A:tier:ai_native_core',
+        'prm:agency:agency-A:tier:null',
+      ],
+    ])
   })
 
   it('agency.tier_changed throws loudly when payload misses agency_id (non-prod)', async () => {
