@@ -151,7 +151,7 @@ Rewrite the "Design system follow-ups" section header with a one-paragraph corre
 
 ### Phase 2: Error card → Alert (destructive)
 
-- [ ] 2.1 Migrate `prospects/[id]/page.tsx` lost-reason confirmation card + tests
+- [x] 2.1 Migrate `prospects/[id]/page.tsx` lost-reason confirmation card + tests — ce3f1f0
 
 ### Phase 3: Status chips → StatusBadge
 
