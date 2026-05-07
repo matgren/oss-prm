@@ -234,9 +234,9 @@ Commit: `docs: trim POST-MVP follow-ups now covered by smoke suite + cross-refer
 
 ### Phase 4: T2 smoke (Attribution Path A + saga + MIN)
 
-- [ ] 4.1 Create TC-PRM-T2-001-attribution-happy-path.spec.ts (attribute Path A + saga poll + MIN)
-- [ ] 4.2 Run twice — green both times
-- [ ] 4.3 If saga poll >30s — surface as a real bug, stop
+- [x] 4.1 Create TC-PRM-T2-001-attribution-happy-path.spec.ts (attribute Path A + saga poll + MIN) — 3d0f57d
+- [x] 4.2 Run twice — green both times — 3d0f57d
+- [x] 4.3 Saga walks Prospect to `won` in <1s (well under 30s budget); inline saga via attribute route is healthy in the ephemeral runner — 3d0f57d
 
 ### Phase 5: Validation gate + POST-MVP trim
 
