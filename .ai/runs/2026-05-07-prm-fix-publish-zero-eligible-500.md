@@ -125,6 +125,6 @@ catch (39 sites). Same root cause, multiple sites — narrow per task brief.
 
 ### Phase 6: Open PR + summary comment
 
-- [ ] 6.1 Push branch + open PR against develop
-- [ ] 6.2 Apply labels (review, bug)
-- [ ] 6.3 Post comprehensive PR summary comment
+- [x] 6.1 Push branch + open PR against develop — PR #19 https://github.com/matgren/oss-prm/pull/19
+- [x] 6.2 Apply labels (review, bug)
+- [x] 6.3 Post comprehensive PR summary comment
