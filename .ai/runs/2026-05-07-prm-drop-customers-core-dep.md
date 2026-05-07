@@ -156,6 +156,7 @@ If any step fails, fix-forward in a new commit; do not amend.
 ## Changelog
 
 - 2026-05-07: plan drafted.
+- 2026-05-07: PR opened — https://github.com/matgren/oss-prm/pull/17 (Status: complete; pending auto-review-pr autofix pass).
 - 2026-05-07: Phase 1 + Phase 2 landed. Validation gate uncovered two pre-existing blockers
   on `develop` that needed fixing inside this PR to prove the stub works:
 
