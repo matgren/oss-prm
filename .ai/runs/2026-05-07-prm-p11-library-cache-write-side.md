@@ -112,8 +112,8 @@ Phase commit (Progress only): `docs(runs): mark Phase 3 gate green`
 
 ### Phase 2: Wire cache.wrap into portal library route
 
-- [ ] 2.1 Edit `src/modules/prm/api/portal/library/route.ts` to read-through cache (get → on miss query + set)
-- [ ] 2.2 Add `src/modules/prm/__tests__/libraryRouteCache.test.ts` (identical-request hit, invalidator clears, separate keys per agency)
+- [x] 2.1 Edit `src/modules/prm/api/portal/library/route.ts` to read-through cache (get → on miss query + set) — db1371f
+- [x] 2.2 Add `src/modules/prm/__tests__/libraryRouteCache.test.ts` (identical-request hit, invalidator clears, separate keys per agency) — db1371f
 
 ### Phase 3: Validation gate
 
