@@ -315,6 +315,96 @@ describe('RfpService.publish', () => {
   })
 })
 
+/**
+ * Spec #5 §9.1 #4 — partial-insert rollback (W4).
+ *
+ * The publish flow updates the RFP row (status: draft → published) and inserts
+ * N broadcast rows in a single `em.flush()`. If the broadcast batch fails
+ * mid-flush, the surrounding transaction must rollback every write — no
+ * orphan broadcasts, RFP stays at status `draft`.
+ *
+ * Production proof = a single shared `em.flush()` (Postgres opens an implicit
+ * transaction per statement-batch). This test exercises the env-gated fault
+ * injection hook in `RfpService.publish`: when
+ * `OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL=1` is set, the service throws
+ * BEFORE `em.flush()` runs, proving no DB write window exists between the
+ * broadcast `persist()` calls and the flush. `flushCount` stays at 1 (the
+ * earlier `createDraft` flush) — the publish's flush never happened.
+ */
+describe('RfpService.publish — Spec #5 §9.1 #4 partial-insert rollback', () => {
+  const ENV_KEY = 'OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL'
+
+  afterEach(() => {
+    delete process.env[ENV_KEY]
+  })
+
+  it('rejects with the injected error when env var is set, and the broadcast flush never runs', async () => {
+    process.env[ENV_KEY] = '1'
+    const em = new FakeEm()
+    seedAgency(em, 'a1', 'om_agency')
+    seedAgency(em, 'a2', 'ai_native_expert')
+    const service = new RfpService(em as any)
+    const created = await service.createDraft(makeCreateInput(), {
+      tenantId: TENANT,
+      organizationId: ORG,
+      userId: USER,
+    })
+    // createDraft does one flush.
+    expect(em.flushCount).toBe(1)
+
+    await expect(
+      service.publish(created.id, {}, { tenantId: TENANT, organizationId: ORG, userId: USER }),
+    ).rejects.toThrow(/OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL/)
+
+    // No additional flush ran — the publish's flush was never reached, so
+    // in production the DB never received either the broadcast inserts or
+    // the RFP status update. The whole publish is atomic-by-construction.
+    expect(em.flushCount).toBe(1)
+  })
+
+  it('is a no-op when env var is unset — publish succeeds normally', async () => {
+    // Defensive: explicitly clear in case prior test leaked.
+    delete process.env[ENV_KEY]
+    const em = new FakeEm()
+    seedAgency(em, 'a1', 'om_agency')
+    const service = new RfpService(em as any)
+    const created = await service.createDraft(makeCreateInput(), {
+      tenantId: TENANT,
+      organizationId: ORG,
+      userId: USER,
+    })
+    const result = await service.publish(
+      created.id,
+      {},
+      { tenantId: TENANT, organizationId: ORG, userId: USER },
+    )
+    expect(result.broadcastAgencyIds).toEqual(['a1'])
+    expect(em.rfps[0]!.status).toBe('published')
+    expect(em.broadcasts).toHaveLength(1)
+    // createDraft flush + publish flush = 2.
+    expect(em.flushCount).toBe(2)
+  })
+
+  it('is a no-op when env var is set to a non-"1" value (strict gate)', async () => {
+    process.env[ENV_KEY] = 'true' // wrong value — only literal "1" should fire.
+    const em = new FakeEm()
+    seedAgency(em, 'a1', 'om_agency')
+    const service = new RfpService(em as any)
+    const created = await service.createDraft(makeCreateInput(), {
+      tenantId: TENANT,
+      organizationId: ORG,
+      userId: USER,
+    })
+    const result = await service.publish(
+      created.id,
+      {},
+      { tenantId: TENANT, organizationId: ORG, userId: USER },
+    )
+    expect(result.broadcastAgencyIds).toEqual(['a1'])
+    expect(em.rfps[0]!.status).toBe('published')
+  })
+})
+
 describe('RfpService.unpublish', () => {
   it('reverts status to draft + deletes broadcasts when no agency has interacted', async () => {
     const em = new FakeEm()

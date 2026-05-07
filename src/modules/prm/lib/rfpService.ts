@@ -271,6 +271,18 @@ export class RfpService {
     rfp.publishedAt = now
     rfp.updatedAt = now
     this.em.persist(rfp)
+
+    // Test-only fault injection — Spec #5 §9.1 #4 (partial-insert rollback).
+    // Mirrors the `OM_PRM_TEST_FIXTURES_ENABLED` convention: gated entirely
+    // by an env var so it is a strict no-op in production. Throws *before*
+    // `em.flush()` so the DB never sees the broadcast inserts nor the RFP
+    // status update — proving the publish flow has no orphan-write window.
+    if (process.env.OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL === '1') {
+      throw new Error(
+        'OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL: simulated DB error on broadcast batch flush',
+      )
+    }
+
     await this.em.flush()
 
     await safeEmit('prm.rfp.published', {
