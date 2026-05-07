@@ -214,10 +214,10 @@ Commit: `docs(runs): close prm-spec-06 run plan; spec implementation status`
 
 ### Commit 3: LLM-assist draft
 
-- [ ] 3.1 llmScoringDraft helper
-- [ ] 3.2 API route POST /score/draft-llm
-- [ ] 3.3 Unit tests with mocked provider
-- [ ] 3.4 typecheck + jest + generate green
+- [x] 3.1 llmScoringDraft helper (resolves first configured LlmProvider; bootstrap memoised)
+- [x] 3.2 API route POST /score/draft-llm (no DB write; 503 on unconfigured)
+- [x] 3.3 Unit tests with mocked provider (7 cases / llmScoringDraft.test.ts)
+- [x] 3.4 typecheck + jest 301/301 + generate green
 
 ### Commit 4: Selection + notifications
 
