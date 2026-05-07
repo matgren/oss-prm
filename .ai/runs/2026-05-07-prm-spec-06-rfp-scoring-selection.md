@@ -219,24 +219,25 @@ Commit: `docs(runs): close prm-spec-06 run plan; spec implementation status`
 - [x] 3.3 Unit tests with mocked provider (7 cases / llmScoringDraft.test.ts)
 - [x] 3.4 typecheck + jest 301/301 + generate green
 
-### Commit 4: Selection + notifications
+### Commit 4: Selection + notifications + close + reopen + hard-guard + expire
 
-- [ ] 4.1 RfpService.selectWinner
-- [ ] 4.2 API route POST /select
-- [ ] 4.3 NotificationTypeDefinitions (selected, not_selected)
-- [ ] 4.4 Subscriber rfp-selection-notifications
-- [ ] 4.5 i18n keys
-- [ ] 4.6 Unit tests
-- [ ] 4.7 typecheck + jest + generate green
+Combined Commits 4 + 5 into one large commit for cohesion (selection drives close/reopen/expire all together via state-machine sibling logic):
 
-### Commit 5: Close + Reopen + Hard-guard + Challenge round
+- [x] 4.1 RfpService.selectWinner (graph save: status, selected_agency_id, decided_at/by, reasoning)
+- [x] 4.2 API route POST /select
+- [x] 4.3 NotificationTypeDefinitions (selected, not_selected)
+- [x] 4.4 Subscriber rfp-selection-notifications (binds both selection_made + selection_changed)
+- [x] 4.5 i18n keys
+- [x] 4.6 RfpService.closeRfp (terminal lifecycle)
+- [x] 4.7 RfpService.reopenRfp + invariant #17 hard-guard (read-model + live SQL re-check)
+- [x] 4.8 RfpService.expireReopenedDeadline (worker hook)
+- [x] 4.9 API routes POST /close + POST /reopen
+- [x] 4.10 Unit tests (21 selection cases + 4 notification cases)
+- [x] 4.11 typecheck + jest 326/326 + generate green
 
-- [ ] 5.1 RfpService.closeRfp
-- [ ] 5.2 RfpService.reopenRfp with hard-guard
-- [ ] 5.3 API routes POST /close + POST /reopen
-- [ ] 5.4 Subscriber rfp-challenge-round-unlocker
-- [ ] 5.5 Unit tests
-- [ ] 5.6 typecheck + jest + generate green
+### Commit 5: (merged into Commit 4 above)
+
+- [x] Done — see above.
 
 ### Commit 6: B11 audit + deadline-expiry worker
 

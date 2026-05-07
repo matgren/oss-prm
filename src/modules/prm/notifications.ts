@@ -24,7 +24,31 @@ export const notificationTypes: NotificationTypeDefinition[] = [
     severity: 'info',
     actions: [],
     primaryActionId: undefined,
-    expiresAfterHours: 24 * 60, // 60 days — RFPs are open for weeks at a time.
+    expiresAfterHours: 24 * 60,
+  },
+  // Spec #6 — selection notifications (OQ-015 fan-out: ONE type per use
+  // case, ONE subscriber dispatching to both).
+  {
+    type: 'prm.rfp.selected',
+    module: 'prm',
+    titleKey: 'prm.notifications.rfp.selected.title',
+    bodyKey: 'prm.notifications.rfp.selected.body',
+    icon: 'trophy',
+    severity: 'success',
+    actions: [],
+    primaryActionId: undefined,
+    expiresAfterHours: 24 * 30,
+  },
+  {
+    type: 'prm.rfp.not_selected',
+    module: 'prm',
+    titleKey: 'prm.notifications.rfp.not_selected.title',
+    bodyKey: 'prm.notifications.rfp.not_selected.body',
+    icon: 'inbox',
+    severity: 'info',
+    actions: [],
+    primaryActionId: undefined,
+    expiresAfterHours: 24 * 30,
   },
 ]
 
