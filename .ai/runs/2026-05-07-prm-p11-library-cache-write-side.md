@@ -106,9 +106,9 @@ Phase commit (Progress only): `docs(runs): mark Phase 3 gate green`
 
 ### Phase 1: Extend libraryCache helper + align tier-change invalidator
 
-- [ ] 1.1 Extend `src/modules/prm/lib/libraryCache.ts` with `LIBRARY_CACHE_TAG`, `LIBRARY_CACHE_TTL_MS`, `agencyTierTag`, `allAgencyTierTags`, `buildLibraryCacheKey`
-- [ ] 1.2 Add `src/modules/prm/__tests__/libraryCacheHelpers.test.ts` covering helpers
-- [ ] 1.3 Update `subscribers/agency-tier-change-library-invalidator.ts` to use `allAgencyTierTags`; update `marketingLibraryInvalidators.test.ts` expectation
+- [x] 1.1 Extend `src/modules/prm/lib/libraryCache.ts` with `LIBRARY_CACHE_TAG`, `LIBRARY_CACHE_TTL_MS`, `agencyTierTag`, `allAgencyTierTags`, `buildLibraryCacheKey` — 06af699
+- [x] 1.2 Add `src/modules/prm/__tests__/libraryCacheHelpers.test.ts` covering helpers — 06af699
+- [x] 1.3 Update `subscribers/agency-tier-change-library-invalidator.ts` to use `allAgencyTierTags`; update `marketingLibraryInvalidators.test.ts` expectation — 06af699
 
 ### Phase 2: Wire cache.wrap into portal library route
 
