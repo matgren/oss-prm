@@ -10,7 +10,10 @@ import { Migration } from '@mikro-orm/migrations'
  *   - Score-range CHECKs (0..5).
  *   - Source enum CHECK (`manual` / `llm_assisted`).
  *   - Cross-field CHECK: `source = 'llm_assisted'` iff `llm_model_id` non-null.
- *   - FKs to `prm_rfp_responses`, `directory_organizations`.
+ *   - FKs to `prm_rfp_responses`, `organizations`. (Directory core declares the
+ *     organization table as `organizations`; an earlier draft incorrectly used
+ *     `directory_organizations` which broke ephemeral migrate. Fixed in line with
+ *     Migration20260506224954's precedent comment.)
  *   - Composite index `(rfp_response_id, version desc)` for "latest score" reads.
  *   - Replace `prm_rfps_status_check` with the extended enum
  *     (`draft` / `published` / `scoring` / `selection_made` / `closed` /
@@ -48,7 +51,7 @@ export class Migration20260507100001_prm_rfp_score_indexes extends Migration {
     )
     // FKs.
     this.addSql(
-      `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_rfp_response_scores_organization_fk') then alter table "prm_rfp_response_scores" add constraint "prm_rfp_response_scores_organization_fk" foreign key ("organization_id") references "directory_organizations" ("id") on delete restrict; end if; end $$;`,
+      `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_rfp_response_scores_organization_fk') then alter table "prm_rfp_response_scores" add constraint "prm_rfp_response_scores_organization_fk" foreign key ("organization_id") references "organizations" ("id") on delete restrict; end if; end $$;`,
     )
     this.addSql(
       `do $$ begin if not exists (select 1 from pg_constraint where conname = 'prm_rfp_response_scores_response_fk') then alter table "prm_rfp_response_scores" add constraint "prm_rfp_response_scores_response_fk" foreign key ("rfp_response_id") references "prm_rfp_responses" ("id") on delete restrict; end if; end $$;`,

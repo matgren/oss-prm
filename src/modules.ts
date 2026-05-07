@@ -13,8 +13,12 @@ export type ModuleEntry = { id: string; from?: '@open-mercato/core' | '@app' | s
 export const enabledModules: ModuleEntry[] = [
   // PRM-direct dependencies (declared in src/modules/prm/index.ts `requires`
   // and/or imported in PRM source).
+  // NOTE: `customers` is intentionally NOT enabled here. The
+  // `mercato test:integration` readiness probe at GET /api/customers/people
+  // is satisfied by a PRM-owned stub route at
+  // `src/modules/prm/api/customers/people/route.ts`. See POST-MVP-FOLLOW-UPS
+  // entry "Drop customers core-module dependency from PRM standalone".
   { id: 'auth', from: '@open-mercato/core' },
-  { id: 'customers', from: '@open-mercato/core' },        // required by mercato test:integration readiness probe (GET /api/customers/people)
   { id: 'customer_accounts', from: '@open-mercato/core' },
   { id: 'directory', from: '@open-mercato/core' },
   { id: 'events', from: '@open-mercato/events' },
