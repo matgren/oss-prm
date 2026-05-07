@@ -146,12 +146,12 @@ Note: brief listed `prm_wic_import_audit_logs` and `prm_service_idempotency_keys
 
 ### Phase 3: Wire `beforeEach` into PRM Playwright specs
 
-- [ ] 3.1 Add `test.beforeEach` to all PRM specs
-- [ ] 3.2 Confirm each beforeEach acquires admin token + calls reset
+- [x] 3.1 Add `test.beforeEach` to all PRM specs — 39b3367
+- [x] 3.2 Confirm each beforeEach acquires admin token + calls reset — 39b3367
 
 ### Phase 4: Regression spec
 
-- [ ] 4.1 Add `TC-PRM-RESET-001-test-isolation.spec.ts`
+- [x] 4.1 Add `TC-PRM-RESET-001-test-isolation.spec.ts` — 39b3367
 
 ### Phase 5: Validation gate
 
