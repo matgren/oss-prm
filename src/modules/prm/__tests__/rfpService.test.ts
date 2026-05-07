@@ -1,5 +1,5 @@
 import { RfpService } from '../lib/rfpService'
-import { Agency, Rfp, RfpBroadcast, RfpResponse } from '../data/entities'
+import { Agency, CaseStudy, Rfp, RfpBroadcast, RfpResponse } from '../data/entities'
 import { PRM_ERROR_CODES, PrmDomainError } from '../lib/errors'
 
 type AnyRow = Record<string, any>
@@ -9,6 +9,7 @@ class FakeEm {
   rfps: AnyRow[] = []
   broadcasts: AnyRow[] = []
   responses: AnyRow[] = []
+  caseStudies: AnyRow[] = []
   removedRows: AnyRow[] = []
   flushCount = 0
 
@@ -93,6 +94,16 @@ class FakeEm {
       return this.responses.filter((r) => {
         if (where.rfpId && r.rfpId !== where.rfpId) return false
         if (where.organizationId && r.organizationId !== where.organizationId) return false
+        return true
+      })
+    }
+    if (ctorName === 'CaseStudy') {
+      const ids: string[] = where.id?.$in ?? []
+      return this.caseStudies.filter((cs) => {
+        if (ids.length && !ids.includes(cs.id)) return false
+        if (where.organizationId && cs.organizationId !== where.organizationId) return false
+        if (where.agencyId && cs.agencyId !== where.agencyId) return false
+        if (where.deletedAt === null && cs.deletedAt) return false
         return true
       })
     }
@@ -482,8 +493,35 @@ describe('RfpService.upsertResponseDraft', () => {
     ).rejects.toMatchObject({ status: 409 })
   })
 
-  it('rejects any attached_case_study_ids until Spec #7 ships (§9.3 #14 surface)', async () => {
-    const { service, rfpId } = await setupPublishedRfp()
+  it('accepts own-Agency live case study ids on the response draft (Spec #7 closes §9.3 #14)', async () => {
+    const { em, service, rfpId } = await setupPublishedRfp()
+    em.caseStudies.push({
+      id: '11111111-1111-4111-8111-111111111111',
+      organizationId: ORG,
+      agencyId: 'agency-A',
+      deletedAt: null,
+    })
+    const result = await service.upsertResponseDraft(
+      rfpId,
+      'agency-A',
+      'member-M1',
+      {
+        tech_experience: 'with attachments',
+        attached_case_study_ids: ['11111111-1111-4111-8111-111111111111'],
+      },
+      { organizationId: ORG },
+    )
+    expect(result.response.attachedCaseStudyIds).toContain('11111111-1111-4111-8111-111111111111')
+  })
+
+  it('rejects cross-Agency case study ids on the response draft (own-Agency lookup)', async () => {
+    const { em, service, rfpId } = await setupPublishedRfp()
+    em.caseStudies.push({
+      id: '22222222-2222-4222-8222-222222222222',
+      organizationId: ORG,
+      agencyId: 'other-agency-Z',
+      deletedAt: null,
+    })
     await expect(
       service.upsertResponseDraft(
         rfpId,
@@ -491,7 +529,32 @@ describe('RfpService.upsertResponseDraft', () => {
         'member-M1',
         {
           tech_experience: 'with attachments',
-          attached_case_study_ids: ['11111111-1111-4111-8111-111111111111'],
+          attached_case_study_ids: ['22222222-2222-4222-8222-222222222222'],
+        },
+        { organizationId: ORG },
+      ),
+    ).rejects.toMatchObject({
+      status: 400,
+      details: expect.objectContaining({ reason: 'case_study_ownership_failed' }),
+    })
+  })
+
+  it('rejects soft-deleted case study ids on the response draft', async () => {
+    const { em, service, rfpId } = await setupPublishedRfp()
+    em.caseStudies.push({
+      id: '33333333-3333-4333-8333-333333333333',
+      organizationId: ORG,
+      agencyId: 'agency-A',
+      deletedAt: new Date('2026-01-01T00:00:00Z'),
+    })
+    await expect(
+      service.upsertResponseDraft(
+        rfpId,
+        'agency-A',
+        'member-M1',
+        {
+          tech_experience: 'with attachments',
+          attached_case_study_ids: ['33333333-3333-4333-8333-333333333333'],
         },
         { organizationId: ORG },
       ),

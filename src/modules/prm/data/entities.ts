@@ -921,6 +921,199 @@ export class WicImportAuditLog {
 }
 
 /**
+ * PRM `CaseStudy` aggregate (Spec #7 — case-studies-marketing).
+ *
+ * Owned by an `Agency`. Soft-deletable. Two Marketing-only fields
+ * (`mayPublishOnOmWebsite`, `publishedUrl`) gate publication on the public
+ * OM website per invariant #8 — together they constitute "published".
+ * Portal authors NEVER write either field (route guard).
+ *
+ * Cross-spec contract:
+ *   - Spec #5's RFP response form attaches own-Agency, non-deleted CaseStudy
+ *     UUIDs in `RfpResponse.attached_case_study_ids[]`. The picker reads via
+ *     `GET /api/prm/portal/case-study?include_deleted=false`.
+ *
+ * Tag fields (`technologies_used`, `services_delivered`, `client_industry`,
+ * `client_country`) are stored as **slug strings** rather than dictionary FKs
+ * to mirror Spec #1's existing slug-based tag convention on `Agency`. Promote
+ * to FK references if the dictionaries module materialises a stable
+ * cross-tenant slug→id pivot in v2.
+ *
+ * Hero / gallery attachments are stored as plain `attachments.id` UUIDs; the
+ * `attachments` module maintains the underlying `attachments` table. No DB
+ * FK constraint in v1 (avoids cross-module migration ordering pin).
+ *
+ * Invariant #8 (DB-backed): `published_url IS NULL OR may_publish_on_om_website = TRUE`.
+ */
+@Entity({ tableName: 'prm_case_studies' })
+export class CaseStudy {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Index()
+  @Property({ name: 'agency_id', type: 'uuid' })
+  agencyId!: string
+
+  @Property({ type: 'text' })
+  title!: string
+
+  @Property({ name: 'client_name', type: 'text' })
+  clientName!: string
+
+  /** Dictionary slug. NULL allowed for v1 (defaults to "" empty UI label). */
+  @Property({ name: 'client_industry', type: 'text', nullable: true })
+  clientIndustry?: string | null
+
+  /** Country slug or ISO-3166 code. NULL allowed for v1. */
+  @Property({ name: 'client_country', type: 'text', nullable: true })
+  clientCountry?: string | null
+
+  /** Markdown narrative — required app-level. */
+  @Property({ name: 'challenge_markdown', type: 'text' })
+  challengeMarkdown!: string
+
+  @Property({ name: 'approach_markdown', type: 'text' })
+  approachMarkdown!: string
+
+  @Property({ name: 'outcome_markdown', type: 'text' })
+  outcomeMarkdown!: string
+
+  /** Slug strings (technology dictionary). */
+  @Property({ name: 'technologies_used', type: 'json', nullable: false, default: '[]' })
+  technologiesUsed: string[] = []
+
+  /** Slug strings (services dictionary). */
+  @Property({ name: 'services_delivered', type: 'json', nullable: false, default: '[]' })
+  servicesDelivered: string[] = []
+
+  /** Attachment row id (no DB FK in v1 — see entity doc). */
+  @Property({ name: 'hero_image_attachment_id', type: 'uuid', nullable: true })
+  heroImageAttachmentId?: string | null
+
+  /** Array of attachment row ids. */
+  @Property({ name: 'gallery_attachment_ids', type: 'json', nullable: false, default: '[]' })
+  galleryAttachmentIds: string[] = []
+
+  /**
+   * Marketing-only field (invariant #6). Portal route guard rejects writes.
+   * Together with `published_url` constitutes "published" per invariant #8.
+   */
+  @Index()
+  @Property({ name: 'may_publish_on_om_website', type: 'boolean', default: false })
+  mayPublishOnOmWebsite: boolean = false
+
+  /** Marketing-only field. NULL when not yet live on the public website. */
+  @Property({ name: 'published_url', type: 'text', nullable: true })
+  publishedUrl?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  /** Soft-delete marker (US2.3). Hard-delete is not supported in v1. */
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+/**
+ * PRM `MarketingMaterial` aggregate (Spec #7 — case-studies-marketing).
+ *
+ * OM-owned (no `agency_id`). Tier-gated visibility via the
+ * `min_tier_rank` lookup column. The PRM portal P11 Library reads this
+ * with the tier-gate filter applied server-side (per-Agency cache key).
+ *
+ * "Currently published" predicate: `published_at IS NOT NULL AND
+ * unpublished_at IS NULL`. Re-publishing after unpublish sets
+ * `unpublished_at = NULL` and bumps `published_at = NOW()`.
+ *
+ * `min_tier_rank` is maintained by the application (`MarketingMaterialService`)
+ * rather than a Postgres `GENERATED ALWAYS AS (...) STORED` column to keep the
+ * MikroORM mapping portable across versions; the lookup is trivial.
+ * The DB CHECK constraints `chk_tier_gated_requires_min_tier` and
+ * `chk_unpublished_after_published` ship in the indexes migration.
+ */
+@Entity({ tableName: 'prm_marketing_materials' })
+export class MarketingMaterial {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Index()
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ type: 'text' })
+  title!: string
+
+  @Property({ type: 'text', nullable: true })
+  description?: string | null
+
+  /**
+   * Enum check (DB-side):
+   *   'playbook' | 'sales_deck' | 'video' | 'guide' | 'case_study_template' | 'other'.
+   */
+  @Index()
+  @Property({ name: 'material_type', type: 'text' })
+  materialType!: string
+
+  /** Enum check (DB-side): 'all_partners' | 'tier_gated'. */
+  @Index()
+  @Property({ type: 'text', default: 'all_partners' })
+  visibility: string = 'all_partners'
+
+  /**
+   * Required iff `visibility = 'tier_gated'`. Enum check (DB-side):
+   *   'om_agency' | 'ai_native' | 'ai_native_expert' | 'ai_native_core'.
+   */
+  @Property({ name: 'min_tier', type: 'text', nullable: true })
+  minTier?: string | null
+
+  /**
+   * Application-maintained tier rank for fast SQL filtering. Maintained
+   * by the service on every write. NULL when not tier-gated.
+   *   om_agency = 1, ai_native = 2, ai_native_expert = 3, ai_native_core = 4.
+   */
+  @Index()
+  @Property({ name: 'min_tier_rank', type: 'smallint', nullable: true })
+  minTierRank?: number | null
+
+  /** Slug strings (topics dictionary, seeded by PRM `setup.ts`). */
+  @Property({ type: 'json', nullable: false, default: '[]' })
+  topics: string[] = []
+
+  /**
+   * Audience tag(s). Enum-shaped values: 'new_partner' / 'active_partner' /
+   * 'tier_progressing'. Stored as a JSON array of strings.
+   */
+  @Property({ type: 'json', nullable: false, default: '[]' })
+  audiences: string[] = []
+
+  /** Attachment row id. Required for download — no v1 metadata-only materials. */
+  @Property({ name: 'primary_attachment_id', type: 'uuid' })
+  primaryAttachmentId!: string
+
+  @Property({ name: 'published_at', type: Date, nullable: true })
+  publishedAt?: Date | null
+
+  @Property({ name: 'unpublished_at', type: Date, nullable: true })
+  unpublishedAt?: Date | null
+
+  @Property({ name: 'created_by_user_id', type: 'uuid' })
+  createdByUserId!: string
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+/**
  * PRM `ServiceIdempotencyKey` — auth infrastructure side table for `ServiceAuthMiddleware`.
  *
  * NOT a PRM domain entity. Lives here in v1 because PRM is the only consumer; lift to a

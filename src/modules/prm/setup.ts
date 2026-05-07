@@ -240,6 +240,14 @@ export const setup: ModuleSetupConfig = {
       // Spec #5: OM PartnerOps owns RFP authoring + broadcast.
       'prm.rfp.create',
       'prm.rfp.publish',
+      // Spec #7: OM PartnerOps reads case studies + marketing materials
+      // for support work. Authoring + publication-flag is Marketing-only —
+      // create a dedicated `marketing` staff role with `prm.case_study.toggle_publish`
+      // and `prm.marketing_material.write` / `prm.marketing_material.publish`
+      // via the staff-roles UI. Documented in PRM_ROLE_FEATURE_PRESETS below.
+      'prm.case_study.read_all',
+      'prm.case_study.write',
+      'prm.marketing_material.read',
     ],
   },
 

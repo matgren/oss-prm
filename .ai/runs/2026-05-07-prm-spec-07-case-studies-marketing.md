@@ -177,19 +177,19 @@ Commit message: `docs(runs): close prm-spec-07 run plan; spec implementation sta
 
 - [x] 0.1 Run plan committed
 
-### Commit 1: CaseStudy entity + portal CRUD + soft-delete/restore + cross-spec picker
+### Commit 1: CaseStudy + MarketingMaterial entities + portal CRUD + soft-delete/restore + cross-spec picker
 
-- [ ] 1.1 Entity (`CaseStudy`) in `data/entities.ts`
-- [ ] 1.2 Migration + `_indexes` companion (CHECK + partial indexes)
-- [ ] 1.3 Validators
-- [ ] 1.4 ACL features (`prm.case_study.write`, `prm.case_study.toggle_publish`, `prm.case_study.read_all`)
-- [ ] 1.5 `CaseStudyService` + DI registration with `.proxy()`
-- [ ] 1.6 Portal API routes (list/create/get/update/delete/restore)
-- [ ] 1.7 Backend API routes (list/get/publication-flag)
-- [ ] 1.8 Events added (created/updated/deleted/restored/publication_flag_changed)
-- [ ] 1.9 `RfpService.upsertResponseDraft` replaces cross-Agency reject with own-Agency lookup
-- [ ] 1.10 Unit tests (service + cross-spec)
-- [ ] 1.11 typecheck + jest + generate green
+- [x] 1.1 Entities (`CaseStudy` + `MarketingMaterial` — both shipped together since the OM ORM generator emits a single migration for both)
+- [x] 1.2 Migration + `_indexes` companion (invariant #8 CHECK + partial indexes + FKs)
+- [x] 1.3 Validators (case study + marketing material schemas)
+- [x] 1.4 ACL features (case_study + marketing_material gates)
+- [x] 1.5 `CaseStudyService` + DI registration with `.proxy()`
+- [x] 1.6 Portal API routes (list/create/get/update/delete/restore)
+- [x] 1.7 Backend API routes (list/get/publication-flag)
+- [x] 1.8 Events added (case_study + marketing_material lifecycle)
+- [x] 1.9 `RfpService.upsertResponseDraft` replaces cross-Agency reject with own-Agency lookup
+- [x] 1.10 Unit tests — caseStudyService.test.ts + 3 new rfpService cross-spec tests; jest 278/278 across 29 suites
+- [x] 1.11 typecheck + jest + generate green
 
 ### Commit 2: MarketingMaterial entity + B9 backend admin
 
