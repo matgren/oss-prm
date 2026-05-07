@@ -215,10 +215,10 @@ Commit: `docs: trim POST-MVP follow-ups now covered by smoke suite + cross-refer
 
 ### Phase 1: Bootstrap (env + fixtures)
 
-- [ ] 1.1 Set OM_PRM_TEST_FIXTURES_ENABLED in .env (local) and re-confirm .env.example documentation
-- [ ] 1.2 Extend src/modules/prm/testing/integration/fixtures.ts with transition / attribute / get fixtures
-- [ ] 1.3 Add unit test for the new fixture wrappers
-- [ ] 1.4 typecheck + jest src/modules/prm green
+- [x] 1.1 Set OM_PRM_TEST_FIXTURES_ENABLED in worktree .env (local; .env is gitignored). .env.example already documents the var. — env-only, no commit
+- [x] 1.2 Extend src/modules/prm/testing/integration/fixtures.ts with transition / attribute / get fixtures — dfc0072
+- [x] 1.3 Add unit test for the new fixture wrappers (8 cases) — dfc0072
+- [x] 1.4 typecheck + jest src/modules/prm green (43 suites, 407 tests) — dfc0072
 
 ### Phase 2: T0 smoke (Agency happy path)
 
