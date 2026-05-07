@@ -139,7 +139,7 @@ All slugs kebab-case (`saas`, `e-commerce`, `fintech`, `node-js`, `dot-net`, etc
 
 ### Phase 2: Wire into setup.ts
 
-- [ ] 2.1 Import + invoke all three seeds in `onTenantCreated` + `seedDefaults`
+- [x] 2.1 Import + invoke all three seeds in `onTenantCreated` + `seedDefaults` — a5fbb5e
 
 ### Phase 3: Validation gate
 
