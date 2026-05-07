@@ -5,7 +5,7 @@ date: 2026-05-07
 branch: feat/prm-spec-05-rfp-broadcast-response
 author: matgren
 input_spec: .ai/specs/SPEC-2026-04-23-rfp-broadcast-response.md
-status: in_progress
+status: complete
 ---
 
 # Run plan — PRM Spec #5 (RFP Broadcast & Response)
@@ -185,25 +185,25 @@ Commit: `docs(runs): close prm-spec-05 run plan; spec implementation status; tri
 
 - [x] 2.1 Visibility helper assertBroadcastedOrNotFound — silent-404 helper + RfpVisibilityNotFoundError + rfpNotFoundResponse
 - [x] 2.2 Portal API routes (list + detail) — list with tab filter; detail stamps first_opened_at idempotently via RfpService.markBroadcastFirstOpened
-- [ ] 2.3 Portal page (custom React list)
-- [ ] 2.4 Integration tests §9.2 (byte-identical 404) — gated on customer-portal Playwright auth helper (carry-over from Spec #4 fixtures.ts comment)
+- [x] 2.3 Portal page (custom React list) — 8f15216
+- [x] 2.4 Integration tests §9.2 — locked at unit-test level via __tests__/rfpVisibility.test.ts (7 cases inc. byte-identical 404 invariant). Playwright surface deferred to POST-MVP "Customer-portal Playwright auth helper" entry.
 
 ### Commits 3a-3d: P10
 
-- [ ] 3a Scaffold + read brief
-- [ ] 3b Markdown editors + draft auto-save
-- [ ] 3c CaseStudy picker (or defer if Spec #7 unshipped)
-- [ ] 3d Submit + unsubmit
+- [x] 3a Scaffold + read brief — 8f15216
+- [x] 3b Markdown editors + draft auto-save — 7696e0a (R7 dedupe via sha256, 4 req/s rate limit, R1 markdown editor shipped as plain Textarea + "Markdown supported" hint per POST-MVP entry)
+- [x] 3c CaseStudy picker — deferred per default (b); cross-Agency reject contract preserved at service layer (RfpService rejects any non-empty attached_case_study_ids until Spec #7 ships)
+- [x] 3d Submit + unsubmit — 26b4931 (RfpService.submitResponse / unsubmitResponse + author-scope at route layer + 9 jest cases)
 
 ### Commit 4: Decline flow
 
-- [ ] 4.1 Decline + undecline commands + routes
-- [ ] 4.2 P10 decline panel
-- [ ] 4.3 Integration tests §9.4
+- [x] 4.1 Decline + undecline commands + routes — d9471bc
+- [x] 4.2 P10 decline panel — d9471bc (Cmd/Ctrl+Enter + Esc dialog UX)
+- [x] 4.3 Integration tests §9.4 — 8 jest cases at service-test level. Playwright surface deferred to POST-MVP "Customer-portal Playwright auth helper" entry.
 
 ### Commit 5: Final gate + PR
 
-- [ ] 5.1 Full gate green
-- [ ] 5.2 Spec implementation status table
-- [ ] 5.3 POST-MVP-FOLLOW-UPS trimmed
+- [x] 5.1 Full gate green — typecheck=0, jest 21 suites / 189 tests, generate clean
+- [x] 5.2 Spec implementation status table — added §11 to spec
+- [x] 5.3 POST-MVP-FOLLOW-UPS — added 5 new entries (customer-portal auth helper, case-study picker, markdown editor, §9.1 #4, §9.6 perf smoke); DI guardrail already trimmed in 39b4304
 - [ ] 5.4 PR opened
