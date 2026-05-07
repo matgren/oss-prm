@@ -155,8 +155,8 @@ Rewrite the "Design system follow-ups" section header with a one-paragraph corre
 
 ### Phase 3: Status chips → StatusBadge
 
-- [ ] 3.1 Migrate `agency/page.tsx` Contract / NDA / Onboarded chips + tests
-- [ ] 3.2 Migrate `rfp/page.tsx` responded chip + tests
+- [x] 3.1 Migrate `agency/page.tsx` Contract / NDA / Onboarded chips + tests — cea4efb
+- [x] 3.2 Migrate `rfp/page.tsx` responded chip + tests — cea4efb
 
 ### Phase 4: Empty states → PortalEmptyState
 
