@@ -115,7 +115,7 @@ Non-goals (do NOT touch):
 
 ### Phase 5: Validation gate + PR
 
-- [ ] 5.1 Run `yarn typecheck`
-- [ ] 5.2 Run `yarn jest src/modules/prm` (target ≥494)
-- [ ] 5.3 Run `yarn build`
+- [x] 5.1 Run `yarn typecheck` (exit 0 after `yarn generate`)
+- [x] 5.2 Run `yarn jest src/modules/prm` (510 = 482 + 28 new — exceeds ≥494 target)
+- [x] 5.3 Run `yarn build` (`Compiled successfully in 43s`, all routes generated)
 - [ ] 5.4 Open PR with `review` + `feature` labels and post summary comment
