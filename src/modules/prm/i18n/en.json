@@ -351,6 +351,15 @@
   "prm.notifications.rfp.not_selected.title": "RFP outcome: {{rfp_title}}",
   "prm.notifications.rfp.not_selected.body": "{{client_name}} has selected another agency for this RFP. Thanks for your response.",
 
+  "prm.rfpAudit.title": "RFP Broadcasts Audit",
+  "prm.rfpAudit.col.agency": "Agency",
+  "prm.rfpAudit.col.broadcastAt": "Broadcast at",
+  "prm.rfpAudit.col.firstOpenedAt": "First opened",
+  "prm.rfpAudit.col.declinedAt": "Declined",
+  "prm.rfpAudit.col.responseStatus": "Response status",
+  "prm.rfpAudit.col.finalOutcome": "Final outcome",
+  "prm.rfpAudit.error.loadFailed": "Failed to load broadcast audit",
+
   "prm.portal.nav.rfp": "RFPs",
   "prm.portal.rfp.title": "RFPs",
   "prm.portal.rfp.subtitle": "Requests for proposal addressed to your agency. Open one to read the brief and respond.",

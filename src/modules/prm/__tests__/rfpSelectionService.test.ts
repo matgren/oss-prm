@@ -64,6 +64,20 @@ class FakeEm {
 
   async find(Ctor: any, where: AnyRow, opts?: AnyRow): Promise<AnyRow[]> {
     const ctor = Ctor?.name ?? ''
+    if (ctor === 'Rfp') {
+      return this.rfps.filter((r) => {
+        if (where.organizationId && r.organizationId !== where.organizationId) return false
+        if (where.status && r.status !== where.status) return false
+        if (where.deletedAt === null && r.deletedAt) return false
+        if (where.reopenedDeadlineAt) {
+          const lt = (where.reopenedDeadlineAt as { $lt?: Date }).$lt
+          if (lt instanceof Date) {
+            if (!r.reopenedDeadlineAt || r.reopenedDeadlineAt.getTime() >= lt.getTime()) return false
+          }
+        }
+        return true
+      })
+    }
     if (ctor === 'RfpResponseScore') {
       let rows = this.scores.filter((s) => {
         if (where.organizationId && s.organizationId !== where.organizationId) return false
@@ -541,5 +555,66 @@ describe('RfpService.expireReopenedDeadline', () => {
     const result = await service.expireReopenedDeadline('nope', { organizationId: ORG })
     expect(result.expired).toBe(false)
     expect(result.rfp).toBeNull()
+  })
+})
+
+describe('RfpService.sweepExpiredReopenedDeadlines', () => {
+  it('sweeps every reopened RFP whose deadline has passed', async () => {
+    const em = new FakeEm()
+    em.rfps.push({
+      id: 'rfp-A',
+      organizationId: ORG,
+      title: 'A',
+      eligibilityFilter: 'all_active',
+      status: 'reopened',
+      reopenedDeadlineAt: new Date(Date.now() - 60_000),
+      isPathBLocked: false,
+      deletedAt: null,
+      createdByUserId: USER,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    em.rfps.push({
+      id: 'rfp-B',
+      organizationId: ORG,
+      title: 'B',
+      eligibilityFilter: 'all_active',
+      status: 'reopened',
+      reopenedDeadlineAt: new Date(Date.now() + 86_400_000), // future
+      isPathBLocked: false,
+      deletedAt: null,
+      createdByUserId: USER,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    em.rfps.push({
+      id: 'rfp-C',
+      organizationId: ORG,
+      title: 'C',
+      eligibilityFilter: 'all_active',
+      status: 'reopened',
+      reopenedDeadlineAt: new Date(Date.now() - 30_000),
+      isPathBLocked: false,
+      deletedAt: null,
+      createdByUserId: USER,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    const service = new RfpService(em as any)
+    const expiredIds = await service.sweepExpiredReopenedDeadlines({ organizationId: ORG })
+    expect(expiredIds.sort()).toEqual(['rfp-A', 'rfp-C'])
+    // The future-deadline RFP is untouched.
+    const stillReopened = em.rfps.find((r) => r.id === 'rfp-B')
+    expect(stillReopened?.status).toBe('reopened')
+    // The expired RFPs got reset to scoring.
+    expect(em.rfps.find((r) => r.id === 'rfp-A')?.status).toBe('scoring')
+    expect(em.rfps.find((r) => r.id === 'rfp-C')?.status).toBe('scoring')
+  })
+
+  it('returns empty array when nothing to sweep', async () => {
+    const em = new FakeEm()
+    const service = new RfpService(em as any)
+    const expiredIds = await service.sweepExpiredReopenedDeadlines({ organizationId: ORG })
+    expect(expiredIds).toEqual([])
   })
 })

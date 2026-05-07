@@ -241,11 +241,11 @@ Combined Commits 4 + 5 into one large commit for cohesion (selection drives clos
 
 ### Commit 6: B11 audit + deadline-expiry worker
 
-- [ ] 6.1 GET /broadcasts API
-- [ ] 6.2 B11 backend page
-- [ ] 6.3 Reopened-deadline expiry worker
-- [ ] 6.4 Unit tests
-- [ ] 6.5 typecheck + jest + generate green
+- [x] 6.1 GET /api/prm/rfp/{id}/broadcasts (audit endpoint with agency-name + response_status + final_outcome enrichment)
+- [x] 6.2 B11 backend page `/backend/prm/rfp-audit/[id]` (DataTable, navHidden — accessed from RFP detail)
+- [x] 6.3 Reopened-deadline expiry worker (default-export + cron metadata) + `RfpService.sweepExpiredReopenedDeadlines`
+- [x] 6.4 Unit tests (3 worker cases + 2 sweep cases + 21 prior selection cases)
+- [x] 6.5 typecheck + jest 334/334 + generate green
 
 ### Commit 7: Final gate + PR
 

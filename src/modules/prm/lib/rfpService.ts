@@ -1181,6 +1181,29 @@ export class RfpService {
   }
 
   /**
+   * Bulk sweep: finds every RFP whose reopened deadline has passed, calls
+   * `expireReopenedDeadline` on each. Used by the scheduled worker.
+   * Returns the list of RFP ids that were expired (one event each).
+   */
+  async sweepExpiredReopenedDeadlines(scope: { organizationId?: string }): Promise<string[]> {
+    const where: Record<string, unknown> = {
+      status: 'reopened',
+      reopenedDeadlineAt: { $lt: new Date() },
+      deletedAt: null,
+    }
+    if (scope.organizationId) where.organizationId = scope.organizationId
+    const rfps = await this.em.find(Rfp, where as any)
+    const expired: string[] = []
+    for (const rfp of rfps) {
+      const result = await this.expireReopenedDeadline(rfp.id, {
+        organizationId: rfp.organizationId,
+      })
+      if (result.expired) expired.push(rfp.id)
+    }
+    return expired
+  }
+
+  /**
    * Live `SELECT` against `prm_license_deals` for the hard-guard. Returns
    * the first locking license_deal_id (if any) or null. Centralised so
    * tests can spy on it.
