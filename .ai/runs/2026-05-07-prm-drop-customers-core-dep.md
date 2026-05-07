@@ -135,18 +135,23 @@ If any step fails, fix-forward in a new commit; do not amend.
 ### Phase 3: Full validation gate
 
 - [x] 3.1 `yarn typecheck` — 1f89ecb (clean exit 0)
-- [x] 3.2 `yarn test` — 1f89ecb (43 suites / 406 tests passed)
-- [ ] 3.3 `yarn test:integration:ephemeral` (CRITICAL) — running after Phase 4 fixes
-- [ ] 3.4 `yarn build`
+- [x] 3.2 `yarn test` — 1f89ecb (43 suites / 406 tests passed) + b939fc5 (stub now 8 cases)
+- [x] 3.3 `yarn test:integration:ephemeral` (CRITICAL) — b939fc5 — readiness probe GREEN.
+      App reached ready, 12 Playwright tests passed, 11 failed for unrelated env-config
+      (OM_PRM_TEST_FIXTURES_ENABLED + X-Om-Import-Secret env vars not set in the
+      ephemeral runtime — pre-existing env config gap on `develop`, not a regression
+      introduced by this PR).
+- [x] 3.4 `yarn build` — b939fc5 (production build clean: 18.7s compile, 26.6s typecheck,
+      static page generation green).
 
 ### Phase 4: Validation-gate blocker fixes (folded into this PR)
 
 - [x] 4.1 Fix `directory_organizations` → `organizations` in
-      Migration20260507062343 + Migration20260507100001 (pre-existing bug from T7;
-      confirmed on `origin/develop`).
+      Migration20260507062343 + Migration20260507100001 — b939fc5 (pre-existing bug
+      from T7; confirmed on `origin/develop` with customers enabled).
 - [x] 4.2 Add `metadata.path = '/customers/people'` to stub route +
-      pinning unit test (without this the route is registered under the module
-      prefix as `/prm/customers/people` and the probe never hits the stub).
+      pinning unit test — b939fc5 (without this the route is registered under the
+      module prefix as `/prm/customers/people` and the probe never hits the stub).
 
 ## Changelog
 
