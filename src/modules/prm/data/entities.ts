@@ -91,6 +91,15 @@ export class Agency {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
+
+  /**
+   * Optimistic-concurrency token — bumped on every aggregate write. Mirrors the
+   * `LicenseDeal.version` reference implementation. Backend + portal PATCH
+   * routes accept an optional `ifMatchVersion` token; mismatches raise
+   * `STATUS_CONFLICT` (409). Default `1` so existing rows backfill safely.
+   */
+  @Property({ type: 'integer', default: 1 })
+  version: number = 1
 }
 
 /**
