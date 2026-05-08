@@ -8,7 +8,7 @@ export const metadata = {
   pageTitleKey: 'prm.nav.agencies',
   pageGroup: 'Partners',
   pageGroupKey: 'prm.nav.group',
-  pageOrder: 100,
+  pageOrder: 15,
   icon: React.createElement(Building2, { className: 'size-4' }),
   breadcrumb: [{ label: 'Partners', labelKey: 'prm.nav.group' }],
 }
