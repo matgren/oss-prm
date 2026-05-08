@@ -1,7 +1,6 @@
 'use client'
 import * as React from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Alert, AlertDescription, AlertTitle } from '@open-mercato/ui/primitives/alert'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -39,11 +38,12 @@ type GetResponse = { ok: true; prospect: Prospect } | { ok: false; error: { code
  * as buttons, mirroring the aggregate's invariant #12 enforcement. Transitions ship the
  * `if_match_status_changed_at` optimistic-concurrency token captured at load time.
  */
-export default function PortalProspectDetailPage() {
+type Props = { params: { orgSlug: string; id: string } }
+
+export default function PortalProspectDetailPage({ params }: Props) {
   const t = useT()
-  const params = useParams<{ orgSlug: string; id: string }>()
-  const id = params?.id
-  const orgSlug = params?.orgSlug
+  const id = params.id
+  const orgSlug = params.orgSlug
   const [prospect, setProspect] = React.useState<Prospect | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)

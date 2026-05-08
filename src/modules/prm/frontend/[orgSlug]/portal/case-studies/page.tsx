@@ -1,7 +1,6 @@
 'use client'
 import * as React from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { ErrorMessage } from '@open-mercato/ui/backend/detail'
@@ -38,10 +37,11 @@ type ListResponse = {
   totalPages: number
 }
 
-export default function PortalCaseStudiesPage() {
+type Props = { params: { orgSlug: string } }
+
+export default function PortalCaseStudiesPage({ params }: Props) {
   const t = useT()
-  const params = useParams<{ orgSlug: string }>()
-  const orgSlug = params?.orgSlug ?? ''
+  const orgSlug = params.orgSlug
   const [items, setItems] = React.useState<CaseStudyDto[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)

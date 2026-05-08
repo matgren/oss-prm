@@ -1,7 +1,6 @@
 'use client'
 import * as React from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Alert, AlertDescription } from '@open-mercato/ui/primitives/alert'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -78,10 +77,11 @@ function formatDateTime(iso: string | null): string {
   return date.toLocaleString()
 }
 
-export default function PortalRfpDetailPage() {
+type Props = { params: { orgSlug: string; id: string } }
+
+export default function PortalRfpDetailPage({ params }: Props) {
   const t = useT()
-  const params = useParams<{ orgSlug: string; id: string }>()
-  const id = params?.id
+  const id = params.id
   const [data, setData] = React.useState<{
     rfp: RfpDetail
     broadcast: Broadcast

@@ -1,14 +1,15 @@
 'use client'
 import * as React from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { CaseStudyForm } from '../caseStudyForm'
 
-export default function NewCaseStudyPage() {
+type Props = { params: { orgSlug: string } }
+
+export default function NewCaseStudyPage({ params }: Props) {
   const t = useT()
-  const params = useParams<{ orgSlug: string }>()
   const router = useRouter()
-  const orgSlug = params?.orgSlug ?? ''
+  const orgSlug = params.orgSlug
   return (
     <div className="space-y-4">
       <header>
