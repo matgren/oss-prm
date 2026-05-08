@@ -7,6 +7,11 @@ import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import {
+  AttachmentPicker,
+  emptyPickerValue,
+  type PickerValue,
+} from '../components/AttachmentPicker'
 
 const formSchema = z.object({
   title: z.string().min(3).max(200),
@@ -16,7 +21,6 @@ const formSchema = z.object({
   minTier: z.string().optional(),
   topicsCsv: z.string().max(2_000).optional(),
   audiencesCsv: z.string().max(500).optional(),
-  primaryAttachmentId: z.string().uuid({ message: 'Provide an attachment UUID' }),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -29,7 +33,6 @@ const INITIAL: FormValues = {
   minTier: '',
   topicsCsv: '',
   audiencesCsv: '',
-  primaryAttachmentId: '',
 }
 
 const VALID_AUDIENCES = new Set(['new_partner', 'active_partner', 'tier_progressing'])
@@ -37,6 +40,17 @@ const VALID_AUDIENCES = new Set(['new_partner', 'active_partner', 'tier_progress
 export default function NewMarketingMaterialPage() {
   const t = useT()
   const router = useRouter()
+  // Stable per-mount draftRecordId — every upload from this form posts under
+  // this id; the server rebinds them to the new material on save.
+  const [draftRecordId] = React.useState<string>(() =>
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  )
+  const [pickerValue, setPickerValue] = React.useState<PickerValue>(emptyPickerValue())
+  const pickerValueRef = React.useRef(pickerValue)
+  pickerValueRef.current = pickerValue
+
   return (
     <Page>
       <PageHeader title={t('prm.backend.marketingMaterials.btn.new', 'New material')} />
@@ -100,15 +114,32 @@ export default function NewMarketingMaterialPage() {
               description: 'Comma-separated, one of new_partner | active_partner | tier_progressing.',
             },
             {
-              id: 'primaryAttachmentId',
-              label: t('prm.backend.marketingMaterials.form.attachmentId', 'Primary attachment id'),
-              type: 'text',
+              id: '__attachments',
+              label: t('prm.backend.marketingMaterials.form.attachments', 'Files'),
+              type: 'custom',
               required: true,
-              description: 'UUID of the file in the attachments module.',
+              component: () => (
+                <AttachmentPicker
+                  value={pickerValue}
+                  onChange={setPickerValue}
+                  draftRecordId={draftRecordId}
+                />
+              ),
             },
           ]}
           submitLabel={t('prm.backend.marketingMaterials.form.save', 'Save')}
           onSubmit={async (values) => {
+            const current = pickerValueRef.current
+            if (!current.primaryAttachmentId || current.attachments.length === 0) {
+              flash(
+                t(
+                  'prm.backend.marketingMaterials.attachments.atLeastOne',
+                  'Add at least one file before saving.',
+                ),
+                'error',
+              )
+              return
+            }
             const topics = (values.topicsCsv ?? '')
               .split(',')
               .map((s) => s.trim())
@@ -117,6 +148,9 @@ export default function NewMarketingMaterialPage() {
               .split(',')
               .map((s) => s.trim())
               .filter((s) => VALID_AUDIENCES.has(s))
+            const extraAttachmentIds = current.attachments
+              .map((a) => a.id)
+              .filter((id) => id !== current.primaryAttachmentId)
             try {
               const res = await apiCallOrThrow<{ ok: true; material: { id: string } }>(
                 '/api/prm/marketing-material',
@@ -131,7 +165,9 @@ export default function NewMarketingMaterialPage() {
                     minTier: values.visibility === 'tier_gated' ? values.minTier || null : null,
                     topics,
                     audiences,
-                    primaryAttachmentId: values.primaryAttachmentId,
+                    primaryAttachmentId: current.primaryAttachmentId,
+                    extraAttachmentIds,
+                    draftRecordId,
                   }),
                 },
               )

@@ -1,6 +1,6 @@
 'use client'
 import * as React from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { z } from 'zod'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
@@ -9,6 +9,20 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import {
+  AttachmentPicker,
+  type PickerFile,
+  type PickerValue,
+} from '../components/AttachmentPicker'
+
+type AttachmentDto = {
+  id: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  url: string
+  isPrimary: boolean
+}
 
 type MaterialDto = {
   id: string
@@ -20,6 +34,7 @@ type MaterialDto = {
   topics: string[]
   audiences: string[]
   primaryAttachmentId: string
+  attachments: AttachmentDto[]
   publishedAt: string | null
   unpublishedAt: string | null
   isCurrentlyPublished: boolean
@@ -33,21 +48,40 @@ const formSchema = z.object({
   minTier: z.string().optional(),
   topicsCsv: z.string().max(2_000).optional(),
   audiencesCsv: z.string().max(500).optional(),
-  primaryAttachmentId: z.string().uuid(),
 })
 
 type FormValues = z.infer<typeof formSchema>
 
 const VALID_AUDIENCES = new Set(['new_partner', 'active_partner', 'tier_progressing'])
 
+const dtoToPickerFile = (a: AttachmentDto): PickerFile => ({
+  id: a.id,
+  fileName: a.fileName,
+  fileSize: a.fileSize,
+  mimeType: a.mimeType,
+  url: a.url,
+  source: 'bound',
+})
+
 export default function EditMarketingMaterialPage() {
   const t = useT()
   const params = useParams<{ id: string }>()
-  const router = useRouter()
   const id = params?.id
   const [data, setData] = React.useState<MaterialDto | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [pickerValue, setPickerValue] = React.useState<PickerValue | null>(null)
+  const pickerValueRef = React.useRef<PickerValue | null>(null)
+  pickerValueRef.current = pickerValue
+
+  // Stable per-mount draftRecordId for any NEW files added on the edit page —
+  // the saved material's existing attachments use the material id, freshly
+  // uploaded ones use this draft id and get rebound on PUT.
+  const [draftRecordId] = React.useState<string>(() =>
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  )
 
   const load = React.useCallback(async () => {
     if (!id) return
@@ -58,7 +92,13 @@ export default function EditMarketingMaterialPage() {
       if (!res.ok || !res.result?.ok) {
         throw new Error(t('prm.backend.marketingMaterials.error.loadFailed', 'Could not load.'))
       }
-      setData(res.result.material)
+      const m = res.result.material
+      setData(m)
+      setPickerValue({
+        primaryAttachmentId: m.primaryAttachmentId,
+        attachments: (m.attachments ?? []).map(dtoToPickerFile),
+        removedBoundIds: [],
+      })
     } catch (err) {
       setError(
         err instanceof Error
@@ -105,7 +145,7 @@ export default function EditMarketingMaterialPage() {
 
   if (loading) return <LoadingMessage label={t('common.loading', 'Loading…')} />
   if (error) return <ErrorMessage label={error} />
-  if (!data) return null
+  if (!data || !pickerValue) return null
 
   const initial: FormValues = {
     title: data.title,
@@ -115,7 +155,6 @@ export default function EditMarketingMaterialPage() {
     minTier: data.minTier ?? '',
     topicsCsv: data.topics.join(', '),
     audiencesCsv: data.audiences.join(', '),
-    primaryAttachmentId: data.primaryAttachmentId,
   }
 
   return (
@@ -128,7 +167,7 @@ export default function EditMarketingMaterialPage() {
             : `${t('prm.backend.marketingMaterials.col.status', 'Status')}: Draft`
         }
         actions={
-          <Button variant="outline" onClick={() => void togglePublish()}>
+          <Button type="button" variant="outline" onClick={() => void togglePublish()}>
             {data.isCurrentlyPublished
               ? t('prm.backend.marketingMaterials.action.unpublish', 'Unpublish')
               : t('prm.backend.marketingMaterials.action.publish', 'Publish')}
@@ -191,14 +230,32 @@ export default function EditMarketingMaterialPage() {
               type: 'text',
             },
             {
-              id: 'primaryAttachmentId',
-              label: t('prm.backend.marketingMaterials.form.attachmentId', 'Primary attachment id'),
-              type: 'text',
+              id: '__attachments',
+              label: t('prm.backend.marketingMaterials.form.attachments', 'Files'),
+              type: 'custom',
               required: true,
+              component: () => (
+                <AttachmentPicker
+                  value={pickerValue}
+                  onChange={setPickerValue}
+                  draftRecordId={draftRecordId}
+                />
+              ),
             },
           ]}
           submitLabel={t('prm.backend.marketingMaterials.form.save', 'Save')}
           onSubmit={async (values) => {
+            const current = pickerValueRef.current
+            if (!current || !current.primaryAttachmentId || current.attachments.length === 0) {
+              flash(
+                t(
+                  'prm.backend.marketingMaterials.attachments.atLeastOne',
+                  'Add at least one file before saving.',
+                ),
+                'error',
+              )
+              return
+            }
             const topics = (values.topicsCsv ?? '')
               .split(',')
               .map((s) => s.trim())
@@ -207,6 +264,17 @@ export default function EditMarketingMaterialPage() {
               .split(',')
               .map((s) => s.trim())
               .filter((s) => VALID_AUDIENCES.has(s))
+            // New files staged this session — anything still flagged 'staged'
+            // needs to be rebound to the material on the server side.
+            const stagedExtras = current.attachments
+              .filter((a) => a.source === 'staged')
+              .map((a) => a.id)
+            // Keep extras stable: include staged ids except the (possibly
+            // newly-promoted) primary. Already-bound non-primary files don't
+            // need to be sent — they stay in place.
+            const extraAttachmentIds = stagedExtras.filter(
+              (id) => id !== current.primaryAttachmentId,
+            )
             try {
               await apiCallOrThrow(`/api/prm/marketing-material/${data.id}`, {
                 method: 'PUT',
@@ -219,7 +287,10 @@ export default function EditMarketingMaterialPage() {
                   minTier: values.visibility === 'tier_gated' ? values.minTier || null : null,
                   topics,
                   audiences,
-                  primaryAttachmentId: values.primaryAttachmentId,
+                  primaryAttachmentId: current.primaryAttachmentId,
+                  extraAttachmentIds,
+                  removedAttachmentIds: current.removedBoundIds,
+                  draftRecordId,
                 }),
               })
               flash(t('prm.backend.marketingMaterials.flash.published', 'Saved.'), 'success')

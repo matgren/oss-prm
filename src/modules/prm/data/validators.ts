@@ -855,6 +855,28 @@ const audienceArray = z
   .max(MARKETING_MATERIAL_AUDIENCES.length)
   .default([])
 
+/**
+ * Marketing material attachment fields (Spec #7 §3.3 — extended for
+ * multi-file authoring).
+ *
+ * `draftRecordId` is a UUID generated client-side in the create/edit form;
+ * uploads done from the form post their files to `/api/prm/marketing-material/upload`
+ * with this id as the temporary `recordId`. On save, the service rebinds
+ * those rows to the real `material.id`. Re-using the same `draftRecordId`
+ * across the edit page lets the user upload more files without first
+ * saving — they live alongside the existing bound files until the next
+ * write commits them.
+ *
+ * `extraAttachmentIds` are non-primary files; the primary download is still
+ * `primaryAttachmentId` (mirrors the FK column on `prm_marketing_materials`).
+ *
+ * `removedAttachmentIds` (update-only) deletes rows + files server-side.
+ * Refused for the row currently used as `primary_attachment_id`.
+ */
+const draftRecordIdSchema = z.string().uuid().optional()
+const extraAttachmentIdsSchema = z.array(z.string().uuid()).max(20).optional()
+const removedAttachmentIdsSchema = z.array(z.string().uuid()).max(20).optional()
+
 export const createMarketingMaterialSchema = z
   .object({
     title: z.string().min(3).max(200),
@@ -865,6 +887,8 @@ export const createMarketingMaterialSchema = z
     topics: slugStringArray.optional(),
     audiences: audienceArray.optional(),
     primaryAttachmentId: z.string().uuid(),
+    extraAttachmentIds: extraAttachmentIdsSchema,
+    draftRecordId: draftRecordIdSchema,
   })
   .refine(
     (v) => v.visibility === 'all_partners' || (v.minTier ?? null) !== null,
@@ -884,6 +908,9 @@ export const updateMarketingMaterialSchema = z
     topics: slugStringArray.optional(),
     audiences: audienceArray.optional(),
     primaryAttachmentId: z.string().uuid().optional(),
+    extraAttachmentIds: extraAttachmentIdsSchema,
+    removedAttachmentIds: removedAttachmentIdsSchema,
+    draftRecordId: draftRecordIdSchema,
   })
   .refine(
     (v) => {

@@ -28,14 +28,18 @@ type RouteContext = { params: Promise<{ id: string }> | { id: string } }
 export async function GET(req: Request, ctx: RouteContext) {
   const params = await Promise.resolve(ctx.params)
   const auth = await getAuthFromRequest(req)
-  if (!auth || !auth.orgId) {
+  if (!auth || !auth.orgId || !auth.tenantId) {
     return NextResponse.json({ ok: false, error: 'Authentication required' }, { status: 401 })
   }
   const container = await createRequestContainer()
   const service = container.resolve('marketingMaterialService') as MarketingMaterialService
   try {
     const m = await service.getById(params.id, { organizationId: auth.orgId })
-    return NextResponse.json({ ok: true, material: toMarketingMaterialDto(m) })
+    const attachments = await service.listAttachments(m, {
+      organizationId: auth.orgId,
+      tenantId: auth.tenantId,
+    })
+    return NextResponse.json({ ok: true, material: toMarketingMaterialDto(m, attachments) })
   } catch (err) {
     if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
@@ -47,7 +51,7 @@ export async function GET(req: Request, ctx: RouteContext) {
 export async function PUT(req: Request, ctx: RouteContext) {
   const params = await Promise.resolve(ctx.params)
   const auth = await getAuthFromRequest(req)
-  if (!auth || !auth.orgId) {
+  if (!auth || !auth.orgId || !auth.tenantId) {
     return NextResponse.json({ ok: false, error: 'Authentication required' }, { status: 401 })
   }
   let body: unknown
@@ -66,8 +70,15 @@ export async function PUT(req: Request, ctx: RouteContext) {
   const container = await createRequestContainer()
   const service = container.resolve('marketingMaterialService') as MarketingMaterialService
   try {
-    const m = await service.update(params.id, parsed.data, { organizationId: auth.orgId })
-    return NextResponse.json({ ok: true, material: toMarketingMaterialDto(m) })
+    const m = await service.update(params.id, parsed.data, {
+      organizationId: auth.orgId,
+      tenantId: auth.tenantId,
+    })
+    const attachments = await service.listAttachments(m, {
+      organizationId: auth.orgId,
+      tenantId: auth.tenantId,
+    })
+    return NextResponse.json({ ok: true, material: toMarketingMaterialDto(m, attachments) })
   } catch (err) {
     if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
+import { deletePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
 import { MarketingMaterial } from '../data/entities'
 import {
   type CreateMarketingMaterialInput,
@@ -9,6 +11,17 @@ import {
 import { PRM_ERROR_CODES, PrmDomainError } from './errors'
 import { safeEmit } from './safeEmit'
 import { tierRank } from './tierRank'
+
+const PRM_MATERIAL_ENTITY_ID = 'prm:marketing_material'
+
+export type MaterialAttachment = {
+  id: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  url: string
+  isPrimary: boolean
+}
 
 /**
  * Domain helper for `MarketingMaterial` (Spec #7 §3.3).
@@ -31,7 +44,7 @@ export class MarketingMaterialService {
 
   async create(
     input: CreateMarketingMaterialInput,
-    scope: { organizationId: string; userId: string },
+    scope: { organizationId: string; userId: string; tenantId?: string },
   ): Promise<MarketingMaterial> {
     if (input.visibility === 'tier_gated' && (input.minTier ?? null) === null) {
       throw new PrmDomainError(
@@ -40,10 +53,30 @@ export class MarketingMaterialService {
         400,
       )
     }
+    // Legacy callers (single-attachment path, no upload widget) leave
+    // `draftRecordId` unset and pass a `primaryAttachmentId` minted somewhere
+    // outside this service — skip ownership/rebind verification in that case
+    // to preserve backward compatibility.
+    const useDraftFlow = !!(input.draftRecordId && scope.tenantId)
+    const allDraftIds = useDraftFlow
+      ? [
+          input.primaryAttachmentId,
+          ...((input.extraAttachmentIds ?? []).filter((id) => id !== input.primaryAttachmentId)),
+        ]
+      : []
+    if (useDraftFlow) {
+      await this.assertOwnedDraftAttachments(allDraftIds, {
+        organizationId: scope.organizationId,
+        tenantId: scope.tenantId!,
+        draftRecordId: input.draftRecordId!,
+      })
+    }
+
     const minTier = input.minTier ?? null
     const minTierRank = minTier ? tierRank(minTier) : null
+    const materialId = randomUUID()
     const m = this.em.create(MarketingMaterial, {
-      id: randomUUID(),
+      id: materialId,
       organizationId: scope.organizationId,
       title: input.title,
       description: input.description ?? null,
@@ -63,6 +96,13 @@ export class MarketingMaterialService {
     this.em.persist(m)
     await this.em.flush()
 
+    if (useDraftFlow) {
+      await this.bindAttachmentsToMaterial(allDraftIds, materialId, {
+        organizationId: scope.organizationId,
+        tenantId: scope.tenantId!,
+      })
+    }
+
     await safeEmit('prm.marketing_material.created', {
       material_id: m.id,
       organization_id: m.organizationId,
@@ -77,9 +117,47 @@ export class MarketingMaterialService {
   async update(
     id: string,
     input: UpdateMarketingMaterialInput,
-    scope: { organizationId: string },
+    scope: { organizationId: string; tenantId?: string },
   ): Promise<MarketingMaterial> {
     const m = await this.loadOwned(id, scope)
+
+    // Resolve incoming attachment changes BEFORE mutating scalar fields so we
+    // can fail fast if the caller sent an attachment id they don't own.
+    const incomingExtras = input.extraAttachmentIds ?? []
+    const incomingRemoves = input.removedAttachmentIds ?? []
+    const nextPrimaryId = input.primaryAttachmentId ?? m.primaryAttachmentId
+    const useAttachmentFlow = !!scope.tenantId && (incomingExtras.length > 0 || incomingRemoves.length > 0 || (input.primaryAttachmentId !== undefined && input.primaryAttachmentId !== m.primaryAttachmentId))
+
+    if (incomingRemoves.includes(nextPrimaryId)) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        'Cannot remove the primary attachment. Promote another file to primary first.',
+        409,
+      )
+    }
+    if (useAttachmentFlow && incomingExtras.length) {
+      await this.assertOwnedDraftAttachments(incomingExtras, {
+        organizationId: scope.organizationId,
+        tenantId: scope.tenantId!,
+        draftRecordId: input.draftRecordId ?? null,
+        allowAlreadyBoundTo: m.id,
+      })
+    }
+    if (
+      useAttachmentFlow &&
+      input.primaryAttachmentId !== undefined &&
+      input.primaryAttachmentId !== m.primaryAttachmentId
+    ) {
+      // Promoting an extra to primary — must be an attachment already bound to
+      // this material (or one of the staged extras above).
+      await this.assertOwnedDraftAttachments([input.primaryAttachmentId], {
+        organizationId: scope.organizationId,
+        tenantId: scope.tenantId!,
+        draftRecordId: input.draftRecordId ?? null,
+        allowAlreadyBoundTo: m.id,
+      })
+    }
+
     if (input.title !== undefined) m.title = input.title
     if (input.description !== undefined) m.description = input.description ?? null
     if (input.materialType !== undefined) m.materialType = input.materialType
@@ -101,6 +179,20 @@ export class MarketingMaterialService {
     m.updatedAt = new Date()
     this.em.persist(m)
     await this.em.flush()
+
+    if (useAttachmentFlow && incomingExtras.length) {
+      await this.bindAttachmentsToMaterial(incomingExtras, m.id, {
+        organizationId: scope.organizationId,
+        tenantId: scope.tenantId!,
+      })
+    }
+    if (useAttachmentFlow && incomingRemoves.length) {
+      await this.removeAttachments(incomingRemoves, {
+        organizationId: scope.organizationId,
+        tenantId: scope.tenantId!,
+        materialId: m.id,
+      })
+    }
 
     await safeEmit('prm.marketing_material.updated', {
       material_id: m.id,
@@ -296,6 +388,139 @@ export class MarketingMaterialService {
     }
     return m
   }
+
+  /**
+   * Loads every Attachment row currently bound to the material — primary +
+   * extras — and returns it in a UI-friendly shape with `isPrimary` resolved
+   * from the material's `primary_attachment_id`.
+   */
+  async listAttachments(
+    material: MarketingMaterial,
+    scope: { organizationId: string; tenantId: string },
+  ): Promise<MaterialAttachment[]> {
+    const rows = await this.em.find(Attachment, {
+      entityId: PRM_MATERIAL_ENTITY_ID,
+      recordId: material.id,
+      organizationId: scope.organizationId,
+      tenantId: scope.tenantId,
+    } as any)
+    return rows
+      .map((a) => ({
+        id: a.id,
+        fileName: a.fileName,
+        fileSize: a.fileSize,
+        mimeType: a.mimeType,
+        url: a.url,
+        isPrimary: a.id === material.primaryAttachmentId,
+      }))
+      .sort((x, y) => {
+        if (x.isPrimary !== y.isPrimary) return x.isPrimary ? -1 : 1
+        return x.fileName.localeCompare(y.fileName)
+      })
+  }
+
+  /**
+   * Verify that every supplied attachment id exists in this tenant/org and is
+   * either (a) still in its draft state under `draftRecordId`, or (b) already
+   * bound to `allowAlreadyBoundTo` (used on update for promote-to-primary).
+   */
+  private async assertOwnedDraftAttachments(
+    ids: string[],
+    options: {
+      organizationId: string
+      tenantId: string
+      draftRecordId: string | null
+      allowAlreadyBoundTo?: string
+    },
+  ): Promise<void> {
+    if (!ids.length) return
+    const rows = await this.em.find(Attachment, {
+      id: { $in: ids },
+      entityId: PRM_MATERIAL_ENTITY_ID,
+      tenantId: options.tenantId,
+      organizationId: options.organizationId,
+    } as any)
+    if (rows.length !== ids.length) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        'One or more attachments are missing or do not belong to this organization.',
+        400,
+        { missing: ids.filter((id) => !rows.some((r) => r.id === id)) },
+      )
+    }
+    for (const row of rows) {
+      const isDraft =
+        options.draftRecordId !== null && row.recordId === options.draftRecordId
+      const isAlreadyBound =
+        options.allowAlreadyBoundTo !== undefined &&
+        row.recordId === options.allowAlreadyBoundTo
+      if (!isDraft && !isAlreadyBound) {
+        throw new PrmDomainError(
+          PRM_ERROR_CODES.VALIDATION_FAILED,
+          'Attachment is not eligible for this material.',
+          400,
+          { attachment_id: row.id },
+        )
+      }
+    }
+  }
+
+  /**
+   * Rebind a set of Attachment rows to a saved MarketingMaterial. Idempotent —
+   * rows already bound to `materialId` are left in place so update() can pass
+   * the full extras list without churn.
+   */
+  private async bindAttachmentsToMaterial(
+    ids: string[],
+    materialId: string,
+    scope: { organizationId: string; tenantId: string },
+  ): Promise<void> {
+    if (!ids.length) return
+    const rows = await this.em.find(Attachment, {
+      id: { $in: ids },
+      entityId: PRM_MATERIAL_ENTITY_ID,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+    } as any)
+    let mutated = false
+    for (const row of rows) {
+      if (row.recordId === materialId) continue
+      row.recordId = materialId
+      this.em.persist(row)
+      mutated = true
+    }
+    if (mutated) await this.em.flush()
+  }
+
+  /**
+   * Hard-delete a set of Attachment rows currently bound to this material,
+   * including their backing files. Skips rows that are not bound to the
+   * material (defensive — should not happen given route-level checks).
+   */
+  private async removeAttachments(
+    ids: string[],
+    scope: { organizationId: string; tenantId: string; materialId: string },
+  ): Promise<void> {
+    if (!ids.length) return
+    const rows = await this.em.find(Attachment, {
+      id: { $in: ids },
+      entityId: PRM_MATERIAL_ENTITY_ID,
+      recordId: scope.materialId,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+    } as any)
+    if (!rows.length) return
+    const fileSpecs = rows.map((r) => ({
+      partitionCode: r.partitionCode,
+      storagePath: r.storagePath,
+      storageDriver: r.storageDriver,
+    }))
+    for (const row of rows) this.em.remove(row)
+    await this.em.flush()
+    await Promise.all(
+      fileSpecs.map((f) => deletePartitionFile(f.partitionCode, f.storagePath, f.storageDriver)),
+    )
+  }
 }
 
 export type MarketingMaterialDto = {
@@ -310,6 +535,7 @@ export type MarketingMaterialDto = {
   topics: string[]
   audiences: string[]
   primaryAttachmentId: string
+  attachments: MaterialAttachment[]
   publishedAt: string | null
   unpublishedAt: string | null
   isCurrentlyPublished: boolean
@@ -317,7 +543,10 @@ export type MarketingMaterialDto = {
   updatedAt: string
 }
 
-export function toMarketingMaterialDto(m: MarketingMaterial): MarketingMaterialDto {
+export function toMarketingMaterialDto(
+  m: MarketingMaterial,
+  attachments: MaterialAttachment[] = [],
+): MarketingMaterialDto {
   return {
     id: m.id,
     organizationId: m.organizationId,
@@ -330,6 +559,7 @@ export function toMarketingMaterialDto(m: MarketingMaterial): MarketingMaterialD
     topics: m.topics ?? [],
     audiences: m.audiences ?? [],
     primaryAttachmentId: m.primaryAttachmentId,
+    attachments,
     publishedAt: m.publishedAt ? m.publishedAt.toISOString() : null,
     unpublishedAt: m.unpublishedAt ? m.unpublishedAt.toISOString() : null,
     isCurrentlyPublished: !!m.publishedAt && !m.unpublishedAt,

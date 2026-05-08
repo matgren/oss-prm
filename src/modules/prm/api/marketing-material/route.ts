@@ -49,7 +49,7 @@ export async function GET(req: Request) {
   )
   return NextResponse.json({
     ok: true,
-    items: items.map(toMarketingMaterialDto),
+    items: items.map((m) => toMarketingMaterialDto(m)),
     page,
     pageSize,
     total,
@@ -59,7 +59,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const auth = await getAuthFromRequest(req)
-  if (!auth || !auth.orgId || !auth.sub) {
+  if (!auth || !auth.orgId || !auth.sub || !auth.tenantId) {
     return NextResponse.json({ ok: false, error: 'Authentication required' }, { status: 401 })
   }
   let body: unknown
@@ -78,8 +78,19 @@ export async function POST(req: Request) {
   const container = await createRequestContainer()
   const service = container.resolve('marketingMaterialService') as MarketingMaterialService
   try {
-    const m = await service.create(parsed.data, { organizationId: auth.orgId, userId: auth.sub })
-    return NextResponse.json({ ok: true, material: toMarketingMaterialDto(m) }, { status: 201 })
+    const m = await service.create(parsed.data, {
+      organizationId: auth.orgId,
+      userId: auth.sub,
+      tenantId: auth.tenantId,
+    })
+    const attachments = await service.listAttachments(m, {
+      organizationId: auth.orgId,
+      tenantId: auth.tenantId,
+    })
+    return NextResponse.json(
+      { ok: true, material: toMarketingMaterialDto(m, attachments) },
+      { status: 201 },
+    )
   } catch (err) {
     if (isPrmDomainError(err)) {
       return NextResponse.json(toPrmErrorBody(err), { status: err.status })
