@@ -338,6 +338,19 @@ export class AgencyMemberService {
           agencyId: member.agencyId,
           tenantId: member.tenantId,
           agencyMemberId: member.id,
+          customerUserId: member.customerUserId ?? null,
+        },
+        { context: { agencyId: member.agencyId, agencyMemberId: member.id } },
+      )
+    }
+    if (!before.isActive && member.isActive) {
+      await safeEmit(
+        'prm.agency_member.reactivated',
+        {
+          agencyId: member.agencyId,
+          tenantId: member.tenantId,
+          agencyMemberId: member.id,
+          customerUserId: member.customerUserId ?? null,
         },
         { context: { agencyId: member.agencyId, agencyMemberId: member.id } },
       )
