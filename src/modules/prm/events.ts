@@ -22,6 +22,7 @@ const events = [
   { id: 'prm.agency_member.added', label: 'Agency member invited (placeholder)', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.agency_member.activated', label: 'Agency member activated (invite accepted)', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.agency_member.removed', label: 'Agency member removed/deactivated', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.agency_member.reactivated', label: 'Agency member reactivated (portal access restored)', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.agency_member.role_changed', label: 'Agency member role changed', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.agency_member.updated', label: 'Agency member personal fields updated', entity: 'agency_member', category: 'crud', clientBroadcast: true, portalBroadcast: true },
 
