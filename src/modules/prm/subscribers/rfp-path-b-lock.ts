@@ -18,6 +18,11 @@ import type { EntityManager } from '@mikro-orm/postgresql'
  *   - lock = FALSE otherwise (including when the lone Path-B deal moves to
  *     `pending` via /unreverse-status, releasing the RFP for re-selection).
  *
+ * Scope-column note: `prm_license_deals` carries `tenant_id`, but `prm_rfps`
+ * scopes by `organization_id` only (no tenant_id column on that table — see
+ * `data/entities.ts` Rfp + `Migration20260506224953_prm_rfp.ts`). Both scope
+ * columns must be sourced from the event payload.
+ *
  * This subscriber is the SOLE writer for `is_path_b_locked` per Singularity Law.
  */
 export const metadata = {
@@ -41,7 +46,7 @@ export default async function handle(
   payload: StatusChangedPayload,
   ctx: { resolve: <T = unknown>(name: string) => T },
 ): Promise<void> {
-  if (!payload?.tenantId || !payload?.rfpId) return
+  if (!payload?.tenantId || !payload?.organizationId || !payload?.rfpId) return
   // Only interested in Path B transitions — other paths can't affect the RFP lock.
   if (payload.attributionPath !== 'B') return
 
@@ -85,7 +90,7 @@ export default async function handle(
   // Step 2 — recompute the lock state for this RFP.
   // The writer is the SOLE source of truth: count signed+active Path-B deals for
   // this RFP; if any exist → lock = true; else → false. This is idempotent per
-  // event delivery.
+  // event delivery. `prm_license_deals` is tenant-scoped.
   const liveCount = (await knex('prm_license_deals')
     .where('rfp_id', payload.rfpId)
     .where('tenant_id', payload.tenantId)
@@ -96,8 +101,9 @@ export default async function handle(
 
   const shouldLock = Number(liveCount[0]?.c ?? 0) > 0
 
+  // `prm_rfps` is organization-scoped (no tenant_id column).
   await knex('prm_rfps')
     .where('id', payload.rfpId)
-    .where('tenant_id', payload.tenantId)
+    .where('organization_id', payload.organizationId)
     .update({ is_path_b_locked: shouldLock, updated_at: new Date() })
 }
