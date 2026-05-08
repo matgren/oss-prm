@@ -153,6 +153,15 @@ test.describe('TC-PRM-T0-007: SPEC-2026-05-08 — Agency member deactivation', (
     )
     expect(reactivateResp.status(), 'reactivation should succeed').toBe(200)
 
+    // Wait for JWT-iat second-precision to exceed the persisted
+    // `sessions_revoked_at` (which is millisecond-precision and was set during
+    // deactivation). Without this delay the freshly-minted JWT could carry an
+    // `iat` whose `iat * 1000` truncates BELOW `sessions_revoked_at.getTime()`
+    // and `validateUserState` would reject it. In practice an admin
+    // reactivating a member then asking them to log in always crosses a
+    // second boundary; the sleep mirrors that real-world cadence.
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+
     // Fresh login must now succeed (CustomerUser.isActive=true again).
     const freshToken = await loginCustomer(request, {
       email: agency.member.email,
