@@ -2,6 +2,9 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { findRouteManifestMatch, registerFrontendRouteManifests } from '@open-mercato/shared/modules/registry'
 import { frontendRoutes } from '@/.mercato/generated/frontend-routes.generated'
+import { sortRoutesBySpecificity } from '@/lib/routing/specificity'
+
+const sortedFrontendRoutes = sortRoutesBySpecificity(frontendRoutes)
 
 registerFrontendRouteManifests(frontendRoutes)
 import { getAuthFromCookies } from '@open-mercato/shared/lib/auth/server'
@@ -36,7 +39,7 @@ async function renderAccessDenied() {
 export async function generateMetadata({ params }: FrontendParams): Promise<Metadata> {
   const p = await params
   const pathname = '/' + (p.slug?.join('/') ?? '')
-  const match = findRouteManifestMatch(frontendRoutes, pathname)
+  const match = findRouteManifestMatch(sortedFrontendRoutes, pathname)
   if (!match) {
     return {}
   }
@@ -50,7 +53,7 @@ export async function generateMetadata({ params }: FrontendParams): Promise<Meta
 export default async function SiteCatchAll({ params }: FrontendParams) {
   const p = await params
   const pathname = '/' + (p.slug?.join('/') ?? '')
-  const match = findRouteManifestMatch(frontendRoutes, pathname)
+  const match = findRouteManifestMatch(sortedFrontendRoutes, pathname)
   if (!match) return notFound()
 
   // Customer portal auth gate — separate from staff auth

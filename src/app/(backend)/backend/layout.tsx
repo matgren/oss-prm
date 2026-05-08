@@ -1,6 +1,9 @@
 import { cookies, headers } from 'next/headers'
 import { backendRoutes } from '@/.mercato/generated/backend-routes.generated'
 import { findRouteManifestMatch, registerBackendRouteManifests } from '@open-mercato/shared/modules/registry'
+import { sortRoutesBySpecificity } from '@/lib/routing/specificity'
+
+const sortedBackendRoutes = sortRoutesBySpecificity(backendRoutes)
 import { getAuthFromCookies } from '@open-mercato/shared/lib/auth/server'
 import { AppShell } from '@open-mercato/ui/backend/AppShell'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
@@ -69,7 +72,7 @@ export default async function BackendLayout({
     'Search requires configuring an embedding provider for semantic search.',
   )
 
-  const match = findRouteManifestMatch(backendRoutes, path)
+  const match = findRouteManifestMatch(sortedBackendRoutes, path)
   const currentTitle = match?.route.titleKey
     ? translate(match.route.titleKey, match.route.title)
     : (match?.route.title ?? '')

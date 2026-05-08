@@ -4,6 +4,9 @@ import { isCrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { apiRoutes } from '@/.mercato/generated/api-routes.generated'
 import { backendRoutes } from '@/.mercato/generated/backend-routes.generated'
 import { frontendRoutes } from '@/.mercato/generated/frontend-routes.generated'
+import { sortRoutesBySpecificity } from '@/lib/routing/specificity'
+
+const sortedApiRoutes = sortRoutesBySpecificity(apiRoutes)
 import { resolveAuthFromRequestDetailed } from '@open-mercato/shared/lib/auth/server'
 import { bootstrap } from '@/bootstrap'
 
@@ -292,7 +295,7 @@ async function handleRequest(
     receivedAt: new Date().toISOString(),
   }
   await emitLifecycleEvent(applicationLifecycleEvents.requestReceived, receivedPayload)
-  const match = findApiRouteManifestMatch(apiRoutes, method, pathname)
+  const match = findApiRouteManifestMatch(sortedApiRoutes, method, pathname)
   if (!match) {
     const response = NextResponse.json({ error: t('api.errors.notFound', 'Not Found') }, { status: 404 })
     await emitLifecycleEvent(applicationLifecycleEvents.requestNotFound, {
