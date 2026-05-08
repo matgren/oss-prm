@@ -4,6 +4,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
+import { TagsInput, type TagsInputOption } from '@open-mercato/ui/backend/inputs/TagsInput'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
@@ -13,6 +14,13 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
  * Plain Textarea + "Markdown supported" hint per the same R1 mitigation
  * Spec #5 ships (no markdown editor primitive in @open-mercato/ui v0.5.0).
  * Promote to a real editor when one lands.
+ *
+ * Tag fields (technologies, services) use the platform `TagsInput` with
+ * suggestions loaded from PRM's portal-scoped dictionary endpoint
+ * (`/api/prm/portal/dictionaries/<key>/entries`). Closed list:
+ * `allowCustomValues={false}` — taxonomy is governed by OMPartnerOps
+ * via the backend dictionaries UI to keep marketing-library / RFP
+ * matching consistent.
  */
 
 export type CaseStudyFormValues = {
@@ -23,8 +31,8 @@ export type CaseStudyFormValues = {
   challengeMarkdown: string
   approachMarkdown: string
   outcomeMarkdown: string
-  technologiesUsed: string
-  servicesDelivered: string
+  technologiesUsed: string[]
+  servicesDelivered: string[]
 }
 
 export type CaseStudyFormProps = {
@@ -42,19 +50,23 @@ const EMPTY: CaseStudyFormValues = {
   challengeMarkdown: '',
   approachMarkdown: '',
   outcomeMarkdown: '',
-  technologiesUsed: '',
-  servicesDelivered: '',
+  technologiesUsed: [],
+  servicesDelivered: [],
 }
 
-function splitCsv(input: string): string[] {
-  return input
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
+type DictionaryEntriesResponse = {
+  ok: true
+  items: TagsInputOption[]
 }
 
-function joinCsv(input: string[] | undefined | null): string {
-  return (input ?? []).join(', ')
+async function fetchDictionaryEntries(key: 'technologies' | 'services'): Promise<TagsInputOption[]> {
+  const res = await apiCall<DictionaryEntriesResponse>(
+    `/api/prm/portal/dictionaries/${encodeURIComponent(key)}/entries`,
+  )
+  if (!res.ok || !res.result || !Array.isArray((res.result as DictionaryEntriesResponse).items)) {
+    return []
+  }
+  return (res.result as DictionaryEntriesResponse).items
 }
 
 export function CaseStudyForm({
@@ -68,9 +80,35 @@ export function CaseStudyForm({
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
-  const update = (key: keyof CaseStudyFormValues, value: string) => {
+  const update = <K extends keyof CaseStudyFormValues>(
+    key: K,
+    value: CaseStudyFormValues[K],
+  ) => {
     setValues((prev) => ({ ...prev, [key]: value }))
   }
+
+  // Load dictionaries once on mount and pass as static `suggestions` to
+  // TagsInput so it filters client-side. Avoids the per-keystroke debounced
+  // refetch loop that flashes "Loading…" and re-renders the dropdown.
+  const [techOptions, setTechOptions] = React.useState<TagsInputOption[]>([])
+  const [servicesOptions, setServicesOptions] = React.useState<TagsInputOption[]>([])
+
+  React.useEffect(() => {
+    let cancelled = false
+    void Promise.all([fetchDictionaryEntries('technologies'), fetchDictionaryEntries('services')])
+      .then(([tech, services]) => {
+        if (cancelled) return
+        setTechOptions(tech)
+        setServicesOptions(services)
+      })
+      .catch(() => {
+        // Silently degrade — TagsInput still works with empty suggestions
+        // when allowCustomValues=false (just no picker).
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -84,8 +122,8 @@ export function CaseStudyForm({
       challengeMarkdown: values.challengeMarkdown,
       approachMarkdown: values.approachMarkdown,
       outcomeMarkdown: values.outcomeMarkdown,
-      technologiesUsed: splitCsv(values.technologiesUsed),
-      servicesDelivered: splitCsv(values.servicesDelivered),
+      technologiesUsed: values.technologiesUsed,
+      servicesDelivered: values.servicesDelivered,
     }
     try {
       const url =
@@ -200,15 +238,27 @@ export function CaseStudyForm({
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1">
           <span className="text-xs font-medium uppercase tracking-wide">
-            {t('prm.portal.caseStudies.form.technologies', 'Technologies (comma-separated slugs)')}
+            {t('prm.portal.caseStudies.form.technologies', 'Technologies')}
           </span>
-          <Input value={values.technologiesUsed} onChange={(e) => update('technologiesUsed', e.target.value)} />
+          <TagsInput
+            value={values.technologiesUsed}
+            onChange={(next) => update('technologiesUsed', next)}
+            suggestions={techOptions}
+            allowCustomValues={false}
+            placeholder={t('prm.portal.caseStudies.form.technologies.placeholder', 'Pick technologies…')}
+          />
         </label>
         <label className="space-y-1">
           <span className="text-xs font-medium uppercase tracking-wide">
-            {t('prm.portal.caseStudies.form.services', 'Services (comma-separated slugs)')}
+            {t('prm.portal.caseStudies.form.services', 'Services')}
           </span>
-          <Input value={values.servicesDelivered} onChange={(e) => update('servicesDelivered', e.target.value)} />
+          <TagsInput
+            value={values.servicesDelivered}
+            onChange={(next) => update('servicesDelivered', next)}
+            suggestions={servicesOptions}
+            allowCustomValues={false}
+            placeholder={t('prm.portal.caseStudies.form.services.placeholder', 'Pick services…')}
+          />
         </label>
       </div>
       {error ? <div className="text-sm text-destructive">{error}</div> : null}
@@ -242,7 +292,7 @@ export function caseStudyDtoToFormValues(dto: {
     challengeMarkdown: dto.challengeMarkdown,
     approachMarkdown: dto.approachMarkdown,
     outcomeMarkdown: dto.outcomeMarkdown,
-    technologiesUsed: joinCsv(dto.technologiesUsed),
-    servicesDelivered: joinCsv(dto.servicesDelivered),
+    technologiesUsed: Array.isArray(dto.technologiesUsed) ? [...dto.technologiesUsed] : [],
+    servicesDelivered: Array.isArray(dto.servicesDelivered) ? [...dto.servicesDelivered] : [],
   }
 }

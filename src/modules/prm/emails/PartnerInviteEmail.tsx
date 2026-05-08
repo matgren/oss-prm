@@ -1,10 +1,22 @@
 /**
- * Partner invite email body.
+ * Partner invite email body — React-Email component matching the OM core
+ * convention (see `@open-mercato/core/modules/customer_accounts/emails/`).
  *
- * Plain HTML rendering keeps the template framework-agnostic — `react-email` renders are
- * available via the platform when present, but the fallback string-template path below
- * is sufficient for the v1 send-or-log scenario (OQ-014).
+ * The component is passed directly to `sendEmail({ react: ... })`; Resend
+ * renders it server-side via @react-email/render, so do not pre-render.
  */
+
+import * as React from 'react'
+import {
+  Body,
+  Container,
+  Head,
+  Html,
+  Link,
+  Preview,
+  Section,
+  Text,
+} from '@react-email/components'
 
 export type PartnerInviteEmailProps = {
   firstName: string
@@ -12,15 +24,6 @@ export type PartnerInviteEmailProps = {
   agencyName: string
   roleSlug: string
   acceptUrl: string
-}
-
-function htmlEscape(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 function humaniseRole(roleSlug: string): string {
@@ -34,35 +37,61 @@ function humaniseRole(roleSlug: string): string {
   }
 }
 
-export function renderPartnerInviteEmail(props: PartnerInviteEmailProps): string {
-  const fullName = htmlEscape(`${props.firstName} ${props.lastName}`.trim())
-  const agency = htmlEscape(props.agencyName)
-  const role = htmlEscape(humaniseRole(props.roleSlug))
-  const url = htmlEscape(props.acceptUrl)
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Invitation to ${agency}</title>
-</head>
-<body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 32px 24px;">
-  <h1 style="font-size: 22px; margin: 0 0 8px;">Welcome to ${agency}, ${fullName}.</h1>
-  <p style="margin: 0 0 20px; line-height: 1.5;">
-    You have been invited to join <strong>${agency}</strong> as a <strong>${role}</strong> on the Open Mercato partner portal.
-    Click the button below to set your password and finish onboarding.
-  </p>
-  <p style="margin: 0 0 28px;">
-    <a href="${url}" style="display: inline-block; padding: 12px 20px; background: #111; color: #fff; text-decoration: none; border-radius: 6px;">
-      Accept invitation
-    </a>
-  </p>
-  <p style="margin: 0 0 4px; font-size: 13px; color: #666;">If the button doesn't work, copy and paste this URL into your browser:</p>
-  <p style="margin: 0 0 28px; font-size: 13px;"><a href="${url}" style="color: #2952cc;">${url}</a></p>
-  <p style="margin: 0; font-size: 12px; color: #888;">
-    This invitation expires in 72 hours. If you didn't expect this email, please ignore it — no account was created on your behalf.
-  </p>
-</body>
-</html>`
+export function PartnerInviteEmail({
+  firstName,
+  lastName,
+  agencyName,
+  roleSlug,
+  acceptUrl,
+}: PartnerInviteEmailProps) {
+  const fullName = `${firstName} ${lastName}`.trim()
+  const role = humaniseRole(roleSlug)
+  return (
+    <Html>
+      <Head />
+      <Preview>{`You're invited to join ${agencyName} on Open Mercato`}</Preview>
+      <Body style={body}>
+        <Container style={container}>
+          <Section>
+            <Text style={title}>{`Welcome to ${agencyName}, ${fullName}.`}</Text>
+            <Text style={paragraph}>
+              You have been invited to join <strong>{agencyName}</strong> as a{' '}
+              <strong>{role}</strong> on the Open Mercato partner portal. Click
+              the button below to set your password and finish onboarding.
+            </Text>
+            <Text>
+              <Link href={acceptUrl} style={button}>
+                Accept invitation
+              </Link>
+            </Text>
+            <Text style={paragraphSmall}>
+              If the button doesn&apos;t work, copy and paste this URL into your
+              browser:
+            </Text>
+            <Text style={paragraphSmall}>
+              <Link href={acceptUrl} style={fallbackLink}>
+                {acceptUrl}
+              </Link>
+            </Text>
+            <Text style={hint}>
+              This invitation expires in 72 hours. If you didn&apos;t expect
+              this email, please ignore it — no account was created on your
+              behalf.
+            </Text>
+          </Section>
+        </Container>
+      </Body>
+    </Html>
+  )
 }
 
-export default renderPartnerInviteEmail
+const body: React.CSSProperties = { backgroundColor: '#f9fafb', margin: 0, padding: '24px 0' }
+const container: React.CSSProperties = { backgroundColor: '#ffffff', borderRadius: 12, padding: 24, margin: '0 auto', maxWidth: 560, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }
+const title: React.CSSProperties = { fontSize: 22, fontWeight: 600, color: '#111827', margin: '0 0 12px' }
+const paragraph: React.CSSProperties = { fontSize: 14, color: '#374151', lineHeight: '20px', margin: '0 0 20px' }
+const button: React.CSSProperties = { display: 'inline-block', backgroundColor: '#111827', color: '#ffffff', padding: '12px 20px', borderRadius: 6, textDecoration: 'none', fontSize: 14 }
+const paragraphSmall: React.CSSProperties = { fontSize: 13, color: '#6b7280', margin: '12px 0 4px' }
+const fallbackLink: React.CSSProperties = { color: '#2952cc', wordBreak: 'break-all' }
+const hint: React.CSSProperties = { fontSize: 12, color: '#9ca3af', marginTop: 24 }
+
+export default PartnerInviteEmail
