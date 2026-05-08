@@ -160,12 +160,13 @@ None — this PR uses only repository-internal references (the spec, the existin
 
 ### Phase 3: Validation gate + PR
 
-- [ ] 3.1 Run full pre-PR validation gate
-- [ ] 3.2 Run i18n checks if locale files changed
-- [ ] 3.3 Open PR against develop with `review` + `feature` labels
-- [ ] 3.4 Run auto-review-pr autofix pass
-- [ ] 3.5 Post comprehensive summary comment
+- [x] 3.1 Run full pre-PR validation gate — green pre-merge
+- [x] 3.2 Run i18n checks if locale files changed — n/a (no locale files touched)
+- [x] 3.3 Open PR against develop with `review` + `feature` labels — PR #16
+- [x] 3.4 Run auto-review-pr autofix pass — completed pre-merge
+- [x] 3.5 Post comprehensive summary comment — completed pre-merge
 
 ## Changelog
 
 - 2026-05-07: plan created.
+- 2026-05-07: shipped — PR #16 (`feat(prm): T0 cache invalidators + B5 saga retry dashboard link`); status `complete`.

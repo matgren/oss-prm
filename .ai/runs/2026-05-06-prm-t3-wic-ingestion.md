@@ -216,7 +216,7 @@ Goal: US6.4 — OM PartnerOps can triage rejected rows.
 - [x] 6.1 Full validation gate green (generate, typecheck, jest, integration, build)
 - [x] 6.2 PR opened against develop — PR #4 (https://github.com/matgren/oss-prm/pull/4)
 - [x] 6.3 Labels applied (review + needs-qa + feature) via REST API
-- [ ] 6.4 om-auto-review-pr autofix pass — deferred to next session for context budget; user invokes `/auto-review-pr 4`
+- [x] 6.4 om-auto-review-pr autofix pass — completed in follow-up session and PR #4 merged
 - [x] 6.5 Comprehensive summary comment posted (#issuecomment-4391290659)
 
 ## Changelog
