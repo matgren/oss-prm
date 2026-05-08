@@ -8,6 +8,7 @@ import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { ConfirmDialog, type ConfirmDialogCopy } from './confirmDialog'
 
 type MemberDetail = {
   id: string
@@ -45,6 +46,8 @@ export default function MemberEditPage() {
   const [member, setMember] = React.useState<MemberDetail | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [pendingDeactivate, setPendingDeactivate] = React.useState<UpdateValues | null>(null)
+  const [submittingDeactivation, setSubmittingDeactivation] = React.useState(false)
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -67,6 +70,49 @@ export default function MemberEditPage() {
     if (memberId) void load()
   }, [memberId, load])
 
+  const persistChanges = React.useCallback(
+    async (values: UpdateValues, wasDeactivation: boolean) => {
+      await apiCallOrThrow(
+        `/api/prm/agency-member/${memberId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...values,
+            roleInAgency: values.roleInAgency || null,
+            githubProfile: values.githubProfile || null,
+          }),
+        },
+        { errorMessage: t('prm.members.detail.flash.error', 'Save failed.') },
+      )
+      const flashMsg = wasDeactivation
+        ? t(
+            'prm.members.detail.flash.deactivated',
+            'Member deactivated — portal access revoked.',
+          )
+        : member && !member.isActive && values.isActive
+          ? t(
+              'prm.members.detail.flash.reactivated',
+              'Member reactivated — portal access restored.',
+            )
+          : t('prm.members.detail.flash.saved', 'Member saved.')
+      flash(flashMsg, 'success')
+      await load()
+    },
+    [memberId, t, member, load],
+  )
+
+  const confirmCopy: ConfirmDialogCopy = {
+    title: t('prm.members.detail.deactivate.title', 'Deactivate member?'),
+    body: t(
+      'prm.members.detail.deactivate.body',
+      'This will revoke their portal access immediately and sign them out of all sessions. They will not be able to log in until reactivated.',
+    ),
+    cancel: t('prm.members.detail.deactivate.cancel', 'Cancel'),
+    confirm: t('prm.members.detail.deactivate.confirm', 'Deactivate'),
+    saving: t('prm.members.detail.deactivate.saving', 'Deactivating…'),
+  }
+
   if (loading) return <LoadingMessage label={t('prm.members.detail.loading', 'Loading member…')} />
   if (error || !member) return <ErrorMessage label={error ?? t('prm.members.detail.notFound', 'Member not found')} />
 
@@ -87,7 +133,15 @@ export default function MemberEditPage() {
             { id: 'lastName', label: t('prm.members.fields.lastName', 'Last name'), type: 'text', required: true, layout: 'half' },
             { id: 'roleInAgency', label: t('prm.members.fields.roleInAgency', 'Role in agency'), type: 'text' },
             { id: 'githubProfile', label: t('prm.members.fields.gh', 'GitHub handle'), type: 'text' },
-            { id: 'isActive', label: t('prm.members.fields.active', 'Active'), type: 'checkbox' },
+            {
+              id: 'isActive',
+              label: t('prm.members.fields.active', 'Active'),
+              type: 'checkbox',
+              description: t(
+                'prm.members.fields.active.help',
+                'Toggling off revokes portal access immediately and signs the member out of all sessions.',
+              ),
+            },
             {
               id: 'roleSlug',
               label: t('prm.members.fields.roleSlug', 'Portal role (lockout recovery)'),
@@ -110,22 +164,35 @@ export default function MemberEditPage() {
           cancelHref={`/backend/prm/${member.agencyId}`}
           backHref={`/backend/prm/${member.agencyId}`}
           onSubmit={async (values) => {
-            await apiCallOrThrow(
-              `/api/prm/agency-member/${memberId}`,
-              {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  ...values,
-                  roleInAgency: values.roleInAgency || null,
-                  githubProfile: values.githubProfile || null,
-                }),
-              },
-              { errorMessage: t('prm.members.detail.flash.error', 'Save failed.') },
-            )
-            flash(t('prm.members.detail.flash.saved', 'Member saved.'), 'success')
-            await load()
+            const wasDeactivation = member.isActive && !values.isActive
+            if (wasDeactivation) {
+              setPendingDeactivate(values)
+              return
+            }
+            await persistChanges(values, false)
           }}
+        />
+        <ConfirmDialog
+          open={pendingDeactivate !== null}
+          copy={confirmCopy}
+          busy={submittingDeactivation}
+          onConfirm={async () => {
+            if (!pendingDeactivate) return
+            setSubmittingDeactivation(true)
+            try {
+              await persistChanges(pendingDeactivate, true)
+              setPendingDeactivate(null)
+            } catch (err) {
+              flash(
+                err instanceof Error ? err.message : t('prm.members.detail.flash.error', 'Save failed.'),
+                'error',
+              )
+            } finally {
+              setSubmittingDeactivation(false)
+            }
+          }}
+          onCancel={() => setPendingDeactivate(null)}
+          testId="agency-member-deactivate-dialog"
         />
       </PageBody>
     </Page>
