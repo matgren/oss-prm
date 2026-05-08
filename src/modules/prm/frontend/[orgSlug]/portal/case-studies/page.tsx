@@ -187,9 +187,16 @@ export default function PortalCaseStudiesPage({ params }: Props) {
                     {t('prm.portal.caseStudies.action.restore', 'Restore')}
                   </Button>
                 ) : (
-                  <Button type="button" variant="outline" size="sm" onClick={() => void softDelete(cs)}>
-                    {t('prm.portal.caseStudies.action.delete', 'Delete')}
-                  </Button>
+                  <>
+                    <Link href={`/${orgSlug}/portal/case-studies/${cs.id}`}>
+                      <Button type="button" variant="outline" size="sm">
+                        {t('prm.portal.caseStudies.action.edit', 'Edit')}
+                      </Button>
+                    </Link>
+                    <Button type="button" variant="outline" size="sm" onClick={() => void softDelete(cs)}>
+                      {t('prm.portal.caseStudies.action.delete', 'Delete')}
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
