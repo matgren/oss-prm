@@ -1,31 +1,20 @@
 /**
- * Customer-portal Playwright auth helper (POST-MVP follow-up).
+ * Customer-portal Playwright auth helpers.
  *
- * Mirrors the staff `apiRequest` / `getAuthToken` helpers from
- * `@open-mercato/core/testing/integration` for the customer-portal contract:
+ * Thin wrappers around real customer-portal HTTP routes — used by PRM
+ * Playwright integration specs that need a CustomerUser JWT to call
+ * portal APIs. All helpers go through production routes; no test-only
+ * routes or env vars are involved.
  *
- *   - Customer login: `POST /api/customer_accounts/login` with
- *     `{ email, password, tenantId }` → response sets `customer_auth_token`
- *     cookie. We extract the JWT from the `Set-Cookie` header so callers can
- *     pass it as a `Bearer` token to subsequent portal API calls — the same
- *     shape staff fixtures use (`token: string`).
- *
- *   - Customer-aware API call: `customerApiRequest(request, method, path, opts)`
- *     attaches `Authorization: Bearer <jwt>` instead of the staff Bearer.
- *     Header contract is taken straight from `requireCustomerAuth` (which
- *     accepts both `Authorization: Bearer` and the cookie form).
- *
- *   - Boot fixture: `bootPartnerAgencyWithMembers(request, staffToken, opts)`
- *     seeds an Agency, two CustomerUsers (`partner_admin` + `partner_member`),
- *     links each via the test-only `POST /api/prm/test-fixtures/agency-member-link`,
- *     logs them in, and returns ready-to-use customer JWTs.
- *
- * Until this helper shipped, T5 §9.2 invariant #15 was locked at the unit-test
- * level (`__tests__/rfpVisibility.test.ts`) and T5 §9.3/§9.4 were at the
- * service-test level (`rfpService.test.ts`). The two demo Playwright tests in
- * `.ai/qa/tests/integration/TC-PRM-T5-002-*` and `TC-PRM-T5-003-*` elevate
- * the byte-identical 404 invariant and the submit happy path to true HTTP
- * contract tests.
+ * Exports:
+ *   - `loginCustomer` — POST `/api/customer_accounts/login`; extracts the
+ *     JWT from the `customer_auth_token` Set-Cookie header.
+ *   - `customerApiRequest` — wraps `request.fetch` with
+ *     `Authorization: Bearer <jwt>` for portal route calls.
+ *   - `getCustomerRoleIdBySlug` — GET
+ *     `/api/customer_accounts/admin/roles?search=<slug>`; returns the role id.
+ *   - `createCustomerUserFixture` — POST
+ *     `/api/customer_accounts/admin/users`; returns `{ id, email }`.
  */
 
 import { expect, type APIRequestContext, type APIResponse } from '@playwright/test'
@@ -127,9 +116,7 @@ type CustomerRoleSummary = { id: string; slug: string; name: string }
 
 /**
  * Look up a customer role id by slug via the staff-admin
- * `GET /api/customer_accounts/admin/roles?search=<slug>` endpoint. Used by
- * `bootPartnerAgencyWithMembers` to assign `partner_admin` / `partner_member`
- * at user-create time.
+ * `GET /api/customer_accounts/admin/roles?search=<slug>` endpoint.
  */
 export async function getCustomerRoleIdBySlug(
   request: APIRequestContext,

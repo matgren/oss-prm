@@ -130,15 +130,10 @@ export async function deleteLicenseDealIfExists(
  * backend list at `/api/prm/prospects` is read-only by design (Spec #2 §3.2,
  * "B4 — Cross-agency Prospect read-only list").
  *
- * Pass a partner-admin / partner-member CustomerUser JWT obtained via
- * `bootPartnerAgencyWithMembers(...)` (returned as `.admin.token` /
- * `.member.token`). The portal route resolves the Agency from the caller's
- * `AgencyMember` row, so an `agencyId` argument is intentionally not part of
- * the public surface — it would be ignored anyway.
- *
- * Backwards-compatibility: the legacy stub used to throw "not yet
- * implemented"; existing call sites passing a staff token will get a clear
- * error from the API (401/403) instead of a silent success.
+ * Pass a partner-admin / partner-member CustomerUser JWT (obtained via
+ * `loginCustomer` in `./customerAuth`). The portal route resolves the
+ * Agency from the caller's `AgencyMember` row, so an `agencyId` argument is
+ * intentionally not part of the public surface — it would be ignored anyway.
  */
 export async function createProspectFixture(
   request: APIRequestContext,
