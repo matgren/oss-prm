@@ -1,8 +1,11 @@
 'use client'
 import * as React from 'react'
 import { Star, Upload, X } from 'lucide-react'
+import { Alert } from '@open-mercato/ui/primitives/alert'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { IconButton } from '@open-mercato/ui/primitives/icon-button'
+import { StatusBadge } from '@open-mercato/ui/primitives/status-badge'
+import { apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 export type PickerFile = {
@@ -87,13 +90,21 @@ export function AttachmentPicker({
           const fd = new FormData()
           fd.set('draftRecordId', draftRecordId)
           fd.set('file', file)
-          const res = await fetch('/api/prm/marketing-material/upload', {
-            method: 'POST',
-            body: fd,
-            credentials: 'same-origin',
-          })
-          const json = (await res.json().catch(() => null)) as UploadResponse | null
-          if (!res.ok || !json?.ok || !json.attachment) {
+          const { result: json } = await apiCallOrThrow<UploadResponse>(
+            '/api/prm/marketing-material/upload',
+            {
+              method: 'POST',
+              body: fd,
+              credentials: 'same-origin',
+            },
+            {
+              errorMessage: t(
+                'prm.backend.marketingMaterials.attachments.uploadFailed',
+                'Upload failed.',
+              ),
+            },
+          )
+          if (!json?.ok || !json.attachment) {
             throw new Error(
               json?.error ||
                 t('prm.backend.marketingMaterials.attachments.uploadFailed', 'Upload failed.'),
@@ -197,7 +208,11 @@ export function AttachmentPicker({
         />
       </div>
 
-      {error ? <div className="text-xs text-red-600">{error}</div> : null}
+      {error ? (
+        <Alert variant="destructive" className="text-xs">
+          {error}
+        </Alert>
+      ) : null}
 
       {value.attachments.length > 0 ? (
         <ul className="divide-y rounded-md border">
@@ -217,6 +232,7 @@ export function AttachmentPicker({
                   }
                   onClick={() => promotePrimary(file.id)}
                   disabled={disabled || isPrimary}
+                  /* DS-SKIP: decorative gold-star icon, not a status semantic */
                   className={`shrink-0 rounded p-1 transition-colors ${
                     isPrimary
                       ? 'text-amber-500'
@@ -242,9 +258,9 @@ export function AttachmentPicker({
                     {humanSize(file.fileSize)}
                   </span>
                   {isPrimary ? (
-                    <span className="ml-2 rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700">
+                    <StatusBadge variant="warning" className="ml-2">
                       {t('prm.backend.marketingMaterials.attachments.primary', 'Primary')}
-                    </span>
+                    </StatusBadge>
                   ) : null}
                 </div>
                 <IconButton
