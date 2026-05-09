@@ -124,14 +124,14 @@ check from the auto-create-pr SKILL. Before opening the PR, the full validation 
 
 ### Phase 1: DS fixes in AttachmentPicker
 
-- [ ] 1.1 Replace raw fetch with apiCallOrThrow
-- [ ] 1.2 Replace text-red-600 error div with Alert variant="destructive"
-- [ ] 1.3 Replace amber Primary badge with StatusBadge variant="warning"
-- [ ] 1.4 Mark gold-star icon className as DS-SKIP: decorative
+- [x] 1.1 Replace raw fetch with apiCallOrThrow — 5517942
+- [x] 1.2 Replace text-red-600 error div with Alert variant="destructive" — 5517942
+- [x] 1.3 Replace amber Primary badge with StatusBadge variant="warning" — 5517942
+- [x] 1.4 Mark gold-star icon className as DS-SKIP: decorative — 5517942
 
 ### Phase 2: DS migration regression test
 
-- [ ] 2.1 Add backendAttachmentPickerDsMigration.test.ts (static-analysis assertions)
+- [x] 2.1 Add backendAttachmentPickerDsMigration.test.ts (static-analysis assertions) — 5517942 (13/13 assertions green)
 
 ### Phase 3: Validation gate + PR
 
