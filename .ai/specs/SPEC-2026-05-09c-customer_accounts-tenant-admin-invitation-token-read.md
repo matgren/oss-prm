@@ -1,7 +1,7 @@
 # SPEC-2026-05-09c — `customer_accounts` tenant-admin invitation list + token-rotate API (upstream contribution)
 
 **Date**: 2026-05-09
-**Status**: DRAFT
+**Status**: PARKED 2026-05-10 — test-infrastructure debt, not a release blocker for PRM v1. Spec authored, upstream PR dispatched via subagent (separate timeline from local development). The PRM portal flows that this spec would unblock (Phase 6 v2 invite-acceptance Playwright specs in SPEC-2026-05-09b) ship under manual QA + production observability for v1 launch. Re-evaluate post-launch based on actual incident data, not pre-launch anxiety.
 **Target**: Upstream PR to `open-mercato/open-mercato` against the `@open-mercato/core` package — `customer_accounts` module
 **Spawned by**: `.ai/specs/SPEC-2026-05-09b-tenant-per-spec-integration-tests.md` (Phase 2 deliverable; gates Phase 6 v2 invite-acceptance specs in that spec — see its "The partner-invite read flow" section for context)
 **Estimate**: ~1.5–2 days (read API + rotate API + tests + docs); +~1 day for the upstream review cycle (variable, depends on maintainer turnaround)
