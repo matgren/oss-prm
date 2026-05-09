@@ -5,7 +5,13 @@ This is the source of truth for follow-up work — when an item ships, delete th
 
 ## Tracker
 
-All real owed code work has either shipped through Wave 0 (PRs #25, #27, #28, #29, #30, #31) or moved to **Triggers, not debt** below. The Playwright integration-test fleet is tracked in its own section at the bottom — Wave 1 (PRs in flight) is striking those entries as each test lands.
+All real owed code work has either shipped through Wave 0 (PRs #25, #27, #28, #29, #30, #31) or moved to **Triggers, not debt** below.
+
+**⚠️ 2026-05-09 — PRM Playwright integration suite deleted in full.** All 33 TC-PRM-* specs were deleted alongside the test-fixtures routes + 4 helpers + Phase 1/2 artifacts of the abandoned `SPEC-2026-05-09`. The "Playwright integration tests" section at the bottom is now stale (every entry refers to a deleted spec). Rebuild is owed — see new top-priority entry under §Owed work below.
+
+## Owed work
+
+- **Rebuild PRM Playwright integration suite using tenant-per-spec architecture** — *Trigger:* whenever the team has appetite to invest in integration coverage. Origin: abandoned `SPEC-2026-05-09-test-fixtures-refactor.md` (see postmortem). Successor design: `.ai/specs/SPEC-2026-05-09b-tenant-per-spec-integration-tests.md`. **Until this lands, PRM has zero Playwright integration coverage** — reliance on unit tests + manual QA only. Effort: L (whole-suite rebuild, ~1-2 weeks). Owner: TBD.
 
 ## Triggers, not debt
 
@@ -23,6 +29,7 @@ Items deferred by design. Each names a specific signal that should trigger reviv
 - **Raw `<input type="month">` filter** — *Trigger:* OM ships a date/month-input primitive. 1 instance at `frontend/[orgSlug]/portal/prospects/page.tsx:278`. Origin: T1. Effort: S.
 - **Raw `<input type="radio">` candidate picker** — *Trigger:* OM ships a `Radio`/`RadioGroup` primitive. 1 instance at `backend/license-deals/[id]/page.tsx:331`. Origin: T2. Effort: S.
 - **Raw `<table>` lists in portal members / prospects** — *Architectural opt-out (OQ-010), not deferred work.* Portal pages use raw `<table>` by design. Backend members tab could migrate to `DataTable` once a "compact" variant ships, but no action is owed. Origin: T0/T1.
+- **`OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL` runtime gate in production code** — *Trigger:* tenant-per-spec rebuild (successor to abandoned SPEC-2026-05-09) lands. Same architectural smell as the deleted test-fixtures routes — runtime env-gate at `src/modules/prm/lib/rfpService.ts:280-284` wrapping fault-injection code that ships in the production bundle. Stakes are low (a `throw` not a `TRUNCATE`), and unlike the test-fixtures routes this one isn't documented anywhere callers can stumble on it. Once the rebuilt suite has its own per-tenant fault-injection seam, the env var + production-code branch can be deleted. Effort: S (mechanical, ~1-2h once the rebuilt fixture pattern is proven). Origin: SPEC-2026-04-23-rfp-broadcast-response.md §9.1 #4.
 
 ## Performance watchlist
 
@@ -73,3 +80,8 @@ Wave 1 in flight: F1 covers T0 IT-2..6, F2 covers T1 IT-9.2..9.8, F3 covers T2 I
 - ~~**P10 unsubmit (US5.4 step 5)**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T5-004-portal-rfp-unsubmit.spec.ts` (draft → submit → unsubmit `reverted=true` → idempotent re-unsubmit on draft `reverted=false`; detail GET preserves `firstSubmittedAt` across the unsubmit).
 - ~~**Decline / undecline (US5.5)**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T5-005-portal-rfp-decline-undecline.spec.ts` (PartnerMember decline → 403 PartnerAdmin-only; PartnerAdmin decline-with-reason → idempotent re-decline preserves original reason → un-decline clears state → idempotent re-undecline → re-decline without reason allowed).
 - ~~**`partner_member` author-scope 403**~~ — SHIPPED in `.ai/qa/tests/integration/TC-PRM-T5-006-partner-member-author-scope-403.spec.ts` (M1 stamps `submittedByMemberId` on draft; M2 sees the RFP via Agency-scope but `/submit` and `/unsubmit` both 403; M1 submits successfully; PartnerAdmin overrides author-scope on unsubmit).
+
+## Upstream contributions to file (open-mercato/open-mercato)
+
+- ~~**Document Playwright `createRequestContainer()` DB-fixture pattern in OM core**~~ — **REMOVED 2026-05-09.** Premise was wrong. Playwright + MikroORM stage-1 decorators is a known-unfixable combo; Playwright maintainers (microsoft/playwright#29646) explicitly reject support. The right pattern is tenant-per-spec via real production routes, not direct EM access from tests. Filing this as an "OM should support direct-EM in Playwright" issue would be misguidance.
+- ~~**Refactor `apps/mercato/src/modules/ratelimit_probe/api/ping/route.ts` to drop `OM_INTEGRATION_TEST` env gate**~~ — **REMOVED 2026-05-09.** Premise was tied to PRM #39 shipping; #39 was abandoned. The ratelimit-probe smell is real but the right replacement (tenant-per-spec or build-time exclusion) is a separate conversation worth its own scoping if anyone picks it up later.

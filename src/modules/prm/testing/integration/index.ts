@@ -17,8 +17,6 @@
  *   import { getAuthToken } from '@open-mercato/core/testing/integration'
  */
 export {
-  // Cross-spec test isolation (POST-MVP follow-up — TRUNCATE PRM slice between specs).
-  resetPrmState,
   createAgencyFixture,
   deleteAgencyIfExists,
   setAgencyOnboardedFixture,
@@ -47,15 +45,8 @@ export {
   customerApiRequest,
   getCustomerRoleIdBySlug,
   createCustomerUserFixture,
-  linkAgencyMemberFixture,
-  bootPartnerAgencyWithMembers,
 } from './customerAuth'
 
 export type {
   CustomerApiOptions,
-  PartnerAgencyMember,
-  PartnerAgencyFixture,
 } from './customerAuth'
-
-export { bulkSeedAgenciesFixture } from './perfAgencyBulkSeed'
-export type { BulkSeedAgenciesResult } from './perfAgencyBulkSeed'

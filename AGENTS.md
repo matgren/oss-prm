@@ -208,14 +208,15 @@ import type { ApiInterceptor } from '@open-mercato/shared/lib/crud/api-intercept
 
 ## Integration test environment
 
-`yarn test:integration:ephemeral` (which runs `mercato test:integration`) requires PRM-specific env vars to be set, otherwise 13 of 26 tests silently return `404` / `"WIC import secret not configured"` and mask real bugs. Both vars are commented out in `.env.example` — uncomment them (or export them in your test shell) before running the suite:
+`yarn test:integration:ephemeral` (which runs `mercato test:integration`) requires `OM_PRM_WIC_IMPORT_SECRET` to be set, otherwise the WIC ingestion routes return `503 "WIC import secret not configured"`. The var is commented out in `.env.example` — uncomment it (or export it in your test shell) before running the suite:
 
 | Env var | Enables |
 |---|---|
-| `OM_PRM_TEST_FIXTURES_ENABLED=1` | The test-only seam `POST /api/prm/test-fixtures/agency-member-link` used by the customer-portal Playwright auth helper. Without it the route returns a byte-identical `404` and ~half the portal tests fail. |
-| `OM_PRM_WIC_IMPORT_SECRET=<32+ char secret>` | The `X-Om-Import-Secret` header check on `/api/prm/service/wic/*`. Without it the WIC ingestion routes return `503 "WIC import secret not configured"` and T3 ingestion tests fail. |
+| `OM_PRM_WIC_IMPORT_SECRET=<32+ char secret>` | The `X-Om-Import-Secret` header check on `/api/prm/service/wic/*`. |
 
-See `.env.example` (PRM WIC Ingestion + PRM Test Fixtures blocks) for the canonical values and rotation notes.
+See `.env.example` (PRM WIC Ingestion block) for the canonical value and rotation notes.
+
+> **Note:** PRM previously had a second env var (`OM_PRM_TEST_FIXTURES_ENABLED`) that gated test-only HTTP routes shipped in the prod bundle. Both the env var and those routes were deleted on 2026-05-09 (issue #39 + the abandoned SPEC-2026-05-09). The whole PRM Playwright integration suite was deleted alongside them — pending a tenant-per-spec rebuild per the new spec.
 
 ## Architecture Rules
 

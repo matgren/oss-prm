@@ -6,37 +6,6 @@ import {
   readJsonSafe,
 } from '@open-mercato/core/testing/integration'
 
-/**
- * Reset every PRM-owned table.
- *
- * Hits the test-only `POST /api/prm/test-fixtures/reset` seam (gated by
- * `OM_PRM_TEST_FIXTURES_ENABLED=1`). Used by Playwright integration specs in
- * `test.beforeEach` so cross-spec Agency / RFP / Prospect leaks don't bleed
- * into siblings within a single ephemeral run.
- *
- * Non-PRM tables (organisations, customer_users, customer_roles, ...) are NOT
- * touched — those are seeded once per ephemeral run by the bootstrap step and
- * the suite depends on that state surviving across specs.
- *
- * Pass the staff `admin` Bearer token (the same one every PRM spec already
- * obtains via `getAuthToken(request, 'admin')` for its other fixture calls).
- *
- * Throws if the seam returns anything other than 200 + `{ ok: true }`. The
- * 404-branch (env var unset) is the most likely failure mode in production-y
- * environments and the assertion error makes that easy to diagnose.
- */
-export async function resetPrmState(
-  request: APIRequestContext,
-  token: string,
-): Promise<void> {
-  const response = await apiRequest(request, 'POST', '/api/prm/test-fixtures/reset', { token })
-  const body = await readJsonSafe<{ ok?: boolean; truncatedTables?: string[]; error?: string }>(response)
-  expect(
-    response.status(),
-    `POST /api/prm/test-fixtures/reset should return 200 (set OM_PRM_TEST_FIXTURES_ENABLED=1); got ${response.status()} body=${JSON.stringify(body)}`,
-  ).toBe(200)
-  expect(body?.ok, `reset response should have ok:true; body=${JSON.stringify(body)}`).toBe(true)
-}
 
 /**
  * Agency creation fixture.

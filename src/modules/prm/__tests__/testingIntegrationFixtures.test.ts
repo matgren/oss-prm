@@ -240,42 +240,4 @@ describe('PRM testing/integration fixtures (additive helpers for T0/T1/T2 smokes
     })
   })
 
-  describe('resetPrmState', () => {
-    it('POSTs /api/prm/test-fixtures/reset with Bearer token and resolves on 200', async () => {
-      const { context, calls } = makeStubContext(() => ({
-        status: 200,
-        body: { ok: true, truncatedTables: ['prm_agencies', 'prm_rfps'] },
-      }))
-      const { resetPrmState } = await import('../testing/integration')
-      await resetPrmState(context, 'staff-jwt')
-      expect(calls).toHaveLength(1)
-      expect(calls[0]!.url).toMatch(/\/api\/prm\/test-fixtures\/reset$/)
-      expect(calls[0]!.options.method).toBe('POST')
-      const headers = calls[0]!.options.headers as Record<string, string>
-      expect(headers.Authorization).toBe('Bearer staff-jwt')
-    })
-
-    it('throws a clear error when the seam returns 404 (env gate not set)', async () => {
-      const { context } = makeStubContext(() => ({
-        status: 404,
-        body: { ok: false, error: 'Not found' },
-      }))
-      const { resetPrmState } = await import('../testing/integration')
-      await expect(resetPrmState(context, 'staff-jwt')).rejects.toThrow(
-        /OM_PRM_TEST_FIXTURES_ENABLED|404/,
-      )
-    })
-
-    it('throws when the seam returns 200 but ok:false', async () => {
-      const { context } = makeStubContext(() => ({
-        status: 200,
-        body: { ok: false, error: 'oops' },
-      }))
-      const { resetPrmState } = await import('../testing/integration')
-      // Helper uses `expect(body?.ok).toBe(true)` so the error surfaces the
-      // boolean assertion failure — matching on the boolean lets the test be
-      // resilient to Playwright's exact wording.
-      await expect(resetPrmState(context, 'staff-jwt')).rejects.toThrow()
-    })
-  })
 })

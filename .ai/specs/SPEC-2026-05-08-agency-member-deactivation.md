@@ -199,7 +199,7 @@ handler(payload):
 
 ### Phase 4 — Integration test (1 commit)
 
-1. New Playwright spec under `tests/integration/` (or wherever PRM puts theirs — see `OM_PRM_TEST_FIXTURES_ENABLED=1` requirement in `AGENTS.md`).
+1. New Playwright spec under `tests/integration/` — DEFERRED. The entire PRM Playwright integration suite was deleted on 2026-05-09 pending the tenant-per-spec rebuild; see the abandoned predecessor at `.ai/specs/SPEC-2026-05-09-test-fixtures-refactor.md`.
 2. Scenario: seed agency + partner_admin + partner_member → log in as partner_member → log in as partner_admin in second context → partner_admin deactivates partner_member → assert partner_member's next API call returns 401 → assert login attempt as partner_member returns generic auth error → partner_admin reactivates → partner_member can log in fresh and access portal.
 
 ### Phase 5 — UX polish (1 commit)
@@ -228,7 +228,7 @@ When/if needed:
 | IT-DEACT-6 | partner_admin tries to deactivate self → 403 `CANNOT_DEACTIVATE_SELF` | Existing guard unchanged |
 | IT-DEACT-7 | OM-staff deactivates a member whose invitation hasn't been accepted yet (`customerUserId=null`) → subscriber no-ops, no errors | Pre-accept safety |
 
-All IT-* require `OM_PRM_TEST_FIXTURES_ENABLED=1` and `OM_PRM_WIC_IMPORT_SECRET` per `AGENTS.md`.
+All IT-* are DEFERRED — the PRM Playwright suite was deleted on 2026-05-09; rebuild pending tenant-per-spec architecture.
 
 ## Risks
 
@@ -246,7 +246,7 @@ All IT-* require `OM_PRM_TEST_FIXTURES_ENABLED=1` and `OM_PRM_WIC_IMPORT_SECRET`
 - Requires `@open-mercato/core` ≥ version that ships `validateUserState` (SPEC-060, present in this repo per `node_modules` inspection).
 - Requires `customerSessionService.revokeAllUserSessions` (present, used in 5 core flows).
 - No new packages, no migration, no env vars.
-- `OM_PRM_TEST_FIXTURES_ENABLED=1` + `OM_PRM_WIC_IMPORT_SECRET` for IT runs (per `AGENTS.md` §"Integration test environment").
+- `OM_PRM_WIC_IMPORT_SECRET` for IT runs (per `AGENTS.md` §"Integration test environment"). The `OM_PRM_TEST_FIXTURES_ENABLED` env var was deleted 2026-05-09 alongside the test-fixtures routes.
 
 ## Backwards Compatibility
 
@@ -264,7 +264,7 @@ All IT-* require `OM_PRM_TEST_FIXTURES_ENABLED=1` and `OM_PRM_WIC_IMPORT_SECRET`
 Compliance gates run 2026-05-08:
 - [x] `yarn typecheck` clean (exit 0)
 - [x] `yarn test` passes — 68 suites, 656 tests, 0 failures
-- [ ] `yarn test:integration:ephemeral` — DEFERRED to PR/QA stage (requires `OM_PRM_TEST_FIXTURES_ENABLED=1` + `OM_PRM_WIC_IMPORT_SECRET` env, plus ephemeral DB stand-up). Tests written + typecheck-clean.
+- [ ] `yarn test:integration:ephemeral` — DEFERRED. The PRM Playwright integration suite was deleted on 2026-05-09 (along with the env var that gated half of it); rebuild pending tenant-per-spec architecture.
 - [x] i18n keys added (no hardcoded strings) — see `src/modules/prm/i18n/en.json` (additions for `prm.members.detail.deactivate.*`, `prm.members.fields.active.help`, `prm.members.detail.flash.{deactivated,reactivated}`, `prm.portal.members.action.*`, `prm.portal.members.deactivate.*`, `prm.portal.members.flash.{deactivated,reactivated,error}`, `prm.portal.members.col.*`, `prm.portal.members.state.*`)
 - [x] `yarn build` clean (1 pre-existing `ai-assistant` dynamic-import warning unrelated to this change)
 - [x] `yarn generate` ran (events registry refreshed; new `prm.agency_member.reactivated` registered)
