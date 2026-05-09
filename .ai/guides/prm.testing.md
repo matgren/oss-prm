@@ -180,11 +180,15 @@ file or append to existing). Re-export from `index.ts`. Helpers MUST:
 
 ## Configuration
 
-- **Worker count**: overridden at the CLI invocation in
-  `package.json`'s `test:integration:ephemeral` script
-  (`mercato test:integration -- --workers=4 --retries=0`). DO NOT
-  modify `.ai/qa/tests/playwright.config.ts` (it ships from upstream
-  with `workers: 1` which is the right default for non-PRM specs).
+- **Worker count**: env-driven. `.ai/qa/tests/playwright.config.ts`
+  reads `PW_WORKERS` and `PW_RETRIES` env vars (defaults 1 / 1 to
+  match upstream convention). The `package.json` script
+  `test:integration:ephemeral` sets `PW_WORKERS=4 PW_RETRIES=0
+  mercato test:integration` to override for the PRM suite. Note: the
+  mercato CLI's `test:integration` subcommand does NOT accept
+  `--workers`/`--retries` flags directly (those are only on the
+  `:interactive` parser) — env vars in the playwright.config.ts are
+  the correct injection point.
 - **Retries are 0** for PRM specs (R7 mitigation per spec) — a real
   cross-tenant leak under workers > 1 must fail hard, not get silently
   retried into a green status.

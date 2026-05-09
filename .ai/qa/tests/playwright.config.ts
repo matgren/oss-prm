@@ -28,8 +28,8 @@ export default defineConfig({
   expect: {
     timeout: 20_000,
   },
-  retries: 1,
-  workers: 1,
+  retries: Number.parseInt(process.env.PW_RETRIES ?? '1', 10),
+  workers: Number.parseInt(process.env.PW_WORKERS ?? '1', 10),
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
     headless: true,

@@ -101,6 +101,21 @@ async function main(): Promise<void> {
   // Dynamic imports — keep the heavy MikroORM dependencies behind a lazy
   // boundary so a failed `--help` invocation (or a missing dependency) prints
   // the CLI usage message instead of a stack trace from container init.
+
+  // Bootstrap via the CLI-context loader so module CLI registrations (and
+  // therefore each module's `setup.onTenantCreated`) are wired up. The
+  // Next.js-side `@/bootstrap` only registers DI/entities/widgets — it does
+  // NOT register CLI modules (per node_modules/@open-mercato/shared/src/lib/
+  // bootstrap/factory.ts comment: "CLI module registration is handled
+  // separately in CLI context via bootstrapFromAppRoot"). Without CLI
+  // modules registered, `setupInitialTenant`'s `modules: getCliModules()`
+  // resolves to `[]` and ZERO `onTenantCreated` hooks fire — meaning PRM's
+  // `seedPartnerRoles`, dictionaries, etc. never run for the new tenant.
+  const { bootstrapFromAppRoot } = await import(
+    '@open-mercato/shared/lib/bootstrap/dynamicLoader'
+  )
+  await bootstrapFromAppRoot(appRoot)
+
   const { createRequestContainer } = await import(
     '@open-mercato/shared/lib/di/container'
   )
@@ -119,6 +134,7 @@ async function main(): Promise<void> {
   // make it unique per worker (`pw-w<workerIndex>-<timestamp>@acme.test` is
   // the recommended shape). The `--slug` arg is informational/diagnostic for
   // log correlation; org names need not be unique at the DB level.
+  const cliModules = getCliModules()
   const result = await setupInitialTenant(em, {
     orgName: args.orgName,
     primaryUser: {
@@ -134,8 +150,31 @@ async function main(): Promise<void> {
     failIfUserExists: true,
     primaryUserRoles: ['admin', 'superadmin'],
     includeSuperadminRole: true,
-    modules: getCliModules(),
+    modules: cliModules,
   })
+
+  // setupInitialTenant fires only `onTenantCreated` hooks (lines 340-344 in
+  // node_modules/@open-mercato/core/src/modules/auth/lib/setup-app.ts). It does
+  // NOT fire `seedDefaults`, which is what populates reference data including
+  // PRM customer roles like `partner_admin` / `partner_member`. `mercato init`
+  // calls seedDefaults separately as a post-step; we mirror that behaviour
+  // here so per-worker tenants end up with the same reference data a
+  // production tenant would have.
+  for (const mod of cliModules) {
+    const seed = (mod as any).setup?.seedDefaults
+    if (typeof seed !== 'function') continue
+    try {
+      await seed({
+        em,
+        tenantId: result.tenantId,
+        organizationId: result.organizationId,
+        container: { resolve },
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      throw new Error(`seedDefaults failed for module "${(mod as any).id ?? '<unknown>'}": ${message}`)
+    }
+  }
 
   // Single line of JSON to stdout — the parent process consumes this as the
   // fixture's source of truth. Anything else (errors, warnings) goes to

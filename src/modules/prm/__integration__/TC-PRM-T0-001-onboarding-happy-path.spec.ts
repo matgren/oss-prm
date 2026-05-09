@@ -45,7 +45,7 @@ test('TC-PRM-T0-001 — backend admin onboards an Agency end-to-end (no invite)'
 
   // Step 3: list and assert. The freshly-onboarded agency must show in the
   // backend list with `onboarded=true` + `status='active'`.
-  const listResponse = await tenant.request.get('/api/prm/agency?pageSize=200')
+  const listResponse = await tenant.request.get('/api/prm/agency?pageSize=100')
   expect(
     listResponse.ok(),
     `GET /api/prm/agency should be 200; got ${listResponse.status()}`,

@@ -19,7 +19,7 @@ test('TC-PRM-T0-SMOKE-isolation [b] — created agency is visible only inside it
   })
   expect(agencyId, 'createAgencyFixture should return the new agency id').toBeTruthy()
 
-  const listResponse = await tenant.request.get('/api/prm/agency?pageSize=200')
+  const listResponse = await tenant.request.get('/api/prm/agency?pageSize=100')
   expect(
     listResponse.ok(),
     `GET /api/prm/agency should be 200; got ${listResponse.status()}`,
