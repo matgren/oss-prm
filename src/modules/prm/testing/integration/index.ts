@@ -50,3 +50,16 @@ export {
 export type {
   CustomerApiOptions,
 } from './customerAuth'
+
+// WIC service-identity ingestion helpers (T3 — Spec #4 §3.3).
+export {
+  buildWicServiceHeaders,
+  buildWicImportEnvelope,
+  postWicImportFixture,
+} from './wicFixtures'
+
+export type {
+  WicImportRowInput,
+  WicImportEnvelopeInput,
+  WicServiceHeaders,
+} from './wicFixtures'
