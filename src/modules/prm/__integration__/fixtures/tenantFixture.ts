@@ -19,8 +19,8 @@
  * Cross-spec isolation is structural — different `tenant_id` values in every
  * row mean specs in worker N literally cannot see data from worker M. This
  * removes the pressure for any inter-spec cleanup seam (the failure mode of
- * the predecessor SPEC-2026-05-09 + the deleted `OM_PRM_TEST_FIXTURES_ENABLED`
- * routes).
+ * the abandoned predecessor SPEC-2026-05-09 + the env-var-gated PRM test
+ * suite that was deleted in commit `d554616`).
  *
  * Imports allowlist (per discipline rule §1):
  * - `@playwright/test`

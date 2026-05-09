@@ -2,8 +2,11 @@
  * 500-agency synthetic roster generator (Spec #5 §9.6 #27 — perf smoke).
  *
  * Pure data generator — no I/O, no DB, no HTTP. Builds a deterministic
- * `Agency`-shaped roster the perf-smoke test feeds into the bulk-seed
- * test seam (`POST /api/prm/test-fixtures/bulk-seed-agencies`).
+ * `Agency`-shaped roster previously consumed by a bulk-seed test route
+ * (deleted on 2026-05-09 alongside the env-var-gated PRM test suite —
+ * see SPEC-2026-05-09b). Kept as a generator so a future workers=1
+ * perf smoke can reuse the deterministic shape without re-engineering
+ * the tier/industry mix.
  *
  * Why a dedicated fixture (vs. a loop of `createAgencyFixture`):
  *   - 500 sequential `POST /api/prm/agency` calls take ~30-60s in the
