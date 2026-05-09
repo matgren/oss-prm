@@ -1,6 +1,10 @@
 import { RfpService } from '../lib/rfpService'
 import { Agency, CaseStudy, Rfp, RfpBroadcast, RfpResponse } from '../data/entities'
 import { PRM_ERROR_CODES, PrmDomainError } from '../lib/errors'
+import {
+  failingBroadcastFailureInjector,
+  nullBroadcastFailureInjector,
+} from '../lib/broadcastFailureInjector'
 
 type AnyRow = Record<string, any>
 
@@ -324,26 +328,24 @@ describe('RfpService.publish', () => {
  * orphan broadcasts, RFP stays at status `draft`.
  *
  * Production proof = a single shared `em.flush()` (Postgres opens an implicit
- * transaction per statement-batch). This test exercises the env-gated fault
- * injection hook in `RfpService.publish`: when
- * `OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL=1` is set, the service throws
- * BEFORE `em.flush()` runs, proving no DB write window exists between the
- * broadcast `persist()` calls and the flush. `flushCount` stays at 1 (the
- * earlier `createDraft` flush) — the publish's flush never happened.
+ * transaction per statement-batch). This test exercises a DI-overridable
+ * fault injection seam (`BroadcastFailureInjector`) in `RfpService.publish`:
+ * the test passes `failingBroadcastFailureInjector` as the second
+ * constructor argument, which throws BEFORE `em.flush()` runs, proving no DB
+ * write window exists between the broadcast `persist()` calls and the flush.
+ * `flushCount` stays at 1 (the earlier `createDraft` flush) — the publish's
+ * flush never happened.
+ *
+ * Replaces the prior `OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL` env-var seam
+ * (SPEC-2026-05-09b Phase 0b — eject env-var-gated fault injection from
+ * production code paths).
  */
 describe('RfpService.publish — Spec #5 §9.1 #4 partial-insert rollback', () => {
-  const ENV_KEY = 'OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL'
-
-  afterEach(() => {
-    delete process.env[ENV_KEY]
-  })
-
-  it('rejects with the injected error when env var is set, and the broadcast flush never runs', async () => {
-    process.env[ENV_KEY] = '1'
+  it('rejects with the injected error when failingBroadcastFailureInjector is wired, and the broadcast flush never runs', async () => {
     const em = new FakeEm()
     seedAgency(em, 'a1', 'om_agency')
     seedAgency(em, 'a2', 'ai_native_expert')
-    const service = new RfpService(em as any)
+    const service = new RfpService(em as any, failingBroadcastFailureInjector)
     const created = await service.createDraft(makeCreateInput(), {
       tenantId: TENANT,
       organizationId: ORG,
@@ -354,7 +356,7 @@ describe('RfpService.publish — Spec #5 §9.1 #4 partial-insert rollback', () =
 
     await expect(
       service.publish(created.id, {}, { tenantId: TENANT, organizationId: ORG, userId: USER }),
-    ).rejects.toThrow(/OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL/)
+    ).rejects.toThrow(/simulated DB error on broadcast batch flush/)
 
     // No additional flush ran — the publish's flush was never reached, so
     // in production the DB never received either the broadcast inserts or
@@ -362,12 +364,10 @@ describe('RfpService.publish — Spec #5 §9.1 #4 partial-insert rollback', () =
     expect(em.flushCount).toBe(1)
   })
 
-  it('is a no-op when env var is unset — publish succeeds normally', async () => {
-    // Defensive: explicitly clear in case prior test leaked.
-    delete process.env[ENV_KEY]
+  it('is a no-op with the production injector — publish succeeds normally', async () => {
     const em = new FakeEm()
     seedAgency(em, 'a1', 'om_agency')
-    const service = new RfpService(em as any)
+    const service = new RfpService(em as any, nullBroadcastFailureInjector)
     const created = await service.createDraft(makeCreateInput(), {
       tenantId: TENANT,
       organizationId: ORG,
@@ -385,10 +385,11 @@ describe('RfpService.publish — Spec #5 §9.1 #4 partial-insert rollback', () =
     expect(em.flushCount).toBe(2)
   })
 
-  it('is a no-op when env var is set to a non-"1" value (strict gate)', async () => {
-    process.env[ENV_KEY] = 'true' // wrong value — only literal "1" should fire.
+  it('is a no-op when no injector is passed — defaults to production no-op', async () => {
     const em = new FakeEm()
     seedAgency(em, 'a1', 'om_agency')
+    // Default constructor (omitted second arg) must use the production no-op
+    // — backward compatibility for callers that have not yet been migrated.
     const service = new RfpService(em as any)
     const created = await service.createDraft(makeCreateInput(), {
       tenantId: TENANT,

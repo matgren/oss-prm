@@ -7,6 +7,10 @@ import { ReinviteCooldownService } from './lib/reinviteCooldownService'
 import { ProspectService } from './lib/prospectService'
 import { LicenseDealService } from './lib/licenseDealService'
 import { RfpService } from './lib/rfpService'
+import {
+  type BroadcastFailureInjector,
+  nullBroadcastFailureInjector,
+} from './lib/broadcastFailureInjector'
 import { CaseStudyService } from './lib/caseStudyService'
 import { MarketingMaterialService } from './lib/marketingMaterialService'
 import {
@@ -43,7 +47,20 @@ export function register(container: AppContainer): void {
     licenseDealService: asFunction(
       ({ em }: { em: EntityManager }) => new LicenseDealService(em),
     ).scoped().proxy(),
-    rfpService: asFunction(({ em }: { em: EntityManager }) => new RfpService(em)).scoped().proxy(),
+    // Production wiring: pass the no-op `broadcastFailureInjector`. Tests
+    // override at construction time (`new RfpService(em, failing...)`) — never
+    // module-level (per SPEC-2026-05-09b anti-pattern: module-level DI overrides
+    // leak test behavior into any code path that resolves the service).
+    broadcastFailureInjector: asValue(nullBroadcastFailureInjector satisfies BroadcastFailureInjector),
+    rfpService: asFunction(
+      ({
+        em,
+        broadcastFailureInjector,
+      }: {
+        em: EntityManager
+        broadcastFailureInjector: BroadcastFailureInjector
+      }) => new RfpService(em, broadcastFailureInjector),
+    ).scoped().proxy(),
     caseStudyService: asFunction(
       ({ em }: { em: EntityManager }) => new CaseStudyService(em),
     ).scoped().proxy(),

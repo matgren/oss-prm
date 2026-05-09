@@ -27,6 +27,10 @@ import {
   toEligibilityFilterInput,
 } from './rfpEligibility'
 import { RfpResponseScoreRepo } from './rfpResponseScoreRepo'
+import {
+  type BroadcastFailureInjector,
+  nullBroadcastFailureInjector,
+} from './broadcastFailureInjector'
 
 /**
  * Domain helper for RFP authoring + broadcast (Spec #5).
@@ -45,7 +49,17 @@ import { RfpResponseScoreRepo } from './rfpResponseScoreRepo'
  * `declineBroadcast`, etc.) land in subsequent commits as those routes ship.
  */
 export class RfpService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    /**
+     * DI-overridable seam for §9.1 #4 partial-insert rollback proof.
+     * Defaults to the production no-op; tests swap in
+     * `failingBroadcastFailureInjector` to exercise the rollback path
+     * without any env-var-gated branch in production code.
+     * See `./broadcastFailureInjector.ts` and `di.ts`.
+     */
+    private readonly broadcastFailureInjector: BroadcastFailureInjector = nullBroadcastFailureInjector,
+  ) {}
 
   async createDraft(
     input: CreateRfpDraftInput,
@@ -272,18 +286,13 @@ export class RfpService {
     rfp.updatedAt = now
     this.em.persist(rfp)
 
-    // Test-only fault injection — Spec #5 §9.1 #4 (partial-insert rollback).
-    // Gated entirely by an env var so it is a strict no-op in production
-    // (`process.env.X !== '1'` short-circuits before any throw). Throws
-    // *before* `em.flush()` so the DB never sees the broadcast inserts nor
-    // the RFP status update — proving the publish flow has no orphan-write
-    // window. The env var is deliberately not in `.env.example` and is only
-    // ever set by a single `__tests__` spec at runtime.
-    if (process.env.OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL === '1') {
-      throw new Error(
-        'OM_PRM_TEST_INJECT_BROADCAST_INSERT_FAIL: simulated DB error on broadcast batch flush',
-      )
-    }
+    // §9.1 #4 partial-insert rollback proof seam. Default impl is a no-op
+    // in production (`nullBroadcastFailureInjector`); the failure-injection
+    // test wires `failingBroadcastFailureInjector` via constructor injection.
+    // Throws *before* `em.flush()` so the DB never sees the broadcast inserts
+    // nor the RFP status update — proving the publish flow has no orphan-write
+    // window. See `./broadcastFailureInjector.ts`.
+    this.broadcastFailureInjector.beforePublishFlush()
 
     await this.em.flush()
 
