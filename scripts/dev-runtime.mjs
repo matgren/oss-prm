@@ -430,6 +430,25 @@ function joinBaseUrl(baseUrl, pathname) {
   return `${String(baseUrl ?? '').replace(/\/$/, '')}${pathname}`
 }
 
+// Next.js dev with Turbopack binds to 0.0.0.0 (IPv4 only) but advertises the URL as
+// `http://localhost:<port>`. On dual-stack hosts (macOS default `/etc/hosts` lists
+// both `127.0.0.1 localhost` and `::1 localhost`), Node's undici fetch can resolve
+// `localhost` to `::1` first, surfacing as a bare `TypeError: fetch failed`.
+// Pin warmup requests to IPv4 to avoid that race; the splash URL shown to the user
+// is unchanged.
+function normalizeWarmupBaseUrl(rawUrl) {
+  if (typeof rawUrl !== 'string' || rawUrl.length === 0) return rawUrl
+  try {
+    const url = new URL(rawUrl)
+    if (url.hostname === 'localhost') {
+      url.hostname = '127.0.0.1'
+    }
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return rawUrl.replace(/\/$/, '')
+  }
+}
+
 function readNonEmptyEnvValue(key) {
   const value = process.env[key]
   if (typeof value !== 'string') return null
@@ -539,6 +558,65 @@ function isAbortLikeError(error) {
   return /aborted/i.test(String(error))
 }
 
+// Walks the error.cause chain (undici wraps the real syscall error there) and
+// collects any string `code` properties.
+function getErrorChainCodes(error) {
+  const codes = []
+  let current = error
+  let depth = 0
+  while (current && typeof current === 'object' && depth < 8) {
+    if (typeof current.code === 'string' && current.code.length > 0) {
+      codes.push(current.code)
+    }
+    current = current.cause
+    depth += 1
+  }
+  return codes
+}
+
+const TRANSIENT_FETCH_ERROR_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+  'EPIPE',
+  'UND_ERR_SOCKET',
+  'UND_ERR_CONNECT_TIMEOUT',
+])
+
+function isTransientFetchError(error) {
+  if (!error || typeof error !== 'object') return false
+  const codes = getErrorChainCodes(error)
+  return codes.some((code) => TRANSIENT_FETCH_ERROR_CODES.has(code))
+}
+
+// Surface the real reason behind Node's opaque `TypeError: fetch failed`.
+// Returns e.g. "fetch failed (ECONNREFUSED 127.0.0.1:3000)" when a syscall code
+// is present in the cause chain; otherwise falls back to the raw message.
+function describeFetchError(error) {
+  if (!error || typeof error !== 'object') return String(error)
+  const baseMessage = 'message' in error ? String(error.message) : ''
+  const codes = getErrorChainCodes(error)
+  if (codes.length === 0) return baseMessage || 'fetch failed'
+  let cause = error.cause
+  let depth = 0
+  let address = ''
+  while (cause && typeof cause === 'object' && depth < 8) {
+    const host = typeof cause.address === 'string' ? cause.address : ''
+    const port = Number.isInteger(cause.port) ? cause.port : null
+    if (host && port !== null) {
+      address = ` ${host}:${port}`
+      break
+    }
+    cause = cause.cause
+    depth += 1
+  }
+  return `${baseMessage || 'fetch failed'} (${codes[0]}${address})`
+}
+
 async function fetchWarmupWithRetry(url, init, detailLabel, progressLabel) {
   let lastError = null
 
@@ -550,12 +628,18 @@ async function fetchWarmupWithRetry(url, init, detailLabel, progressLabel) {
     } catch (error) {
       lastError = error
 
-      if (!isAbortLikeError(error) || index === warmupRequestTimeoutsMs.length - 1) {
+      const aborted = isAbortLikeError(error)
+      const connectionFailed = isTransientFetchError(error)
+      const isLastAttempt = index === warmupRequestTimeoutsMs.length - 1
+      if ((!aborted && !connectionFailed) || isLastAttempt) {
         throw error
       }
 
+      const reason = aborted
+        ? `is still compiling after ${formatDuration(timeoutMs)}`
+        : `is not accepting connections yet (${describeFetchError(error)})`
       reportWarmupStep(
-        `⏳ ${detailLabel} is still compiling after ${formatDuration(timeoutMs)}, retrying once`,
+        `⏳ ${detailLabel} ${reason}, retrying once`,
         progressLabel,
       )
     }
@@ -771,7 +855,7 @@ async function runTargetedRouteWarmup() {
   } catch (error) {
     runtimeWarmupState.promise = null
 
-    if (isAbortLikeError(error) || isWarmupTransientError(error)) {
+    if (isAbortLikeError(error) || isWarmupTransientError(error) || isTransientFetchError(error)) {
       runtimeWarmupState.started = false
       runtimeWarmupState.retryAttempts += 1
       const reason = error instanceof Error ? error.message : 'unknown error'
@@ -813,7 +897,7 @@ async function runTargetedRouteWarmup() {
       return
     }
 
-    const errorMessage = error instanceof Error ? error.message : 'unknown error'
+    const errorMessage = error instanceof Error ? describeFetchError(error) : 'unknown error'
     const isCredentialsFailure = error instanceof LoginError && error.status === 401
     const warmupWarning = `⚠️ Warmup incomplete: ${errorMessage}`
     const loginUrl = runtimeWarmupState.baseUrl
@@ -1224,7 +1308,7 @@ function createFilteredReporter(label, classifyLine) {
     if (result.type === 'status') {
       if (result.message) {
         if (typeof result.readyUrl === 'string' && result.readyUrl) {
-          runtimeWarmupState.baseUrl = result.readyUrl.replace(/\/$/, '')
+          runtimeWarmupState.baseUrl = normalizeWarmupBaseUrl(result.readyUrl)
         }
         if (result.ready === true || result.runtimeReady === true) {
           runtimeWarmupState.readySignalSeen = true
