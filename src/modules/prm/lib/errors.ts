@@ -41,6 +41,7 @@ export const PRM_ERROR_CODES = {
   RFP_NOT_FOUND: 'rfp_not_found',
   RFP_BROADCAST_NOT_FOUND: 'rfp_broadcast_not_found',
   RFP_RESPONSE_NOT_FOUND: 'rfp_response_not_found',
+  RFP_NOT_DRAFT: 'rfp_not_draft',
   NOT_FOUND: 'not_found',
   // Spec #6 — rfp-scoring-selection. FROZEN once shipped.
   CHANGE_REASON_REQUIRED: 'change_reason_required',

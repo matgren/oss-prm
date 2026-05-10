@@ -76,6 +76,7 @@ const events = [
   // read-model written by Spec #3 on `prm.license_deal.status_changed`.
   { id: 'prm.rfp.created', label: 'RFP draft created', entity: 'rfp', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.rfp.updated', label: 'RFP draft updated', entity: 'rfp', category: 'crud', clientBroadcast: true },
+  { id: 'prm.rfp.deleted', label: 'RFP draft soft-deleted', entity: 'rfp', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.rfp.published', label: 'RFP published + broadcast', entity: 'rfp', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.rfp.unpublished', label: 'RFP unpublished (undo of publish)', entity: 'rfp', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.rfp_broadcast.created', label: 'RFP broadcast created (per agency)', entity: 'rfp_broadcast', category: 'lifecycle' },

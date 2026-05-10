@@ -1,7 +1,7 @@
 'use client'
 import * as React from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
@@ -69,6 +69,7 @@ function resolveDynamicId(params: Record<string, unknown> | null): string | unde
 
 export default function RfpDetailPage() {
   const t = useT()
+  const router = useRouter()
   const params = useParams() as Record<string, unknown> | null
   const id = resolveDynamicId(params)
 
@@ -142,6 +143,7 @@ export default function RfpDetailPage() {
           rfp={rfp}
           broadcastTotal={broadcastTotal}
           onChange={() => void load()}
+          onDeleted={() => router.push('/backend/prm/rfp')}
         />
       </PageBody>
     </Page>
@@ -754,10 +756,12 @@ function ActionsBar({
   rfp,
   broadcastTotal,
   onChange,
+  onDeleted,
 }: {
   rfp: Rfp
   broadcastTotal: number | null
   onChange: () => void
+  onDeleted: () => void
 }) {
   const t = useT()
   const [busy, setBusy] = React.useState(false)
@@ -766,6 +770,7 @@ function ActionsBar({
   const [unpublishOpen, setUnpublishOpen] = React.useState(false)
   const [closeOpen, setCloseOpen] = React.useState(false)
   const [reopenOpen, setReopenOpen] = React.useState(false)
+  const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [reopenDeadline, setReopenDeadline] = React.useState('')
 
   async function publish() {
@@ -827,6 +832,27 @@ function ActionsBar({
     }
   }
 
+  async function deleteDraft() {
+    setBusy(true)
+    setError(null)
+    try {
+      await apiCallOrThrow(`/api/prm/rfp/${rfp.id}`, {
+        method: 'DELETE',
+      })
+      flash(t('prm.rfp.delete.flash.success', 'RFP draft deleted.'), 'success')
+      setDeleteOpen(false)
+      onDeleted()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t('prm.rfp.delete.flash.error', 'Failed to delete RFP draft.'),
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function reopen(reason: string) {
     if (!reopenDeadline) {
       setError(
@@ -866,9 +892,18 @@ function ActionsBar({
       {error ? <ErrorMessage label={error} /> : null}
       <div className="flex flex-wrap gap-2">
         {rfp.status === 'draft' ? (
-          <Button onClick={() => setPublishOpen(true)} disabled={busy}>
-            {t('prm.rfp.actions.publish', 'Publish + broadcast')}
-          </Button>
+          <>
+            <Button onClick={() => setPublishOpen(true)} disabled={busy}>
+              {t('prm.rfp.actions.publish', 'Publish + broadcast')}
+            </Button>
+            <Button
+              onClick={() => setDeleteOpen(true)}
+              disabled={busy}
+              variant="destructive"
+            >
+              {t('prm.rfp.actions.delete', 'Delete draft')}
+            </Button>
+          </>
         ) : null}
         {rfp.status === 'published' ? (
           <>
@@ -902,6 +937,25 @@ function ActionsBar({
           </Link>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title={t('prm.rfp.delete.dialog.title', 'Delete RFP draft?')}
+        body={t(
+          'prm.rfp.delete.dialog.body',
+          'This soft-deletes the draft (deleted_at is set; the row is preserved for audit). Only draft RFPs can be deleted — published, scoring, or closed RFPs are referenced by broadcasts and responses and cannot be removed here.',
+        )}
+        confirmLabel={
+          busy
+            ? t('prm.rfp.delete.dialog.saving', 'Deleting…')
+            : t('prm.rfp.delete.dialog.confirm', 'Delete draft')
+        }
+        cancelLabel={t('prm.rfp.delete.dialog.cancel', 'Cancel')}
+        busy={busy}
+        variant="destructive"
+        onConfirm={() => void deleteDraft()}
+        onCancel={() => setDeleteOpen(false)}
+      />
 
       <ConfirmDialog
         open={publishOpen}

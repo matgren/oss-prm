@@ -14,12 +14,19 @@ import { summariseRfp } from '../route'
 /**
  * Backend RFP detail + update routes (Spec #5 §3.1).
  *
- *   GET   /api/prm/rfp/{id} — B7 detail. `prm.rfp.create`.
- *   PATCH /api/prm/rfp/{id} — Update draft. `prm.rfp.create`.
+ *   GET    /api/prm/rfp/{id} — B7 detail. `prm.rfp.create`.
+ *   PATCH  /api/prm/rfp/{id} — Update draft. `prm.rfp.create`.
+ *   DELETE /api/prm/rfp/{id} — Soft-delete draft. `prm.rfp.create`.
+ *
+ * DELETE is gated to `status = 'draft'` only — published/scoring/closed RFPs
+ * are referenced by broadcasts + responses + license deals. Non-draft cleanup
+ * goes through `unpublish` (draft revert) or `closeRfp` (terminal).
+ * Idempotent — a second DELETE on an already-soft-deleted draft returns 200.
  */
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['prm.rfp.create'] },
   PATCH: { requireAuth: true, requireFeatures: ['prm.rfp.create'] },
+  DELETE: { requireAuth: true, requireFeatures: ['prm.rfp.create'] },
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -85,6 +92,31 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   }
 }
 
+export async function DELETE(req: Request, ctx: RouteCtx) {
+  const auth = await getAuthFromRequest(req)
+  if (!auth || !auth.tenantId || !auth.orgId || !auth.sub) {
+    return NextResponse.json({ ok: false, error: 'Authentication required' }, { status: 401 })
+  }
+  const params = await Promise.resolve(ctx.params)
+  if (!UUID_REGEX.test(params.id)) {
+    return NextResponse.json({ ok: false, error: 'Invalid RFP id' }, { status: 400 })
+  }
+  const container = await createRequestContainer()
+  const service = container.resolve('rfpService') as RfpService
+  try {
+    const { rfp, alreadyDeleted } = await service.deleteDraft(params.id, {
+      organizationId: auth.orgId,
+      userId: auth.sub,
+    })
+    return NextResponse.json({ ok: true, rfp: summariseRfp(rfp), alreadyDeleted })
+  } catch (err) {
+    if (isPrmDomainError(err)) {
+      return NextResponse.json(toPrmErrorBody(err), { status: err.status })
+    }
+    throw err
+  }
+}
+
 const errorSchema = z.object({ ok: z.literal(false), error: z.string() })
 
 const getDoc: OpenApiMethodDoc = {
@@ -107,7 +139,19 @@ const patchDoc: OpenApiMethodDoc = {
   ],
 }
 
+const deleteDoc: OpenApiMethodDoc = {
+  summary: 'Soft-delete RFP draft',
+  description:
+    'Sets deleted_at on the row. Only allowed while status=draft (returns 409 RFP_NOT_DRAFT otherwise). Idempotent — repeated calls on a soft-deleted draft return 200 with alreadyDeleted=true.',
+  tags: ['PRM RFPs'],
+  responses: [
+    { status: 200, description: 'OK' },
+    { status: 404, description: 'Not found.', schema: errorSchema },
+    { status: 409, description: 'RFP not in draft status.', schema: errorSchema },
+  ],
+}
+
 export const openApi: OpenApiRouteDoc = {
-  summary: 'PRM RFP detail + update',
-  methods: { GET: getDoc, PATCH: patchDoc },
+  summary: 'PRM RFP detail + update + soft-delete',
+  methods: { GET: getDoc, PATCH: patchDoc, DELETE: deleteDoc },
 }

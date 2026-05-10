@@ -197,6 +197,60 @@ export class RfpService {
   }
 
   /**
+   * Soft-delete a draft RFP.
+   *
+   * Mirrors `CaseStudyService.softDelete` — sets `deletedAt = now()`, never
+   * physical-deletes. Idempotent: a second call on an already-deleted RFP
+   * returns the same row unchanged (no `deletedAt` refresh, no event re-emit)
+   * so flaky retries from the UI don't churn audit history.
+   *
+   * Refuses with 409 `RFP_NOT_DRAFT` for any non-draft status — broadcasts and
+   * responses depend on published/scoring/closed RFPs, so only drafts are safe
+   * to delete. Non-draft cleanup goes through `unpublish` (draft revert) or
+   * `closeRfp` (terminal).
+   *
+   * Tenant-scoping: filters by `organizationId` only (Rfp does not carry a
+   * `tenantId` column — see entities.ts §6.1 spec note that RFPs are
+   * organization-scoped). Cross-org callers see NOT_FOUND.
+   */
+  async deleteDraft(
+    rfpId: string,
+    scope: { organizationId: string; userId: string },
+  ): Promise<{ rfp: Rfp; alreadyDeleted: boolean }> {
+    // Allow loading a soft-deleted row so we can return idempotent success.
+    const rfp = await this.em.findOne(
+      Rfp,
+      { id: rfpId, organizationId: scope.organizationId } as any,
+    )
+    if (!rfp) {
+      throw new PrmDomainError(PRM_ERROR_CODES.NOT_FOUND, 'RFP not found', 404)
+    }
+    if (rfp.deletedAt) {
+      // Idempotent — already soft-deleted, no event re-emit.
+      return { rfp, alreadyDeleted: true }
+    }
+    if (rfp.status !== 'draft') {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.RFP_NOT_DRAFT,
+        `Cannot delete RFP — status is "${rfp.status}". Only draft RFPs can be deleted.`,
+        409,
+      )
+    }
+    const now = new Date()
+    rfp.deletedAt = now
+    rfp.updatedAt = now
+    this.em.persist(rfp)
+    await this.em.flush()
+
+    await safeEmit('prm.rfp.deleted', {
+      rfp_id: rfp.id,
+      organization_id: rfp.organizationId,
+      deleted_by_user_id: scope.userId,
+    })
+    return { rfp, alreadyDeleted: false }
+  }
+
+  /**
    * `draft → published`. Runs the eligibility evaluator, writes N broadcast rows,
    * emits `prm.rfp.published` once + `prm.rfp_broadcast.created` per agency.
    *
