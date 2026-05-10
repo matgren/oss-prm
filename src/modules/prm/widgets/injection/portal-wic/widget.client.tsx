@@ -76,7 +76,7 @@ export default function PortalWicWidget() {
         <span className="text-xs uppercase tracking-wide text-muted-foreground">
           {t(
             'prm.portal.dashboard.wic.subtitle',
-            'Code contributions to OM repositories per member.',
+            'Scored code contributions to Open Mercato (L1–L4, with bounty multipliers).',
           )}
         </span>
         {!wic.awaiting ? <ScopeToggle value={scope} onChange={setScope} t={t} /> : null}
@@ -86,7 +86,7 @@ export default function PortalWicWidget() {
         <div className="rounded-md border border-dashed bg-muted/30 px-3 py-4 text-center text-xs text-muted-foreground">
           {t(
             'prm.portal.dashboard.wic.awaiting',
-            'Awaiting WIC data — once your team has contributions to OM repositories they will appear here.',
+            'No scored contributions yet. Once your team’s PRs to OM repos are merged and scored, they’ll appear here monthly.',
           )}
         </div>
       ) : (
