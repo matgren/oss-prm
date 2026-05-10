@@ -77,7 +77,7 @@ describe('libraryCache helpers', () => {
         pageSize: 50,
         materialType: undefined,
         topics: undefined,
-        audiences: undefined,
+        viewerRoleSlugs: undefined,
       },
     }
 
@@ -85,14 +85,22 @@ describe('libraryCache helpers', () => {
       expect(buildLibraryCacheKey(baseParams)).toBe(buildLibraryCacheKey(baseParams))
     })
 
-    it('is deterministic across topic/audience array ordering', () => {
+    it('is deterministic across topic/role-slug array ordering', () => {
       const a = buildLibraryCacheKey({
         ...baseParams,
-        params: { ...baseParams.params, topics: ['ai', 'devops'], audiences: ['cmo', 'cto'] },
+        params: {
+          ...baseParams.params,
+          topics: ['ai', 'devops'],
+          viewerRoleSlugs: ['partner_admin', 'partner_member'],
+        },
       })
       const b = buildLibraryCacheKey({
         ...baseParams,
-        params: { ...baseParams.params, topics: ['devops', 'ai'], audiences: ['cto', 'cmo'] },
+        params: {
+          ...baseParams.params,
+          topics: ['devops', 'ai'],
+          viewerRoleSlugs: ['partner_member', 'partner_admin'],
+        },
       })
       expect(a).toBe(b)
     })
@@ -115,7 +123,7 @@ describe('libraryCache helpers', () => {
       )
     })
 
-    it('differs when materialType / topics / audiences change', () => {
+    it('differs when materialType / topics / viewerRoleSlugs change', () => {
       const base = buildLibraryCacheKey(baseParams)
       expect(base).not.toBe(
         buildLibraryCacheKey({
@@ -132,7 +140,7 @@ describe('libraryCache helpers', () => {
       expect(base).not.toBe(
         buildLibraryCacheKey({
           ...baseParams,
-          params: { ...baseParams.params, audiences: ['cmo'] },
+          params: { ...baseParams.params, viewerRoleSlugs: ['partner_admin'] },
         }),
       )
     })

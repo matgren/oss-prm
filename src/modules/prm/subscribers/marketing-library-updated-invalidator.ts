@@ -20,8 +20,8 @@ type Payload = {
   material_id: string
   organization_id: string
   material_type: string
-  visibility: string
   min_tier?: string | null
+  allowed_roles?: string[]
 }
 
 type ResolverContext = { resolve: <T = unknown>(name: string) => T }

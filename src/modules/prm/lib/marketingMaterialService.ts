@@ -46,13 +46,6 @@ export class MarketingMaterialService {
     input: CreateMarketingMaterialInput,
     scope: { organizationId: string; userId: string; tenantId?: string },
   ): Promise<MarketingMaterial> {
-    if (input.visibility === 'tier_gated' && (input.minTier ?? null) === null) {
-      throw new PrmDomainError(
-        PRM_ERROR_CODES.MARKETING_MATERIAL_INVALID_TIER,
-        'minTier is required when visibility = tier_gated.',
-        400,
-      )
-    }
     // Legacy callers (single-attachment path, no upload widget) leave
     // `draftRecordId` unset and pass a `primaryAttachmentId` minted somewhere
     // outside this service — skip ownership/rebind verification in that case
@@ -81,11 +74,10 @@ export class MarketingMaterialService {
       title: input.title,
       description: input.description ?? null,
       materialType: input.materialType,
-      visibility: input.visibility ?? 'all_partners',
       minTier,
       minTierRank,
       topics: input.topics ?? [],
-      audiences: input.audiences ?? [],
+      allowedRoles: input.allowedRoles ?? [],
       primaryAttachmentId: input.primaryAttachmentId,
       publishedAt: null,
       unpublishedAt: null,
@@ -107,8 +99,8 @@ export class MarketingMaterialService {
       material_id: m.id,
       organization_id: m.organizationId,
       material_type: m.materialType,
-      visibility: m.visibility,
       min_tier: m.minTier ?? null,
+      allowed_roles: m.allowedRoles ?? [],
       created_by_user_id: scope.userId,
     })
     return m
@@ -161,21 +153,13 @@ export class MarketingMaterialService {
     if (input.title !== undefined) m.title = input.title
     if (input.description !== undefined) m.description = input.description ?? null
     if (input.materialType !== undefined) m.materialType = input.materialType
-    if (input.visibility !== undefined) m.visibility = input.visibility
     if (input.minTier !== undefined) {
       m.minTier = input.minTier ?? null
       m.minTierRank = m.minTier ? tierRank(m.minTier) : null
     }
     if (input.topics !== undefined) m.topics = input.topics ?? []
-    if (input.audiences !== undefined) m.audiences = input.audiences ?? []
+    if (input.allowedRoles !== undefined) m.allowedRoles = input.allowedRoles ?? []
     if (input.primaryAttachmentId !== undefined) m.primaryAttachmentId = input.primaryAttachmentId
-    if (m.visibility === 'tier_gated' && (m.minTier ?? null) === null) {
-      throw new PrmDomainError(
-        PRM_ERROR_CODES.MARKETING_MATERIAL_INVALID_TIER,
-        'minTier is required when visibility = tier_gated.',
-        400,
-      )
-    }
     m.updatedAt = new Date()
     this.em.persist(m)
     await this.em.flush()
@@ -198,8 +182,8 @@ export class MarketingMaterialService {
       material_id: m.id,
       organization_id: m.organizationId,
       material_type: m.materialType,
-      visibility: m.visibility,
       min_tier: m.minTier ?? null,
+      allowed_roles: m.allowedRoles ?? [],
     })
     return m
   }
@@ -220,7 +204,6 @@ export class MarketingMaterialService {
     await safeEmit('prm.marketing_material.published', {
       material_id: m.id,
       organization_id: m.organizationId,
-      visibility: m.visibility,
       min_tier: m.minTier ?? null,
       published_at: now.toISOString(),
       published_by_user_id: actor.userId,
@@ -275,7 +258,6 @@ export class MarketingMaterialService {
     scope: { organizationId: string },
     options: {
       materialType?: string
-      visibility?: string
       isPublished?: boolean
       q?: string
       limit: number
@@ -286,7 +268,6 @@ export class MarketingMaterialService {
       organizationId: scope.organizationId,
     }
     if (options.materialType) where.materialType = options.materialType
-    if (options.visibility) where.visibility = options.visibility
     if (options.isPublished !== undefined) {
       if (options.isPublished) {
         where.publishedAt = { $ne: null }
@@ -314,57 +295,65 @@ export class MarketingMaterialService {
   }
 
   /**
-   * Portal P11 query — applies the tier-gate filter inline.
+   * Portal P11 query — applies the tier-gate + role-gate filter inline.
    *
    * SQL contract: `published_at IS NOT NULL AND unpublished_at IS NULL AND
-   * (visibility = 'all_partners' OR (visibility = 'tier_gated' AND
-   * min_tier_rank <= :viewer_rank))`. The route layer caches the response
-   * under `[ 'prm:library', 'prm:agency:${agency_id}:tier:${tier}' ]`.
+   * (min_tier IS NULL OR min_tier_rank <= :viewer_rank)`. When the viewer has
+   * no tier (`viewerRank === null`), only ungated rows (`min_tier IS NULL`)
+   * are returned.
+   *
+   * Role gate is applied as a post-filter on the JSONB `allowed_roles` array:
+   * empty array means "all roles", non-empty means viewer must hold at least
+   * one of the listed slugs. The route layer caches the response under
+   * `[ 'prm:library', 'prm:agency:${agency_id}:tier:${tier}' ]`.
    */
   async listPublishedForViewer(
     scope: { organizationId: string; viewerTier: string | null },
     options: {
       materialType?: string
       topics?: string[]
-      audiences?: string[]
+      viewerRoleSlugs?: string[]
       limit: number
       offset: number
     },
   ): Promise<{ items: MarketingMaterial[]; total: number }> {
     const viewerRank = scope.viewerTier ? tierRank(scope.viewerTier) : null
-    // Build a combined visibility filter. We use $or so all_partners always
-    // wins; tier_gated requires viewer rank > 0 + min_tier_rank ≤ viewer_rank.
-    const visibilityClause: Record<string, unknown>[] = [
-      { visibility: 'all_partners' },
-    ]
-    if (viewerRank !== null) {
-      visibilityClause.push({
-        visibility: 'tier_gated',
-        minTierRank: { $lte: viewerRank },
-      })
-    }
+    // SQL-side tier gate. When viewer has no tier, only ungated (min_tier IS
+    // NULL) rows are eligible. When viewer has a tier, ungated rows always
+    // pass and tier-gated rows pass when min_tier_rank ≤ viewer_rank.
     const where: Record<string, unknown> = {
       organizationId: scope.organizationId,
       publishedAt: { $ne: null },
       unpublishedAt: null,
-      $or: visibilityClause,
+    }
+    if (viewerRank !== null) {
+      where.$or = [
+        { minTier: null },
+        { minTierRank: { $lte: viewerRank } },
+      ]
+    } else {
+      where.minTier = null
     }
     if (options.materialType) where.materialType = options.materialType
-    const [rawItems, totalAll] = await this.em.findAndCount(MarketingMaterial, where as any, {
+    const [rawItems] = await this.em.findAndCount(MarketingMaterial, where as any, {
       orderBy: { publishedAt: 'desc' },
     })
     let items = rawItems
-    // Topics / audiences are JSONB array filters not directly expressible
-    // through MikroORM `where` portably — apply server-side post-filter on
-    // the already-narrowed result set.
+    // Topics is a JSONB array filter not directly expressible through
+    // MikroORM `where` portably — apply server-side post-filter.
     if (options.topics && options.topics.length) {
       const set = new Set(options.topics)
       items = items.filter((m) => (m.topics ?? []).some((t) => set.has(t)))
     }
-    if (options.audiences && options.audiences.length) {
-      const set = new Set(options.audiences)
-      items = items.filter((m) => (m.audiences ?? []).some((a) => set.has(a)))
-    }
+    // Role gate. Empty allowed_roles = visible to all roles; non-empty =
+    // visible only when viewer's role intersects the list.
+    const viewerRoles = options.viewerRoleSlugs ?? []
+    const viewerRoleSet = new Set(viewerRoles)
+    items = items.filter((m) => {
+      const allowed = m.allowedRoles ?? []
+      if (allowed.length === 0) return true
+      return allowed.some((r) => viewerRoleSet.has(r))
+    })
     const total = items.length
     const paged = items.slice(options.offset, options.offset + options.limit)
     return { items: paged, total }
@@ -529,11 +518,10 @@ export type MarketingMaterialDto = {
   title: string
   description: string | null
   materialType: string
-  visibility: string
   minTier: string | null
   minTierRank: number | null
   topics: string[]
-  audiences: string[]
+  allowedRoles: string[]
   primaryAttachmentId: string
   attachments: MaterialAttachment[]
   publishedAt: string | null
@@ -553,11 +541,10 @@ export function toMarketingMaterialDto(
     title: m.title,
     description: m.description ?? null,
     materialType: m.materialType,
-    visibility: m.visibility,
     minTier: m.minTier ?? null,
     minTierRank: m.minTierRank ?? null,
     topics: m.topics ?? [],
-    audiences: m.audiences ?? [],
+    allowedRoles: m.allowedRoles ?? [],
     primaryAttachmentId: m.primaryAttachmentId,
     attachments,
     publishedAt: m.publishedAt ? m.publishedAt.toISOString() : null,
@@ -568,14 +555,17 @@ export function toMarketingMaterialDto(
   }
 }
 
-/** Public DTO for portal P11 — never exposes `min_tier` per §3.4. */
+/**
+ * Public DTO for portal P11 — never exposes `min_tier` (per §3.4) or
+ * `allowed_roles` (the role gate is internal; revealing the gate would leak
+ * which roles cannot see a material).
+ */
 export type MarketingMaterialPublicDto = {
   id: string
   title: string
   description: string | null
   materialType: string
   topics: string[]
-  audiences: string[]
   primaryAttachmentDownloadPath: string
   publishedAt: string
 }
@@ -587,7 +577,6 @@ export function toPublicLibraryDto(m: MarketingMaterial): MarketingMaterialPubli
     description: m.description ?? null,
     materialType: m.materialType,
     topics: m.topics ?? [],
-    audiences: m.audiences ?? [],
     primaryAttachmentDownloadPath: `/api/prm/portal/library/${m.id}/download`,
     publishedAt: m.publishedAt ? m.publishedAt.toISOString() : '',
   }

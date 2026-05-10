@@ -20,7 +20,6 @@ type LibraryItem = {
   description: string | null
   materialType: string
   topics: string[]
-  audiences: string[]
   primaryAttachmentDownloadPath: string
   publishedAt: string
 }
@@ -28,7 +27,6 @@ type LibraryItem = {
 type LibraryFacets = {
   material_types: { value: string; count: number }[]
   topics: { value: string; count: number }[]
-  audiences: { value: string; count: number }[]
 }
 
 type ListResponse = {
@@ -49,13 +47,11 @@ export default function PortalLibraryPage() {
   const [facets, setFacets] = React.useState<LibraryFacets>({
     material_types: [],
     topics: [],
-    audiences: [],
   })
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [materialType, setMaterialType] = React.useState('')
   const [topics, setTopics] = React.useState<string[]>([])
-  const [audiences, setAudiences] = React.useState<string[]>([])
   const [page, setPage] = React.useState(1)
   const [total, setTotal] = React.useState(0)
 
@@ -67,7 +63,6 @@ export default function PortalLibraryPage() {
     params.set('pageSize', String(PAGE_SIZE))
     if (materialType) params.set('materialType', materialType)
     for (const t of topics) params.append('topics', t)
-    for (const a of audiences) params.append('audiences', a)
     try {
       const res = await apiCall<ListResponse>(`/api/prm/portal/library?${params.toString()}`)
       if (!res.ok || !res.result?.ok) {
@@ -85,7 +80,7 @@ export default function PortalLibraryPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, materialType, topics, audiences, t])
+  }, [page, materialType, topics, t])
 
   React.useEffect(() => {
     void load()
@@ -93,13 +88,6 @@ export default function PortalLibraryPage() {
 
   const toggleTopic = (slug: string) => {
     setTopics((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]))
-    setPage(1)
-  }
-
-  const toggleAudience = (slug: string) => {
-    setAudiences((prev) =>
-      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug],
-    )
     setPage(1)
   }
 
@@ -178,27 +166,6 @@ export default function PortalLibraryPage() {
                       type="checkbox"
                       checked={topics.includes(f.value)}
                       onChange={() => toggleTopic(f.value)}
-                    />
-                    <span>
-                      {f.value} ({f.count})
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {facets.audiences.length ? (
-            <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {t('prm.portal.library.filter.audience', 'Audience')}
-              </h2>
-              <div className="mt-1 flex flex-col gap-1">
-                {facets.audiences.map((f) => (
-                  <label key={f.value} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={audiences.includes(f.value)}
-                      onChange={() => toggleAudience(f.value)}
                     />
                     <span>
                       {f.value} ({f.count})

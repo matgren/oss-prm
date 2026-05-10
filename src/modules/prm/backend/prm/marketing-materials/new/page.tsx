@@ -4,9 +4,10 @@ import { useRouter } from 'next/navigation'
 import { z } from 'zod'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
+import { TagsInput, type TagsInputOption } from '@open-mercato/ui/backend/inputs/TagsInput'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import {
   AttachmentPicker,
   emptyPickerValue,
@@ -17,10 +18,9 @@ const formSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().max(2_000).optional(),
   materialType: z.enum(['playbook', 'sales_deck', 'video', 'guide', 'case_study_template', 'other']),
-  visibility: z.enum(['all_partners', 'tier_gated']),
   minTier: z.string().optional(),
-  topicsCsv: z.string().max(2_000).optional(),
-  audiencesCsv: z.string().max(500).optional(),
+  topics: z.array(z.string()).default([]),
+  allowedRoles: z.array(z.enum(['partner_admin', 'partner_member'])).default([]),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -29,13 +29,20 @@ const INITIAL: FormValues = {
   title: '',
   description: '',
   materialType: 'playbook',
-  visibility: 'all_partners',
   minTier: '',
-  topicsCsv: '',
-  audiencesCsv: '',
+  topics: [],
+  allowedRoles: [],
 }
 
-const VALID_AUDIENCES = new Set(['new_partner', 'active_partner', 'tier_progressing'])
+const ROLE_OPTIONS: TagsInputOption[] = [
+  { value: 'partner_admin', label: 'Partner admin' },
+  { value: 'partner_member', label: 'Partner member' },
+]
+
+type DictionaryEntriesResponse = {
+  ok: true
+  items: TagsInputOption[]
+}
 
 export default function NewMarketingMaterialPage() {
   const t = useT()
@@ -50,6 +57,32 @@ export default function NewMarketingMaterialPage() {
   const [pickerValue, setPickerValue] = React.useState<PickerValue>(emptyPickerValue())
   const pickerValueRef = React.useRef(pickerValue)
   pickerValueRef.current = pickerValue
+
+  // TagsInput state for `topics` and `allowedRoles`. We keep these as local
+  // React state and read them on submit instead of relying on CrudForm's
+  // value plumbing, since `type: 'custom'` fields are uncontrolled wrt the
+  // form value.
+  const [topicsValue, setTopicsValue] = React.useState<string[]>([])
+  const [topicsOptions, setTopicsOptions] = React.useState<TagsInputOption[]>([])
+  const [allowedRolesValue, setAllowedRolesValue] = React.useState<string[]>([])
+
+  React.useEffect(() => {
+    let cancelled = false
+    void apiCall<DictionaryEntriesResponse>('/api/prm/dictionaries/topics/entries')
+      .then((res) => {
+        if (cancelled) return
+        if (res.ok && res.result?.ok && Array.isArray(res.result.items)) {
+          setTopicsOptions(res.result.items)
+        }
+      })
+      .catch(() => {
+        // Silently degrade to empty suggestions — closed-list TagsInput still
+        // renders (just without autocomplete) so the form remains usable.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <Page>
@@ -80,16 +113,6 @@ export default function NewMarketingMaterialPage() {
               ],
             },
             {
-              id: 'visibility',
-              label: t('prm.backend.marketingMaterials.form.visibility', 'Visibility'),
-              type: 'select',
-              required: true,
-              options: [
-                { value: 'all_partners', label: 'All partners' },
-                { value: 'tier_gated', label: 'Tier-gated' },
-              ],
-            },
-            {
               id: 'minTier',
               label: t('prm.backend.marketingMaterials.form.minTier', 'Minimum tier'),
               type: 'select',
@@ -100,18 +123,45 @@ export default function NewMarketingMaterialPage() {
                 { value: 'ai_native_expert', label: 'ai_native_expert' },
                 { value: 'ai_native_core', label: 'ai_native_core' },
               ],
-              description: 'Required when visibility = tier_gated.',
+              description: t(
+                'prm.backend.marketingMaterials.form.minTier.help',
+                'Optional. Leave empty to allow all partners.',
+              ),
             },
             {
-              id: 'topicsCsv',
-              label: t('prm.backend.marketingMaterials.form.topics', 'Topics (comma-separated slugs)'),
-              type: 'text',
+              id: 'topics',
+              label: t('prm.backend.marketingMaterials.form.topics', 'Topics'),
+              type: 'custom',
+              component: () => (
+                <TagsInput
+                  value={topicsValue}
+                  onChange={setTopicsValue}
+                  suggestions={topicsOptions}
+                  allowCustomValues={false}
+                  placeholder={t('prm.backend.marketingMaterials.form.topics.placeholder', 'Pick topics…')}
+                />
+              ),
             },
             {
-              id: 'audiencesCsv',
-              label: t('prm.backend.marketingMaterials.form.audiences', 'Audiences'),
-              type: 'text',
-              description: 'Comma-separated, one of new_partner | active_partner | tier_progressing.',
+              id: 'allowedRoles',
+              label: t('prm.backend.marketingMaterials.form.allowedRoles', 'Visible to roles'),
+              type: 'custom',
+              description: t(
+                'prm.backend.marketingMaterials.form.allowedRoles.help',
+                'Leave empty to make visible to all partner roles.',
+              ),
+              component: () => (
+                <TagsInput
+                  value={allowedRolesValue}
+                  onChange={setAllowedRolesValue}
+                  suggestions={ROLE_OPTIONS}
+                  allowCustomValues={false}
+                  placeholder={t(
+                    'prm.backend.marketingMaterials.form.allowedRoles.placeholder',
+                    'Pick roles…',
+                  )}
+                />
+              ),
             },
             {
               id: '__attachments',
@@ -140,14 +190,6 @@ export default function NewMarketingMaterialPage() {
               )
               return
             }
-            const topics = (values.topicsCsv ?? '')
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean)
-            const audiences = (values.audiencesCsv ?? '')
-              .split(',')
-              .map((s) => s.trim())
-              .filter((s) => VALID_AUDIENCES.has(s))
             const extraAttachmentIds = current.attachments
               .map((a) => a.id)
               .filter((id) => id !== current.primaryAttachmentId)
@@ -161,10 +203,9 @@ export default function NewMarketingMaterialPage() {
                     title: values.title,
                     description: values.description || null,
                     materialType: values.materialType,
-                    visibility: values.visibility,
-                    minTier: values.visibility === 'tier_gated' ? values.minTier || null : null,
-                    topics,
-                    audiences,
+                    minTier: values.minTier || null,
+                    topics: topicsValue,
+                    allowedRoles: allowedRolesValue,
                     primaryAttachmentId: current.primaryAttachmentId,
                     extraAttachmentIds,
                     draftRecordId,

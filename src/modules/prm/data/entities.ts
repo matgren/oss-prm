@@ -1123,9 +1123,13 @@ export class CaseStudy {
 /**
  * PRM `MarketingMaterial` aggregate (Spec #7 — case-studies-marketing).
  *
- * OM-owned (no `agency_id`). Tier-gated visibility via the
- * `min_tier_rank` lookup column. The PRM portal P11 Library reads this
- * with the tier-gate filter applied server-side (per-Agency cache key).
+ * OM-owned (no `agency_id`). Two independent visibility gates:
+ *   - **Tier gate** — optional. `min_tier IS NULL` means ungated; otherwise
+ *     viewer must have `tier_rank >= min_tier_rank`.
+ *   - **Role gate** — optional. `allowed_roles = []` means visible to all
+ *     roles; otherwise viewer's customer-role slug must intersect the list.
+ * Both gates compose (must pass both). The PRM portal P11 Library reads this
+ * with both filters applied server-side (per-Agency cache key).
  *
  * "Currently published" predicate: `published_at IS NOT NULL AND
  * unpublished_at IS NULL`. Re-publishing after unpublish sets
@@ -1134,8 +1138,8 @@ export class CaseStudy {
  * `min_tier_rank` is maintained by the application (`MarketingMaterialService`)
  * rather than a Postgres `GENERATED ALWAYS AS (...) STORED` column to keep the
  * MikroORM mapping portable across versions; the lookup is trivial.
- * The DB CHECK constraints `chk_tier_gated_requires_min_tier` and
- * `chk_unpublished_after_published` ship in the indexes migration.
+ * The `chk_unpublished_after_published` DB CHECK ships in the indexes
+ * migration.
  */
 @Entity({ tableName: 'prm_marketing_materials' })
 export class MarketingMaterial {
@@ -1160,14 +1164,11 @@ export class MarketingMaterial {
   @Property({ name: 'material_type', type: 'text' })
   materialType!: string
 
-  /** Enum check (DB-side): 'all_partners' | 'tier_gated'. */
-  @Index()
-  @Property({ type: 'text', default: 'all_partners' })
-  visibility: string = 'all_partners'
-
   /**
-   * Required iff `visibility = 'tier_gated'`. Enum check (DB-side):
+   * Optional tier gate. Enum check (DB-side):
    *   'om_agency' | 'ai_native' | 'ai_native_expert' | 'ai_native_core'.
+   * NULL means no tier gate; viewers at any tier (or with no tier) see the
+   * material. When set, only viewers with `tierRank >= min_tier_rank` see it.
    */
   @Property({ name: 'min_tier', type: 'text', nullable: true })
   minTier?: string | null
@@ -1186,11 +1187,14 @@ export class MarketingMaterial {
   topics: string[] = []
 
   /**
-   * Audience tag(s). Enum-shaped values: 'new_partner' / 'active_partner' /
-   * 'tier_progressing'. Stored as a JSON array of strings.
+   * Per-role visibility gate. Customer-role slugs (from
+   * `customer_accounts.customer_role` — currently `partner_admin` /
+   * `partner_member`). Empty array means no role gate; non-empty means only
+   * viewers whose own `agency_member.role_slug` is in this list see the
+   * material. Compose with the tier gate (must pass both).
    */
-  @Property({ type: 'json', nullable: false, default: '[]' })
-  audiences: string[] = []
+  @Property({ name: 'allowed_roles', type: 'json', nullable: false, default: '[]' })
+  allowedRoles: string[] = []
 
   /** Attachment row id. Required for download — no v1 metadata-only materials. */
   @Property({ name: 'primary_attachment_id', type: 'uuid' })

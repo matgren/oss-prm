@@ -19,7 +19,6 @@ export const metadata = {
 type Payload = {
   material_id: string
   organization_id: string
-  visibility: string
   min_tier?: string | null
   published_at: string
 }

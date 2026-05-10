@@ -838,23 +838,6 @@ export const MARKETING_MATERIAL_TYPES = [
 ] as const
 export type MarketingMaterialType = (typeof MARKETING_MATERIAL_TYPES)[number]
 
-export const MARKETING_MATERIAL_VISIBILITIES = ['all_partners', 'tier_gated'] as const
-export type MarketingMaterialVisibility =
-  (typeof MARKETING_MATERIAL_VISIBILITIES)[number]
-
-export const MARKETING_MATERIAL_AUDIENCES = [
-  'new_partner',
-  'active_partner',
-  'tier_progressing',
-] as const
-export type MarketingMaterialAudience =
-  (typeof MARKETING_MATERIAL_AUDIENCES)[number]
-
-const audienceArray = z
-  .array(z.enum(MARKETING_MATERIAL_AUDIENCES))
-  .max(MARKETING_MATERIAL_AUDIENCES.length)
-  .default([])
-
 /**
  * Marketing material attachment fields (Spec #7 §3.3 — extended for
  * multi-file authoring).
@@ -877,49 +860,41 @@ const draftRecordIdSchema = z.string().uuid().optional()
 const extraAttachmentIdsSchema = z.array(z.string().uuid()).max(20).optional()
 const removedAttachmentIdsSchema = z.array(z.string().uuid()).max(20).optional()
 
-export const createMarketingMaterialSchema = z
-  .object({
-    title: z.string().min(3).max(200),
-    description: z.string().max(2_000).nullable().optional(),
-    materialType: z.enum(MARKETING_MATERIAL_TYPES),
-    visibility: z.enum(MARKETING_MATERIAL_VISIBILITIES).default('all_partners'),
-    minTier: z.enum(AGENCY_TIERS).nullable().optional(),
-    topics: slugStringArray.optional(),
-    audiences: audienceArray.optional(),
-    primaryAttachmentId: z.string().uuid(),
-    extraAttachmentIds: extraAttachmentIdsSchema,
-    draftRecordId: draftRecordIdSchema,
-  })
-  .refine(
-    (v) => v.visibility === 'all_partners' || (v.minTier ?? null) !== null,
-    { message: 'minTier required when visibility = tier_gated', path: ['minTier'] },
-  )
+/**
+ * Per-role visibility gate. Slugs come from the seeded
+ * `customer_accounts.customer_role` set (`partner_admin` / `partner_member`).
+ * Empty array (the default) = all roles see it; non-empty = only the listed
+ * roles see it. Composes with the tier gate (must pass both).
+ */
+const allowedRolesArray = z.array(z.enum(ROLE_SLUGS)).default([])
+
+export const createMarketingMaterialSchema = z.object({
+  title: z.string().min(3).max(200),
+  description: z.string().max(2_000).nullable().optional(),
+  materialType: z.enum(MARKETING_MATERIAL_TYPES),
+  minTier: z.enum(AGENCY_TIERS).nullable().optional(),
+  topics: slugStringArray.optional(),
+  allowedRoles: allowedRolesArray.optional(),
+  primaryAttachmentId: z.string().uuid(),
+  extraAttachmentIds: extraAttachmentIdsSchema,
+  draftRecordId: draftRecordIdSchema,
+})
 export type CreateMarketingMaterialInput = z.infer<
   typeof createMarketingMaterialSchema
 >
 
-export const updateMarketingMaterialSchema = z
-  .object({
-    title: z.string().min(3).max(200).optional(),
-    description: z.string().max(2_000).nullable().optional(),
-    materialType: z.enum(MARKETING_MATERIAL_TYPES).optional(),
-    visibility: z.enum(MARKETING_MATERIAL_VISIBILITIES).optional(),
-    minTier: z.enum(AGENCY_TIERS).nullable().optional(),
-    topics: slugStringArray.optional(),
-    audiences: audienceArray.optional(),
-    primaryAttachmentId: z.string().uuid().optional(),
-    extraAttachmentIds: extraAttachmentIdsSchema,
-    removedAttachmentIds: removedAttachmentIdsSchema,
-    draftRecordId: draftRecordIdSchema,
-  })
-  .refine(
-    (v) => {
-      if (v.visibility === 'all_partners') return true
-      if (v.visibility === 'tier_gated') return (v.minTier ?? null) !== null
-      return true
-    },
-    { message: 'minTier required when visibility = tier_gated', path: ['minTier'] },
-  )
+export const updateMarketingMaterialSchema = z.object({
+  title: z.string().min(3).max(200).optional(),
+  description: z.string().max(2_000).nullable().optional(),
+  materialType: z.enum(MARKETING_MATERIAL_TYPES).optional(),
+  minTier: z.enum(AGENCY_TIERS).nullable().optional(),
+  topics: slugStringArray.optional(),
+  allowedRoles: allowedRolesArray.optional(),
+  primaryAttachmentId: z.string().uuid().optional(),
+  extraAttachmentIds: extraAttachmentIdsSchema,
+  removedAttachmentIds: removedAttachmentIdsSchema,
+  draftRecordId: draftRecordIdSchema,
+})
 export type UpdateMarketingMaterialInput = z.infer<
   typeof updateMarketingMaterialSchema
 >
@@ -935,7 +910,6 @@ export const listMarketingMaterialBackendSchema = z.object({
   page: z.coerce.number().int().min(1).max(1_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
   materialType: z.enum(MARKETING_MATERIAL_TYPES).optional(),
-  visibility: z.enum(MARKETING_MATERIAL_VISIBILITIES).optional(),
   isPublished: z
     .union([z.boolean(), z.literal('true'), z.literal('false')])
     .optional()
@@ -961,16 +935,6 @@ export const listLibraryPortalSchema = z.object({
       if (v === undefined) return undefined
       if (Array.isArray(v)) return v
       return v.split(',').map((s) => s.trim()).filter(Boolean)
-    }),
-  audiences: z
-    .union([z.string(), z.array(z.string())])
-    .optional()
-    .transform((v) => {
-      if (v === undefined) return undefined
-      const list = Array.isArray(v) ? v : v.split(',').map((s) => s.trim()).filter(Boolean)
-      return list.filter((s): s is MarketingMaterialAudience =>
-        (MARKETING_MATERIAL_AUDIENCES as readonly string[]).includes(s),
-      )
     }),
 })
 export type ListLibraryPortalInput = z.infer<typeof listLibraryPortalSchema>

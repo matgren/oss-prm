@@ -50,7 +50,7 @@ Phase 6 completes the marketing flywheel. Agencies self-manage CaseStudies throu
 - **Mode:** Extend PRM module with content entities + backend CrudForms + custom portal pages + per-feature cache invalidator subscribers. No core modifications. Reuses `attachments` / `media`, `dictionaries`, `cache` modules.
 - **New entities:**
   - `CaseStudy` (aggregate; FK `agency_id`; `title`, `client_name`, `client_industry` FK to `dictionaries.industries`, `client_country` FK to countries list, `challenge_markdown`, `approach_markdown`, `outcome_markdown`, `technologies_used[]` FK to dictionaries, `services_delivered[]` FK to dictionaries, `hero_image_attachment_id` FK, `gallery_attachment_ids[]` FK, `may_publish_on_om_website` boolean default false — Marketing-only write per US2.4, `published_url` nullable text — Marketing-only write, `deleted_at` nullable — soft-delete per US2.3, `created_at`, `updated_at`). **Invariant #8: publishing gated on `may_publish_on_om_website = true` AND `published_url IS NOT NULL`.**
-  - `MarketingMaterial` (OM-owned; `title`, `description`, `material_type` enum `playbook` / `sales_deck` / `video` / `guide` / `case_study_template` / `other`, `visibility` enum `all_partners` / `tier_gated`, `min_tier` nullable integer — required when visibility=tier_gated, `topics[]` FK to a `topics` dictionary (seeded by PRM `setup.ts` per OQ-012), `audiences[]` enum `new_partner` / `active_partner` / `tier_progressing`, `primary_attachment_id` FK, `published_at` nullable, `unpublished_at` nullable, `created_by_user_id`, `created_at`, `updated_at`).
+  - `MarketingMaterial` (OM-owned; `title`, `description`, `material_type` enum `playbook` / `sales_deck` / `video` / `guide` / `case_study_template` / `other`, `min_tier` nullable enum `om_agency` / `ai_native` / `ai_native_expert` / `ai_native_core` — `NULL` ⇒ visible to all partners; non-null ⇒ tier-gated to that rank or above, `topics[]` FK to a `topics` dictionary (seeded by PRM `setup.ts` per OQ-012; backend new/edit form uses `TagsInput` (closed list) backed by the topics dictionary, matching the `caseStudyForm.tsx` pattern for technologies/services), `allowed_roles[]` jsonb of partner role slugs from `['partner_admin','partner_member']` (canonical list: `src/modules/prm/data/validators.ts` `ROLE_SLUGS`) — empty array ⇒ all roles within an at-tier agency; non-empty ⇒ only those role slugs see the row, `primary_attachment_id` FK, `published_at` nullable, `unpublished_at` nullable, `created_by_user_id`, `created_at`, `updated_at`).
 - **Attachments (OQ-011 resolved):**
   - Reuses `packages/core/src/modules/attachments/`. Writes to local FS `storage/attachments/{partitionCode}/org_X/tenant_Y/...`.
   - `buildAttachmentImageUrl(attachmentId, sizeOptions)` returns a regular URL gated by partition/org/tenant segmentation.
@@ -73,9 +73,9 @@ Phase 6 completes the marketing flywheel. Agencies self-manage CaseStudies throu
   - Emits `prm.marketing_material.published` / `prm.marketing_material.unpublished`.
 - **US7.2 Browse Marketing Library (P11 portal custom list with facets):**
   - Custom React list (OQ-010 — no DataTable in portal).
-  - Filter facets: material_type, topics, audiences. Visibility filter: `visibility = 'all_partners' OR (visibility = 'tier_gated' AND min_tier <= current_agency.tier)`.
+  - Filter facets: material_type, topics. Tier-gate filter: `min_tier IS NULL OR min_tier_rank <= current_agency.tier_rank`.
   - Click-to-download: fetch `buildAttachmentImageUrl` (OQ-011 — regular URL, route-ACL-gated).
-  - **Cache strategy (OQ-019):** P11 library list is cached per-agency (tier-dependent visibility). Cache tags: `[ 'prm:library', `prm:agency:${agency_id}:tier:${tier}` ]`.
+  - **Cache strategy (OQ-019):** P11 library list is cached per-agency (tier-dependent visibility). Cache tags: `[ 'prm:library', `prm:agency:${agency_id}:tier:${tier}` ]`. Role gate (`allowed_roles[]`) is applied **post-cache** by the request handler against the viewer's role membership — cache stays tier-keyed, never role-keyed.
   - Per-feature `cache.deleteByTags` invalidator subscribers (OQ-019 — no generic event-to-cache-bust router):
     - `prm.marketing_material.published` → invalidate `['prm:library']` (new material may now be visible to all agencies at/above min_tier).
     - `prm.marketing_material.unpublished` → invalidate `['prm:library']`.
@@ -86,7 +86,7 @@ Phase 6 completes the marketing flywheel. Agencies self-manage CaseStudies throu
 
 > **Reconciliation note (Piotr):** The App Spec §1.4.1 CaseStudy block uses slightly different field names than the Technical Approach above (`client_public_name` / `client_anonymous_label` / `summary` / `challenge` / `solution` / `outcome` / `hero_image_url` text field / `gallery_urls` text[]). **The Technical Approach above is authoritative for implementation** — specifically: (a) the narrative fields are `challenge_markdown` / `approach_markdown` / `outcome_markdown` (markdown type explicit, `approach_markdown` replaces `solution` for clearer semantics); (b) hero + gallery are **attachment FKs**, not URL strings, because OQ-011 resolved in favour of the `attachments` module owning lifecycle; (c) `client_name` is a single field — the NDA-anonymisation decision is now a value-level choice by the Agency (type "Global Automotive Supplier" if anonymised) rather than two separate fields. The `client_public_name` / `client_anonymous_label` split is absorbed; `summary` is dropped (covered by `challenge_markdown`'s opening paragraph per markdown-narrative convention). Soft-delete column `deleted_at` is new vs App Spec — required by US2.3 per Cagan C3. The App Spec will be reconciled in a follow-up edit pass; this spec ships the resolved shape. `submitted_at` / `last_edited_at` collapse into the standard `created_at` / `updated_at` per the data-model convention used across all Phase 1-5 specs.
 
-> **Reconciliation note #2 (Piotr):** Similarly, MarketingMaterial fields in App Spec §1.4.1 use `type` (enum includes `slide_deck` / `datasheet`), `file_url` / `thumbnail_url` string fields, `target_audience` string[] enum, `visibility` enum values `all_agencies` / `by_min_tier`, `is_published` boolean + `published_at` nullable. **This spec's authoritative shape (per Technical Approach):** `material_type` (renamed for clarity, collision avoidance with Postgres `type`; enum extended with `sales_deck` + `case_study_template` + `other` for v1 richness); `primary_attachment_id` FK (attachments module, not URL); `audiences[]` (renamed from `target_audience` for grammatical symmetry with `topics[]`); visibility enum `all_partners` / `tier_gated` (renamed for terminology alignment — "partners" is the v1 term post-Phase 1, not "agencies"); boolean `is_published` collapses into the pair `published_at` / `unpublished_at` timestamps, where `published_at IS NOT NULL AND unpublished_at IS NULL` means "currently published" (explicit audit trail vs flag).
+> **Reconciliation note #2 (Piotr; revised 2026-05-10):** Similarly, MarketingMaterial fields in App Spec §1.4.1 use `type` (enum includes `slide_deck` / `datasheet`), `file_url` / `thumbnail_url` string fields, `target_audience` string[] enum, `visibility` enum values `all_agencies` / `by_min_tier`, `is_published` boolean + `published_at` nullable. **This spec's authoritative shape (per Technical Approach):** `material_type` (renamed for clarity, collision avoidance with Postgres `type`; enum extended with `sales_deck` + `case_study_template` + `other` for v1 richness); `primary_attachment_id` FK (attachments module, not URL); boolean `is_published` collapses into the pair `published_at` / `unpublished_at` timestamps, where `published_at IS NOT NULL AND unpublished_at IS NULL` means "currently published" (explicit audit trail vs flag). **The App Spec `visibility` and `target_audience` mappings no longer apply.** The `visibility` enum is dropped entirely: visibility collapses into `min_tier IS NULL ⇒ all partners` vs `min_tier IS NOT NULL ⇒ tier-gated to that rank or above`. The old `target_audience` (`new_partner` / `active_partner` / `tier_progressing`) was an unproven persona enum and is **deferred to a future feature** tracked at [#42](https://github.com/matgren/oss-prm/issues/42) — it is replaced for v1 by `allowed_roles[]`, a multi-select of real RBAC role slugs (`partner_admin` / `partner_member`; empty ⇒ all roles within an at-tier agency).
 
 ---
 
@@ -161,7 +161,7 @@ B9 MarketingMaterial CRUD + publish/unpublish.
 
 | Method | Path | Body | Returns | Notes |
 |---|---|---|---|---|
-| `GET` | `/api/prm/marketing-material` | — (query: `material_type`, `visibility`, `is_published`, `q`) | paged list | B9 list |
+| `GET` | `/api/prm/marketing-material` | — (query: `material_type`, `min_tier`, `is_published`, `q`) | paged list | B9 list |
 | `POST` | `/api/prm/marketing-material` | `CreateMarketingMaterialInput` | `MarketingMaterialDTO` | Creates unpublished |
 | `GET` | `/api/prm/marketing-material/:id` | — | DTO | |
 | `PUT` | `/api/prm/marketing-material/:id` | `UpdateMarketingMaterialInput` | DTO | Rejects `published_at` / `unpublished_at` direct writes — use publish/unpublish actions |
@@ -174,15 +174,13 @@ const MaterialWriteBase = z.object({
   title: z.string().min(3).max(200),
   description: z.string().max(2000).nullable(),
   material_type: z.enum(['playbook', 'sales_deck', 'video', 'guide', 'case_study_template', 'other']),
-  visibility: z.enum(['all_partners', 'tier_gated']),
+  // min_tier IS NULL ⇒ all partners; non-null ⇒ tier-gated to that rank or above
   min_tier: z.enum(['om_agency', 'ai_native', 'ai_native_expert', 'ai_native_core']).nullable(),
   topics_ids: z.array(z.string().uuid()).default([]),
-  audiences: z.array(z.enum(['new_partner', 'active_partner', 'tier_progressing'])).default([]),
+  // allowed_roles[] empty ⇒ all roles within an at-tier agency; non-empty ⇒ only those role slugs see it
+  allowed_roles: z.array(z.enum(['partner_admin', 'partner_member'])).default([]),
   primary_attachment_id: z.string().uuid(),
-}).refine(
-  (v) => v.visibility === 'all_partners' || v.min_tier !== null,
-  { message: 'min_tier required when visibility = tier_gated', path: ['min_tier'] }
-);
+});
 ```
 
 ### 3.4 Portal — `/api/prm/portal/library`
@@ -191,7 +189,7 @@ Read-only faceted list for P11. Server applies tier-gate filter from session.
 
 | Method | Path | Query | Returns |
 |---|---|---|---|
-| `GET` | `/api/prm/portal/library` | `material_type?`, `topics[]?`, `audiences[]?`, `limit?`, `offset?` | `{ items: MarketingMaterialPublicDTO[], facets: { material_types, topics, audiences }, total }` |
+| `GET` | `/api/prm/portal/library` | `material_type?`, `topics[]?`, `limit?`, `offset?` | `{ items: MarketingMaterialPublicDTO[], facets: { material_types, topics }, total }` |
 | `GET` | `/api/prm/portal/library/:id/download` | — | `302` redirect to `buildAttachmentImageUrl(primary_attachment_id)` with route-ACL re-check |
 
 **Server filter (concatenated with any user-supplied facet filter):**
@@ -199,17 +197,16 @@ Read-only faceted list for P11. Server applies tier-gate filter from session.
 ```sql
 WHERE published_at IS NOT NULL
   AND unpublished_at IS NULL
-  AND (
-    visibility = 'all_partners'
-    OR (visibility = 'tier_gated' AND min_tier_rank <= :current_agency_tier_rank)
-  )
+  AND (min_tier IS NULL OR min_tier_rank <= :viewer_rank)
 ```
 
 Tier rank is a lookup (`om_agency = 1 < ai_native = 2 < ai_native_expert = 3 < ai_native_core = 4`) — same table seeded in Spec #1.
 
-**Cache:** Response cached under tags `['prm:library', 'prm:agency:${agency_id}:tier:${tier}']` with TTL 15 minutes. Invalidators in §4.3.
+**Role gate (post-cache):** the request handler additionally filters the cached tier-keyed result against the viewer's role membership: a row with non-empty `allowed_roles[]` is dropped if the viewer's role slug is not in the array; an empty `allowed_roles[]` means "all roles at this tier". Applied **post-cache** so the cache stays tier-keyed (not role-keyed) — the alternative would multiply cache cardinality by `2^|roles|`.
 
-`MarketingMaterialPublicDTO` exposes: `id`, `title`, `description`, `material_type`, `topics_ids`, `audiences`, `primary_attachment_download_path`, `published_at`. Never exposes `min_tier` (an agency below-tier never sees the row at all; an agency at-tier doesn't need to know the gate exists).
+**Cache:** Tier-keyed response cached under tags `['prm:library', 'prm:agency:${agency_id}:tier:${tier}']` with TTL 15 minutes. Invalidators in §4.3. Cache is **not** role-keyed.
+
+`MarketingMaterialPublicDTO` exposes: `id`, `title`, `description`, `material_type`, `topics_ids`, `allowed_roles`, `primary_attachment_download_path`, `published_at`. Exposing `allowed_roles` is acceptable: an at-tier viewer who is filtered out of a row never receives the row in the response, and an at-tier viewer who does receive it benefits from knowing the role audience (e.g., a partner_admin reviewing their team's exposure). Never exposes `min_tier` (an agency below-tier never sees the row at all; an agency at-tier doesn't need to know the gate exists).
 
 ---
 
@@ -243,9 +240,9 @@ All events follow `prm.case_study.*` / `prm.marketing_material.*` naming per App
 | `prm.case_study.deleted` | `{ case_study_id, agency_id, deleted_by_customer_user_id }` | Soft-delete audit; downstream Marketing unpublish signal |
 | `prm.case_study.restored` | `{ case_study_id, agency_id, restored_by_customer_user_id }` | Undelete audit (new; paired inverse of `deleted`) |
 | `prm.case_study.publication_flag_changed` | `{ case_study_id, may_publish_on_om_website, published_url, set_by_user_id }` | **Drives external Marketing system** (v1 shortcut per OQ-008; v2 will replace with full handshake) |
-| `prm.marketing_material.created` | `{ material_id, material_type, visibility, min_tier?, created_by_user_id }` | B9 audit; no cache effect (not published yet) |
-| `prm.marketing_material.updated` | `{ material_id, material_type, visibility, min_tier? }` | Metadata edit; **triggers cache invalidation if currently published** (§4.3) |
-| `prm.marketing_material.published` | `{ material_id, visibility, min_tier?, published_at }` | **Drives cache invalidation** + P11 refresh |
+| `prm.marketing_material.created` | `{ material_id, material_type, min_tier?, created_by_user_id }` | B9 audit; no cache effect (not published yet) |
+| `prm.marketing_material.updated` | `{ material_id, material_type, min_tier? }` | Metadata edit; **triggers cache invalidation if currently published** (§4.3) |
+| `prm.marketing_material.published` | `{ material_id, min_tier?, published_at }` | **Drives cache invalidation** + P11 refresh |
 | `prm.marketing_material.unpublished` | `{ material_id, unpublished_by_user_id, unpublished_at, reason? }` | Drives cache invalidation |
 
 > **Naming note:** App Spec §1.4.5 uses `prm.case_study.submitted` for first-create and `prm.case_study.publish_flag_changed`. This spec renames the first to `prm.case_study.created` (submitted implies a review workflow which L-007 explicitly out-of-scopes) and the second to `prm.case_study.publication_flag_changed` (grammatical symmetry with other `*_changed` events in the catalog). Both renames are noted in the App Spec reconciliation backlog.
@@ -328,8 +325,7 @@ CREATE TABLE marketing_material (
   material_type             TEXT NOT NULL
                               CHECK (material_type IN ('playbook','sales_deck','video','guide','case_study_template','other')),
 
-  visibility                TEXT NOT NULL DEFAULT 'all_partners'
-                              CHECK (visibility IN ('all_partners','tier_gated')),
+  -- min_tier IS NULL ⇒ visible to all partners; non-null ⇒ tier-gated to that rank or above
   min_tier                  TEXT
                               CHECK (min_tier IN ('om_agency','ai_native','ai_native_expert','ai_native_core')),
   min_tier_rank             SMALLINT GENERATED ALWAYS AS (
@@ -342,7 +338,10 @@ CREATE TABLE marketing_material (
                               END) STORED,
 
   topics_ids                JSONB NOT NULL DEFAULT '[]'::jsonb,
-  audiences                 JSONB NOT NULL DEFAULT '[]'::jsonb,
+  -- allowed_roles[] empty ⇒ all roles at this tier may see the row;
+  -- non-empty ⇒ only viewers whose role slug is in the array see it.
+  -- Canonical slug list: src/modules/prm/data/validators.ts ROLE_SLUGS = ['partner_admin','partner_member'].
+  allowed_roles             JSONB NOT NULL DEFAULT '[]'::jsonb,
 
   primary_attachment_id     UUID NOT NULL REFERENCES attachment(id),
 
@@ -353,14 +352,12 @@ CREATE TABLE marketing_material (
   created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-  CONSTRAINT chk_tier_gated_requires_min_tier
-    CHECK (visibility = 'all_partners' OR min_tier IS NOT NULL),
   CONSTRAINT chk_unpublished_after_published
     CHECK (unpublished_at IS NULL OR published_at IS NOT NULL)
 );
 
 CREATE INDEX idx_marketing_material_live
-  ON marketing_material (published_at, visibility, min_tier_rank)
+  ON marketing_material (published_at, min_tier_rank)
   WHERE published_at IS NOT NULL AND unpublished_at IS NULL;
 ```
 
@@ -531,12 +528,12 @@ Mitigation: soft-delete retains the FKs. Any future hard-delete (v2) must delete
 
 ### 9.7 MarketingMaterial publish → P11 library refresh within TTL
 - Seed: Agency A at `tier = ai_native`. Baseline P11 fetch → empty list, cached under `['prm:library', 'prm:agency:A:tier:ai_native']`.
-- OM Marketing creates + publishes MarketingMaterial M (visibility `all_partners`).
+- OM Marketing creates + publishes MarketingMaterial M (`min_tier = NULL` ⇒ visible to all partners).
 - Assert `prm.marketing_material.published` fired → `MarketingLibraryPublishedInvalidator` runs → `cache.deleteByTags(['prm:library'])`.
 - Re-fetch P11 → M appears. Assert cache was re-populated with M visible.
 
 ### 9.8 Tier-gated hide + tier-upgrade reveal
-- Seed: Agency A at `tier = om_agency` (rank 1). OM Marketing publishes material N with `visibility = tier_gated, min_tier = ai_native_expert` (rank 3).
+- Seed: Agency A at `tier = om_agency` (rank 1). OM Marketing publishes material N with `min_tier = ai_native_expert` (rank 3).
 - Agency A fetches P11 → N not visible.
 - Spec #1 admin upgrades Agency A to `ai_native_core` (rank 4). Emits `prm.agency.tier_changed`.
 - `AgencyTierChangeLibraryInvalidator` fires → `cache.deleteByTags(['prm:agency:A:tier:*'])`.
@@ -604,6 +601,7 @@ Mitigation: soft-delete retains the FKs. Any future hard-delete (v2) must delete
 | C3 — B8 CaseStudy admin + topics dictionary seed | Done | 2026-05-07 | B8 list with inline publication-flag toggle. B8 detail page (read-only narrative + flag/url editor). Topics dictionary seeded idempotently from `lib/topicsDictionarySeed.ts`. 3 setup-seed jest cases. |
 | C4 — P11 Marketing Library + tier gate | Done | 2026-05-07 | `/api/prm/portal/library` GET with facets; `min_tier` never exposed to portal viewer. `/[id]/download` re-checks publish state + tier gate before issuing the URL. P11 portal page custom React + faceted sidebar. tierRank.test.ts (4 cases). |
 | C5 — Cache invalidators + portal P7/P8 + Spec #5 P10 picker | Done | 2026-05-07 | Four per-feature invalidators (published / unpublished / updated-only-when-published / agency.tier_changed); shared `lib/libraryCache.ts` helper. Portal P7 list + new + edit pages. Spec #5 P10 case-study picker (max 5 checkbox list) replaces the deferred message. POST-MVP `Spec #5 case-study picker` entry trimmed; spec #5 §11 status table updated. 8 invalidator cases. |
+| Spec revision — visibility/audiences removed; allowed_roles[] added; topics UX upgraded | Pending | 2026-05-10 | Mid-implementation review trimmed the MarketingMaterial shape: dropped the `visibility` enum (collapses into `min_tier IS NULL ⇒ all partners`), dropped `audiences[]` (deferred to a future feature, tracked at [#42](https://github.com/matgren/oss-prm/issues/42)), added `allowed_roles[]` (jsonb of partner role slugs from `src/modules/prm/data/validators.ts` `ROLE_SLUGS`; empty ⇒ all roles within an at-tier agency). Cache stays tier-keyed; role gate applied post-cache by the route handler. Topics field UX: backend new/edit form switches from comma-separated text to a closed-list `TagsInput` backed by the topics dictionary (matches `caseStudyForm.tsx` pattern for technologies/services); data shape `topics: string[]` unchanged. Schema/code follow-ups: drop `visibility` column, drop `chk_tier_gated_requires_min_tier`, drop `audiences` column, add `allowed_roles JSONB NOT NULL DEFAULT '[]'`, replace the live-row index with `(published_at, min_tier_rank)`. |
 
 ### Run plan reference
 

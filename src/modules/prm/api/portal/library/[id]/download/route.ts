@@ -17,9 +17,10 @@ import { z } from 'zod'
  *
  *   GET /api/prm/portal/library/:id/download
  *
- * Re-checks the publish state + tier gate before issuing the redirect.
- * This closes the window where an old URL could grant post-unpublish
- * access, even if the cached library list still references the row.
+ * Re-checks publish state + tier gate + role gate before issuing the
+ * redirect. Closes the window where an old URL could grant post-unpublish
+ * (or post-role-restriction) access, even if the cached library list still
+ * references the row.
  *
  * The actual download URL is built by the `attachments` module's
  * `buildAttachmentImageUrl` helper. v1 returns the canonical path for
@@ -62,6 +63,7 @@ export async function GET(req: Request, ctx: RouteContext) {
   const em = container.resolve('em') as EntityManager
   const agency = await em.findOne(Agency, { id: member.agencyId } as any)
   const viewerRank = tierRank(agency?.tier ?? null)
+  const viewerRoleSlug = member.roleSlug ?? null
   const material = await em.findOne(MarketingMaterial, {
     id: params.id,
     organizationId: auth.orgId,
@@ -72,8 +74,18 @@ export async function GET(req: Request, ctx: RouteContext) {
   if (!material.publishedAt || material.unpublishedAt) {
     return NextResponse.json({ ok: false, error: 'Not available' }, { status: 404 })
   }
-  if (material.visibility === 'tier_gated') {
+  // Tier gate: when min_tier is set, viewer must have a tier of at least
+  // the same rank. A viewer with no tier (`viewerRank === null`) cannot
+  // access tier-gated rows.
+  if (material.minTier) {
     if (viewerRank === null || (material.minTierRank ?? Infinity) > viewerRank) {
+      return NextResponse.json({ ok: false, error: 'Not available' }, { status: 404 })
+    }
+  }
+  // Role gate: when allowed_roles is non-empty, viewer's role must intersect.
+  const allowedRoles = material.allowedRoles ?? []
+  if (allowedRoles.length > 0) {
+    if (!viewerRoleSlug || !allowedRoles.includes(viewerRoleSlug)) {
       return NextResponse.json({ ok: false, error: 'Not available' }, { status: 404 })
     }
   }
@@ -92,7 +104,7 @@ export async function GET(req: Request, ctx: RouteContext) {
 
 const getDoc: OpenApiMethodDoc = {
   summary: 'Resolve marketing material download URL',
-  description: 'Re-checks publish + tier gate at request time. Returns the attachment download URL.',
+  description: 'Re-checks publish + tier + role gate at request time. Returns the attachment download URL.',
   tags: ['PRM Portal Library'],
   responses: [
     {
@@ -100,7 +112,7 @@ const getDoc: OpenApiMethodDoc = {
       description: 'OK',
       schema: z.object({ ok: z.literal(true), download: z.object({ url: z.string(), attachmentId: z.string().uuid() }) }),
     },
-    { status: 404, description: 'Not available (unpublished or tier-gated below viewer)' },
+    { status: 404, description: 'Not available (unpublished, tier-gated below viewer, or role-restricted)' },
   ],
 }
 

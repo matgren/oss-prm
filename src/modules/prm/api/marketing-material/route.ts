@@ -40,12 +40,12 @@ export async function GET(req: Request) {
       { status: 400 },
     )
   }
-  const { page, pageSize, materialType, visibility, isPublished, q } = parsed.data
+  const { page, pageSize, materialType, isPublished, q } = parsed.data
   const container = await createRequestContainer()
   const service = container.resolve('marketingMaterialService') as MarketingMaterialService
   const { items, total } = await service.list(
     { organizationId: auth.orgId },
-    { materialType, visibility, isPublished, q, limit: pageSize, offset: (page - 1) * pageSize },
+    { materialType, isPublished, q, limit: pageSize, offset: (page - 1) * pageSize },
   )
   return NextResponse.json({
     ok: true,

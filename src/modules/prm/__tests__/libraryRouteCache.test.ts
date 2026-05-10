@@ -112,11 +112,10 @@ function makeMaterial(id: string) {
     title: `Material ${id}`,
     description: null,
     materialType: 'playbook',
-    visibility: 'all_partners',
     minTier: null,
     minTierRank: null,
     topics: ['ai'],
-    audiences: ['cmo'],
+    allowedRoles: [] as string[],
     primaryAttachmentId: 'att-1',
     publishedAt: new Date('2026-01-01T00:00:00Z'),
     unpublishedAt: null,
@@ -126,7 +125,11 @@ function makeMaterial(id: string) {
 function makeContainerState(opts: { agencyId: string; tier: string | null }): ContainerState {
   const cache = new InMemoryCache()
   const memberService = {
-    findByCustomerUserId: jest.fn(async () => ({ agencyId: opts.agencyId, customerUserId: USER })),
+    findByCustomerUserId: jest.fn(async () => ({
+      agencyId: opts.agencyId,
+      customerUserId: USER,
+      roleSlug: 'partner_admin',
+    })),
   }
   const em = {
     findOne: jest.fn(async (_Ctor: any, where: any) => {
@@ -206,7 +209,6 @@ describe('GET /api/prm/portal/library — cache write-side (Spec #7 §3.4)', () 
       {
         material_id: 'm-2',
         organization_id: ORG,
-        visibility: 'all_partners',
         min_tier: null,
         published_at: new Date().toISOString(),
       },

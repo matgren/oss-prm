@@ -6,6 +6,7 @@ import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { TagsInput, type TagsInputOption } from '@open-mercato/ui/backend/inputs/TagsInput'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
@@ -29,10 +30,9 @@ type MaterialDto = {
   title: string
   description: string | null
   materialType: string
-  visibility: string
   minTier: string | null
   topics: string[]
-  audiences: string[]
+  allowedRoles: string[]
   primaryAttachmentId: string
   attachments: AttachmentDto[]
   publishedAt: string | null
@@ -44,15 +44,22 @@ const formSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().max(2_000).optional(),
   materialType: z.enum(['playbook', 'sales_deck', 'video', 'guide', 'case_study_template', 'other']),
-  visibility: z.enum(['all_partners', 'tier_gated']),
   minTier: z.string().optional(),
-  topicsCsv: z.string().max(2_000).optional(),
-  audiencesCsv: z.string().max(500).optional(),
+  topics: z.array(z.string()).default([]),
+  allowedRoles: z.array(z.enum(['partner_admin', 'partner_member'])).default([]),
 })
 
 type FormValues = z.infer<typeof formSchema>
 
-const VALID_AUDIENCES = new Set(['new_partner', 'active_partner', 'tier_progressing'])
+const ROLE_OPTIONS: TagsInputOption[] = [
+  { value: 'partner_admin', label: 'Partner admin' },
+  { value: 'partner_member', label: 'Partner member' },
+]
+
+type DictionaryEntriesResponse = {
+  ok: true
+  items: TagsInputOption[]
+}
 
 const dtoToPickerFile = (a: AttachmentDto): PickerFile => ({
   id: a.id,
@@ -74,6 +81,11 @@ export default function EditMarketingMaterialPage() {
   const pickerValueRef = React.useRef<PickerValue | null>(null)
   pickerValueRef.current = pickerValue
 
+  // TagsInput state mirrored from the loaded DTO once it arrives.
+  const [topicsValue, setTopicsValue] = React.useState<string[]>([])
+  const [topicsOptions, setTopicsOptions] = React.useState<TagsInputOption[]>([])
+  const [allowedRolesValue, setAllowedRolesValue] = React.useState<string[]>([])
+
   // Stable per-mount draftRecordId for any NEW files added on the edit page —
   // the saved material's existing attachments use the material id, freshly
   // uploaded ones use this draft id and get rebound on PUT.
@@ -82,6 +94,24 @@ export default function EditMarketingMaterialPage() {
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
   )
+
+  React.useEffect(() => {
+    let cancelled = false
+    void apiCall<DictionaryEntriesResponse>('/api/prm/dictionaries/topics/entries')
+      .then((res) => {
+        if (cancelled) return
+        if (res.ok && res.result?.ok && Array.isArray(res.result.items)) {
+          setTopicsOptions(res.result.items)
+        }
+      })
+      .catch(() => {
+        // Silently degrade to empty suggestions — closed-list TagsInput still
+        // renders (just without autocomplete) so the form remains usable.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const load = React.useCallback(async () => {
     if (!id) return
@@ -99,6 +129,8 @@ export default function EditMarketingMaterialPage() {
         attachments: (m.attachments ?? []).map(dtoToPickerFile),
         removedBoundIds: [],
       })
+      setTopicsValue(Array.isArray(m.topics) ? m.topics : [])
+      setAllowedRolesValue(Array.isArray(m.allowedRoles) ? m.allowedRoles : [])
     } catch (err) {
       setError(
         err instanceof Error
@@ -151,10 +183,9 @@ export default function EditMarketingMaterialPage() {
     title: data.title,
     description: data.description ?? '',
     materialType: data.materialType as FormValues['materialType'],
-    visibility: data.visibility as FormValues['visibility'],
     minTier: data.minTier ?? '',
-    topicsCsv: data.topics.join(', '),
-    audiencesCsv: data.audiences.join(', '),
+    topics: topicsValue,
+    allowedRoles: allowedRolesValue as FormValues['allowedRoles'],
   }
 
   return (
@@ -199,15 +230,6 @@ export default function EditMarketingMaterialPage() {
               ],
             },
             {
-              id: 'visibility',
-              label: t('prm.backend.marketingMaterials.form.visibility', 'Visibility'),
-              type: 'select',
-              options: [
-                { value: 'all_partners', label: 'All partners' },
-                { value: 'tier_gated', label: 'Tier-gated' },
-              ],
-            },
-            {
               id: 'minTier',
               label: t('prm.backend.marketingMaterials.form.minTier', 'Minimum tier'),
               type: 'select',
@@ -218,16 +240,45 @@ export default function EditMarketingMaterialPage() {
                 { value: 'ai_native_expert', label: 'ai_native_expert' },
                 { value: 'ai_native_core', label: 'ai_native_core' },
               ],
+              description: t(
+                'prm.backend.marketingMaterials.form.minTier.help',
+                'Optional. Leave empty to allow all partners.',
+              ),
             },
             {
-              id: 'topicsCsv',
-              label: t('prm.backend.marketingMaterials.form.topics', 'Topics (comma-separated slugs)'),
-              type: 'text',
+              id: 'topics',
+              label: t('prm.backend.marketingMaterials.form.topics', 'Topics'),
+              type: 'custom',
+              component: () => (
+                <TagsInput
+                  value={topicsValue}
+                  onChange={setTopicsValue}
+                  suggestions={topicsOptions}
+                  allowCustomValues={false}
+                  placeholder={t('prm.backend.marketingMaterials.form.topics.placeholder', 'Pick topics…')}
+                />
+              ),
             },
             {
-              id: 'audiencesCsv',
-              label: t('prm.backend.marketingMaterials.form.audiences', 'Audiences'),
-              type: 'text',
+              id: 'allowedRoles',
+              label: t('prm.backend.marketingMaterials.form.allowedRoles', 'Visible to roles'),
+              type: 'custom',
+              description: t(
+                'prm.backend.marketingMaterials.form.allowedRoles.help',
+                'Leave empty to make visible to all partner roles.',
+              ),
+              component: () => (
+                <TagsInput
+                  value={allowedRolesValue}
+                  onChange={setAllowedRolesValue}
+                  suggestions={ROLE_OPTIONS}
+                  allowCustomValues={false}
+                  placeholder={t(
+                    'prm.backend.marketingMaterials.form.allowedRoles.placeholder',
+                    'Pick roles…',
+                  )}
+                />
+              ),
             },
             {
               id: '__attachments',
@@ -256,14 +307,6 @@ export default function EditMarketingMaterialPage() {
               )
               return
             }
-            const topics = (values.topicsCsv ?? '')
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean)
-            const audiences = (values.audiencesCsv ?? '')
-              .split(',')
-              .map((s) => s.trim())
-              .filter((s) => VALID_AUDIENCES.has(s))
             // New files staged this session — anything still flagged 'staged'
             // needs to be rebound to the material on the server side.
             const stagedExtras = current.attachments
@@ -283,10 +326,9 @@ export default function EditMarketingMaterialPage() {
                   title: values.title,
                   description: values.description || null,
                   materialType: values.materialType,
-                  visibility: values.visibility,
-                  minTier: values.visibility === 'tier_gated' ? values.minTier || null : null,
-                  topics,
-                  audiences,
+                  minTier: values.minTier || null,
+                  topics: topicsValue,
+                  allowedRoles: allowedRolesValue,
                   primaryAttachmentId: current.primaryAttachmentId,
                   extraAttachmentIds,
                   removedAttachmentIds: current.removedBoundIds,

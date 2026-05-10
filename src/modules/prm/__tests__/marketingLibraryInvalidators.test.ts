@@ -31,7 +31,6 @@ describe('Cache invalidator subscribers (Spec #7 §4.3 / OQ-019)', () => {
       {
         material_id: 'm-1',
         organization_id: 'o-1',
-        visibility: 'all_partners',
         min_tier: null,
         published_at: new Date().toISOString(),
       },
@@ -71,8 +70,8 @@ describe('Cache invalidator subscribers (Spec #7 §4.3 / OQ-019)', () => {
         material_id: 'm-1',
         organization_id: 'o-1',
         material_type: 'playbook',
-        visibility: 'all_partners',
         min_tier: null,
+        allowed_roles: [],
       },
       makeCtx(cache, em),
     )
@@ -95,8 +94,8 @@ describe('Cache invalidator subscribers (Spec #7 §4.3 / OQ-019)', () => {
         material_id: 'm-1',
         organization_id: 'o-1',
         material_type: 'playbook',
-        visibility: 'all_partners',
         min_tier: null,
+        allowed_roles: [],
       },
       makeCtx(cache, em),
     )
@@ -160,7 +159,6 @@ describe('Cache invalidator subscribers (Spec #7 §4.3 / OQ-019)', () => {
         {
           material_id: 'm-1',
           organization_id: 'o-1',
-          visibility: 'all_partners',
           min_tier: null,
           published_at: new Date().toISOString(),
         },

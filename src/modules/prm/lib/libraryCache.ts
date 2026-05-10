@@ -66,7 +66,9 @@ export function allAgencyTierTags(agencyId: string): string[] {
 
 /**
  * Canonical params used in the cache-key hash. The route's parsed query
- * shape (page, pageSize, materialType, topics[], audiences[]).
+ * shape (page, pageSize, materialType, topics[]) plus the viewer's role
+ * slugs so role-gated content does not bleed across roles within one
+ * agency+tier cache namespace.
  *
  * Arrays are sorted before hashing so query-string array-order doesn't
  * fracture the cache (e.g. `?topics=a&topics=b` and `?topics=b&topics=a`
@@ -77,7 +79,7 @@ export type LibraryCacheKeyParams = {
   pageSize: number
   materialType?: string | null | undefined
   topics?: readonly string[] | null | undefined
-  audiences?: readonly string[] | null | undefined
+  viewerRoleSlugs?: readonly string[] | null | undefined
 }
 
 /**
@@ -101,7 +103,7 @@ export function buildLibraryCacheKey(input: {
     pageSize: params.pageSize,
     materialType: params.materialType ?? null,
     topics: [...(params.topics ?? [])].sort(),
-    audiences: [...(params.audiences ?? [])].sort(),
+    viewerRoleSlugs: [...(params.viewerRoleSlugs ?? [])].sort(),
   }
   const hash = createHash('sha1').update(JSON.stringify(canonical)).digest('hex')
   const tierKey = tier ?? 'null'

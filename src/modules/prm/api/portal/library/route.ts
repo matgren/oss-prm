@@ -138,7 +138,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       items: [],
-      facets: { material_types: [], topics: [], audiences: [] },
+      facets: { material_types: [], topics: [] },
       page: 1,
       pageSize: 50,
       total: 0,
@@ -149,14 +149,14 @@ export async function GET(req: Request) {
   const em = container.resolve('em') as EntityManager
   const agency = await em.findOne(Agency, { id: member.agencyId } as any)
   const viewerTier = agency?.tier ?? null
+  // Single role slug from the AgencyMember (the canonical mirror of the
+  // customer-role assignment for v1 — partner_admin / partner_member).
+  const viewerRoleSlugs = member.roleSlug ? [member.roleSlug] : []
 
   const url = new URL(req.url)
   const params = Object.fromEntries(url.searchParams.entries())
   if (url.searchParams.has('topics')) {
     ;(params as any).topics = url.searchParams.getAll('topics')
-  }
-  if (url.searchParams.has('audiences')) {
-    ;(params as any).audiences = url.searchParams.getAll('audiences')
   }
   const parsed = listLibraryPortalSchema.safeParse(params)
   if (!parsed.success) {
@@ -165,7 +165,7 @@ export async function GET(req: Request) {
       { status: 400 },
     )
   }
-  const { page, pageSize, materialType, topics, audiences } = parsed.data
+  const { page, pageSize, materialType, topics } = parsed.data
 
   // Cache layer. Soft-fail at every point — the §8.4 perf model leans on
   // the cache but correctness leans on the DB query + tier gate.
@@ -179,7 +179,7 @@ export async function GET(req: Request) {
     orgId: auth.orgId,
     agencyId: member.agencyId,
     tier: viewerTier,
-    params: { page, pageSize, materialType, topics, audiences },
+    params: { page, pageSize, materialType, topics, viewerRoleSlugs },
   })
   const cacheTags = [LIBRARY_CACHE_TAG, agencyTierTag(member.agencyId, viewerTier)]
 
@@ -192,17 +192,18 @@ export async function GET(req: Request) {
     {
       materialType,
       topics,
-      audiences,
+      viewerRoleSlugs,
       limit: pageSize,
       offset: (page - 1) * pageSize,
     },
   )
 
-  // Facets are computed across the same tier-gated result set (full set,
-  // not the paginated slice) so the user sees a consistent option list.
+  // Facets are computed across the same tier-gated + role-gated result set
+  // (full set, not the paginated slice) so the user sees a consistent option
+  // list.
   const allForFacets = await service.listPublishedForViewer(
     { organizationId: auth.orgId, viewerTier },
-    { materialType: undefined, topics: undefined, audiences: undefined, limit: 1_000, offset: 0 },
+    { materialType: undefined, topics: undefined, viewerRoleSlugs, limit: 1_000, offset: 0 },
   )
   const facets = computeFacets(allForFacets.items)
 
@@ -222,19 +223,16 @@ export async function GET(req: Request) {
   return NextResponse.json(body)
 }
 
-function computeFacets(rows: ReadonlyArray<{ materialType: string; topics: string[]; audiences: string[] }>) {
+function computeFacets(rows: ReadonlyArray<{ materialType: string; topics: string[] }>) {
   const types = new Map<string, number>()
   const topicsMap = new Map<string, number>()
-  const audiencesMap = new Map<string, number>()
   for (const row of rows) {
     types.set(row.materialType, (types.get(row.materialType) ?? 0) + 1)
     for (const t of row.topics) topicsMap.set(t, (topicsMap.get(t) ?? 0) + 1)
-    for (const a of row.audiences) audiencesMap.set(a, (audiencesMap.get(a) ?? 0) + 1)
   }
   return {
     material_types: [...types.entries()].map(([value, count]) => ({ value, count })),
     topics: [...topicsMap.entries()].map(([value, count]) => ({ value, count })),
-    audiences: [...audiencesMap.entries()].map(([value, count]) => ({ value, count })),
   }
 }
 
@@ -259,7 +257,6 @@ const getDoc: OpenApiMethodDoc = {
         facets: z.object({
           material_types: z.array(z.object({ value: z.string(), count: z.number() })),
           topics: z.array(z.object({ value: z.string(), count: z.number() })),
-          audiences: z.array(z.object({ value: z.string(), count: z.number() })),
         }),
         page: z.number(),
         pageSize: z.number(),

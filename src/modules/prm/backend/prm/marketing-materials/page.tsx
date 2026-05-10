@@ -14,7 +14,6 @@ type MaterialRow = {
   id: string
   title: string
   materialType: string
-  visibility: string
   minTier: string | null
   publishedAt: string | null
   unpublishedAt: string | null
@@ -41,12 +40,6 @@ const TYPE_OPTIONS = [
   { value: 'other', label: 'Other' },
 ] as const
 
-const VISIBILITY_OPTIONS = [
-  { value: '', label: 'All visibilities' },
-  { value: 'all_partners', label: 'All partners' },
-  { value: 'tier_gated', label: 'Tier-gated' },
-] as const
-
 const PUBLISH_OPTIONS = [
   { value: '', label: 'Any state' },
   { value: 'true', label: 'Published' },
@@ -70,7 +63,6 @@ export default function MarketingMaterialsBackendPage() {
   const [total, setTotal] = React.useState(0)
   const [totalPages, setTotalPages] = React.useState(1)
   const [type, setType] = React.useState('')
-  const [visibility, setVisibility] = React.useState('')
   const [isPublished, setIsPublished] = React.useState('')
   const [q, setQ] = React.useState('')
 
@@ -80,7 +72,6 @@ export default function MarketingMaterialsBackendPage() {
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
       if (type) params.set('materialType', type)
-      if (visibility) params.set('visibility', visibility)
       if (isPublished) params.set('isPublished', isPublished)
       if (q.trim()) params.set('q', q.trim())
       const res = await apiCall<ListResponse>(`/api/prm/marketing-material?${params.toString()}`)
@@ -99,7 +90,7 @@ export default function MarketingMaterialsBackendPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, type, visibility, isPublished, q, t])
+  }, [page, pageSize, type, isPublished, q, t])
 
   React.useEffect(() => {
     void load()
@@ -150,11 +141,6 @@ export default function MarketingMaterialsBackendPage() {
         id: 'materialType',
         header: t('prm.backend.marketingMaterials.col.type', 'Type'),
         accessorKey: 'materialType',
-      },
-      {
-        id: 'visibility',
-        header: t('prm.backend.marketingMaterials.col.visibility', 'Visibility'),
-        accessorKey: 'visibility',
       },
       {
         id: 'minTier',
@@ -224,17 +210,6 @@ export default function MarketingMaterialsBackendPage() {
             className="h-9 rounded-md border border-input bg-background px-2 text-sm"
           >
             {TYPE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={visibility}
-            onChange={(e) => setVisibility(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-          >
-            {VISIBILITY_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>

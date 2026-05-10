@@ -1765,22 +1765,6 @@
           "enumItems": [],
           "mappedType": "text"
         },
-        "visibility": {
-          "name": "visibility",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "'all_partners'",
-          "comment": null,
-          "enumItems": [],
-          "mappedType": "text"
-        },
         "min_tier": {
           "name": "min_tier",
           "type": "text",
@@ -1829,8 +1813,8 @@
           "enumItems": [],
           "mappedType": "json"
         },
-        "audiences": {
-          "name": "audiences",
+        "allowed_roles": {
+          "name": "allowed_roles",
           "type": "jsonb",
           "unsigned": false,
           "autoincrement": false,
@@ -1961,16 +1945,6 @@
           ],
           "composite": false,
           "keyName": "prm_marketing_materials_material_type_index",
-          "constraint": false,
-          "primary": false,
-          "unique": false
-        },
-        {
-          "columnNames": [
-            "visibility"
-          ],
-          "composite": false,
-          "keyName": "prm_marketing_materials_visibility_index",
           "constraint": false,
           "primary": false,
           "unique": false
