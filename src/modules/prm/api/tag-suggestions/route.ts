@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { Agency, CaseStudy } from '../../data/entities'
 import { unionTagSlugs } from '../../lib/tagSuggestions'
@@ -42,19 +43,23 @@ export async function GET(req: Request) {
   // their non-deleted case studies. CaseStudy has no tenant_id column — we
   // join via Agency.id list. The collated row set is small at v1 scale; see
   // §14.1 for the deferred UNNEST-based projection swap.
-  const agencies = await em.find(
+  //
+  // `findWithDecryption` is used per the AGENTS.md rule even though
+  // `techCapabilities` / `technologiesUsed` are plain jsonb (not encrypted):
+  // the helper transparently handles the no-encrypted-fields case.
+  const agencies = await findWithDecryption<Agency>(
+    em,
     Agency,
-    { tenantId: auth.tenantId, deletedAt: null },
-    { fields: ['id', 'techCapabilities'] as any },
+    { tenantId: auth.tenantId, deletedAt: null } as any,
   )
   if (agencies.length === 0) {
     return NextResponse.json({ ok: true, items: [] })
   }
   const agencyIds = agencies.map((a) => a.id)
-  const caseStudies = await em.find(
+  const caseStudies = await findWithDecryption<CaseStudy>(
+    em,
     CaseStudy,
-    { agencyId: { $in: agencyIds }, deletedAt: null },
-    { fields: ['id', 'technologiesUsed'] as any },
+    { agencyId: { $in: agencyIds }, deletedAt: null } as any,
   )
 
   const sources: Array<readonly string[] | null | undefined> = [

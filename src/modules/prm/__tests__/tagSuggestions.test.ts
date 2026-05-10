@@ -52,6 +52,17 @@ describe('unionTagSlugs (SPEC-2026-05-11)', () => {
     expect(result.map((r) => r.value)).toEqual(['LangGraph'])
   })
 
+  it('is a pure function — does not throw on entity-like inputs with extra fields', () => {
+    // The tenant-wide endpoint uses `findWithDecryption<Agency>(em, Agency, where)`
+    // which returns full Agency entities. The helper only reads .techCapabilities
+    // / .technologiesUsed / etc. via the array-projection at call sites, so
+    // passing arrays of strings (the projection result) is the contract. This
+    // documents that the helper does NOT introspect entity metadata or react
+    // to entity-only structures.
+    const result = unionTagSlugs([['LangGraph'], ['PyTorch', 'React']])
+    expect(result.map((r) => r.value)).toEqual(['LangGraph', 'PyTorch', 'React'])
+  })
+
   it('handles the tenant-wide multi-agency shape (B-RFP driver scenario)', () => {
     // §5.1.2 — tenant-wide endpoint passes agency profile arrays AND case-study
     // arrays into the helper. The helper treats them uniformly.
