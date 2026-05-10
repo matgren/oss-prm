@@ -85,13 +85,13 @@ Single-phase amendment per Mat §8 (no partial-ship value).
 
 ### Phase 1: Open-vocab tag fields
 
-- [ ] 1.1 Commit 1 — validators (open-vocab Agency + slugStringArray tighten + RFP tighten + array caps)
+- [x] 1.1 Commit 1 — validators (open-vocab Agency + slugStringArray tighten + RFP tighten + array caps) — 345e8be
 - [ ] 1.2 Commit 2 — portal per-agency tag-suggestion endpoint + shared helper
 - [ ] 1.3 Commit 3 — backend per-agency tag-suggestion endpoint (B1 driver)
 - [ ] 1.4 Commit 4 — backend tenant-wide tag-suggestion endpoint (B-RFP driver)
 - [ ] 1.5 Commit 5 — P8 case-study form: swap suggestion source, `allowCustomValues=true`
 - [ ] 1.6 Commit 6 — P3 + B1 + B-RFP UI bundle + Playwright spec `TC-PRM-OPEN-VOCAB-TAGS-001.spec.ts`
-- [ ] 1.7 Validator regression tests: BC-uuid for Agency + tightening for CaseStudy + RFP
+- [x] 1.7 Validator regression tests: BC-uuid for Agency + tightening for CaseStudy + MarketingMaterial + RFP — 345e8be (bundled with commit 1)
 - [ ] 1.8 Validation gate: `yarn generate` / `yarn typecheck` / `yarn jest` PRM scope / `yarn test:integration:ephemeral --grep TC-PRM-OPEN-VOCAB-TAGS-001` / `yarn lint` / i18n keys / manual smoke §8.4
 - [ ] 1.9 Update spec status DRAFT → IMPLEMENTED with the Implementation Status block populated
 
