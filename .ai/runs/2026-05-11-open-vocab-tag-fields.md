@@ -86,7 +86,7 @@ Single-phase amendment per Mat §8 (no partial-ship value).
 ### Phase 1: Open-vocab tag fields
 
 - [x] 1.1 Commit 1 — validators (open-vocab Agency + slugStringArray tighten + RFP tighten + array caps) — 345e8be
-- [ ] 1.2 Commit 2 — portal per-agency tag-suggestion endpoint + shared helper
+- [x] 1.2 Commit 2 — portal per-agency tag-suggestion endpoint + shared helper — 48f8ce7
 - [ ] 1.3 Commit 3 — backend per-agency tag-suggestion endpoint (B1 driver)
 - [ ] 1.4 Commit 4 — backend tenant-wide tag-suggestion endpoint (B-RFP driver)
 - [ ] 1.5 Commit 5 — P8 case-study form: swap suggestion source, `allowCustomValues=true`
