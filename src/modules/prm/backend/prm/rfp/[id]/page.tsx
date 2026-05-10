@@ -1,4 +1,50 @@
 'use client'
+/**
+ * Why this page does NOT use `CrudForm` + `updateCrud` (deviation auditable
+ * against commit 20ceeb7).
+ *
+ * The RFP draft editor needs **dynamic dependent-field rendering** driven by
+ * live form state: when `eligibility_filter` is `by_min_tier`, the `minTier`
+ * select must be visible; when it's `explicit`, the `explicitAgencyIds`
+ * textarea must be visible; otherwise both are hidden. The companion-field
+ * rules (server `updateRfpDraftSchema`) reject submissions where the wrong
+ * companion is populated, so the UI must hide the irrelevant ones — not just
+ * show them with a hint label.
+ *
+ * `CrudForm` (`@open-mercato/ui/backend/CrudForm`) accepts `fields` as a
+ * **static `CrudField[]` array**. `CrudFieldBase` (lines 121-131 of
+ * `node_modules/@open-mercato/ui/src/backend/CrudForm.tsx`) does not expose
+ * `visibleWhen` / `showIf` / `dependsOn`. The `visibleWhen` rule **only**
+ * applies to UMES-injected fields (`InjectionFieldDefinition` at
+ * `@open-mercato/shared/src/modules/widgets/injection.ts:315`) — fields that
+ * downstream modules add via injection. The host page's own field list has
+ * no equivalent hook.
+ *
+ * The sibling create page (`new/page.tsx`) works around this by always
+ * rendering `minTier` + `explicitAgencyIds` and folding the condition into
+ * the field label ("(when filter = by_min_tier)"). That's a UX regression we
+ * deliberately don't repeat on the edit page — once a draft has a real
+ * eligibility filter chosen, hiding the irrelevant companion is materially
+ * clearer.
+ *
+ * Refactor paths considered and rejected:
+ *   1. Adopt the create page's compromise — regresses UX with no offsetting
+ *      consistency win (the two pages are still different surfaces).
+ *   2. Wrap `CrudForm` in a custom adapter that rebuilds `fields` on every
+ *      keystroke — adds ~150 LOC of indirection for a single dynamic rule.
+ *   3. Use a custom `CrudFormGroup.component` callback — the body of the
+ *      group becomes hand-rolled JSX inside `CrudForm` chrome, which is
+ *      "inline form inside a CrudForm shell" rather than "CrudForm".
+ *
+ * Trade-off owned: this page hand-rolls field state + `apiCallOrThrow`
+ * PATCH instead of `updateCrud`, with explicit camelCase→snake_case mapping
+ * matching the create page's `onSubmit`. The action surface (publish,
+ * unpublish, close, reopen, delete) lives outside any form and would not be
+ * served by `CrudForm` regardless.
+ *
+ * Re-evaluate this decision when `CrudForm` ships per-field `visibleWhen`
+ * for non-injected fields. Until then, do NOT migrate this page.
+ */
 import * as React from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
