@@ -106,7 +106,7 @@ describe('AgencyService', () => {
     const svc = new AgencyService(em as any)
     await expect(
       svc.createAgencyWithOrganization(
-        { name: 'Acme', slug: 'acme', tier: 'om_agency', headquartersCountry: 'US' },
+        { name: 'Acme', slug: 'acme', tier: 'om_agency' },
         { tenantId: 'tenant-1' },
       ),
     ).rejects.toMatchObject({ code: PRM_ERROR_CODES.AGENCY_SLUG_TAKEN, status: 409 })
@@ -119,7 +119,7 @@ describe('AgencyService', () => {
     const svc = new AgencyService(em as any)
     await expect(
       svc.createAgencyWithOrganization(
-        { name: 'Acme', slug: 'acme', tier: 'om_agency', headquartersCountry: 'US' },
+        { name: 'Acme', slug: 'acme', tier: 'om_agency' },
         { tenantId: 'tenant-1' },
       ),
     ).rejects.toBeInstanceOf(PrmDomainError)
@@ -130,7 +130,7 @@ describe('AgencyService', () => {
     const svc = new AgencyService(em as any)
     await expect(
       svc.createAgencyWithOrganization(
-        { name: 'Acme', slug: 'acme', tier: 'om_agency', headquartersCountry: 'US' },
+        { name: 'Acme', slug: 'acme', tier: 'om_agency' },
         { tenantId: 'tenant-missing' },
       ),
     ).rejects.toMatchObject({ status: 403 })
@@ -153,7 +153,7 @@ describe('AgencyService', () => {
 
       await expect(
         svc.createAgencyWithOrganization(
-          { name: 'Acme', slug: 'acme', tier: 'om_agency', headquartersCountry: 'US' },
+          { name: 'Acme', slug: 'acme', tier: 'om_agency' },
           { tenantId: 'tenant-1' },
         ),
       ).rejects.toMatchObject({ code: PRM_ERROR_CODES.AGENCY_SLUG_TAKEN, status: 409 })

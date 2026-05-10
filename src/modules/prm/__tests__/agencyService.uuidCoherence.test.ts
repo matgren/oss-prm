@@ -198,7 +198,7 @@ describe('AgencyService.createAgencyWithOrganization — UUID coherence (POST-MV
     const { em, svc } = makeServiceWithStrictEm()
 
     const agency = await svc.createAgencyWithOrganization(
-      { name: 'Acme', slug: 'acme', tier: 'om_agency', headquartersCountry: 'US' },
+      { name: 'Acme', slug: 'acme', tier: 'om_agency' },
       { tenantId: TENANT_ID },
     )
 
@@ -229,7 +229,7 @@ describe('AgencyService.createAgencyWithOrganization — UUID coherence (POST-MV
     const { em, svc } = makeServiceWithStrictEm()
 
     await svc.createAgencyWithOrganization(
-      { name: 'Acme', slug: 'acme', tier: 'om_agency', headquartersCountry: 'US' },
+      { name: 'Acme', slug: 'acme', tier: 'om_agency' },
       { tenantId: TENANT_ID },
     )
 
@@ -257,7 +257,7 @@ describe('AgencyService.createAgencyWithOrganization — UUID coherence (POST-MV
     const { em, svc } = makeServiceWithStrictEm()
 
     await svc.createAgencyWithOrganization(
-      { name: 'Acme', slug: 'acme', tier: 'om_agency', headquartersCountry: 'US' },
+      { name: 'Acme', slug: 'acme', tier: 'om_agency' },
       { tenantId: TENANT_ID },
     )
 
@@ -278,11 +278,11 @@ describe('AgencyService.createAgencyWithOrganization — UUID coherence (POST-MV
     const { em, svc } = makeServiceWithStrictEm()
 
     await svc.createAgencyWithOrganization(
-      { name: 'Acme', slug: 'acme', tier: 'om_agency', headquartersCountry: 'US' },
+      { name: 'Acme', slug: 'acme', tier: 'om_agency' },
       { tenantId: TENANT_ID },
     )
     await svc.createAgencyWithOrganization(
-      { name: 'Beta', slug: 'beta', tier: 'om_agency', headquartersCountry: 'US' },
+      { name: 'Beta', slug: 'beta', tier: 'om_agency' },
       { tenantId: TENANT_ID },
     )
 

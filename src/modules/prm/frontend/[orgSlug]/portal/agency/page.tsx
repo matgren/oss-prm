@@ -17,7 +17,7 @@ type AgencyView = {
   description: string | null
   websiteUrl: string | null
   logoUrl: string | null
-  headquartersCountry: string
+  headquartersCountry: string | null
   headquartersCity: string | null
   teamSizeBucket: string | null
   industries: string[]
@@ -45,6 +45,7 @@ export default function PortalAgencyProfilePage() {
     name: '',
     description: '',
     websiteUrl: '',
+    headquartersCountry: '',
     headquartersCity: '',
     teamSizeBucket: '',
   })
@@ -71,6 +72,7 @@ export default function PortalAgencyProfilePage() {
         name: a.name,
         description: a.description ?? '',
         websiteUrl: a.websiteUrl ?? '',
+        headquartersCountry: a.headquartersCountry ?? '',
         headquartersCity: a.headquartersCity ?? '',
         teamSizeBucket: a.teamSizeBucket ?? '',
       })
@@ -97,16 +99,19 @@ export default function PortalAgencyProfilePage() {
     event.preventDefault()
     setSaving(true)
     try {
+      const country = form.headquartersCountry.trim()
+      const body: Record<string, unknown> = {
+        name: form.name,
+        description: form.description || null,
+        websiteUrl: form.websiteUrl || null,
+        headquartersCity: form.headquartersCity || null,
+        teamSizeBucket: form.teamSizeBucket || null,
+      }
+      if (country) body.headquartersCountry = country.toUpperCase()
       await apiCallOrThrow(`/api/prm/portal/agency/${agencyId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          description: form.description || null,
-          websiteUrl: form.websiteUrl || null,
-          headquartersCity: form.headquartersCity || null,
-          teamSizeBucket: form.teamSizeBucket || null,
-        }),
+        body: JSON.stringify(body),
       })
       flash(t('prm.portal.agency.saved', 'Profile saved.'), 'success')
       await load()
@@ -180,6 +185,21 @@ export default function PortalAgencyProfilePage() {
             value={form.websiteUrl}
             onChange={(e) => setForm((f) => ({ ...f, websiteUrl: e.target.value }))}
           />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-muted-foreground">
+            {t('prm.portal.agency.fields.country', 'Headquarters country')}
+          </span>
+          <Input
+            value={form.headquartersCountry}
+            maxLength={2}
+            placeholder="US"
+            pattern="[A-Za-z]{2}"
+            onChange={(e) => setForm((f) => ({ ...f, headquartersCountry: e.target.value }))}
+          />
+          <span className="text-xs text-muted-foreground">
+            {t('prm.portal.agency.fields.country.help', 'ISO-3166 alpha-2 code (e.g. US, GB, PL).')}
+          </span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-muted-foreground">{t('prm.portal.agency.fields.city', 'Headquarters city')}</span>

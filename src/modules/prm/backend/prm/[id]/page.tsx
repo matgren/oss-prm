@@ -19,7 +19,7 @@ type AgencyDetail = {
   description: string | null
   websiteUrl: string | null
   logoUrl: string | null
-  headquartersCountry: string
+  headquartersCountry: string | null
   headquartersCity: string | null
   teamSizeBucket: string | null
   industries: string[]
@@ -47,14 +47,11 @@ type AgencyMember = {
   githubProfile: string | null
 }
 
-const updateSchema = z.object({
-  name: z.string().min(1).max(120),
-  description: z.string().max(8000).nullable().optional(),
-  websiteUrl: z.string().url().max(500).nullable().optional().or(z.literal('')),
-  logoUrl: z.string().max(2000).nullable().optional().or(z.literal('')),
-  headquartersCountry: z.string().length(2).regex(/^[A-Z]{2}$/),
-  headquartersCity: z.string().max(120).nullable().optional().or(z.literal('')),
-  teamSizeBucket: z.enum(['1-5', '6-20', '21-50', '51-100', '100+']).nullable().optional(),
+/**
+ * "Status" tab — admin-only fields. OM staff edits these; portal users cannot.
+ * Mirrors the `_prm` block returned by the portal route + the ADMIN_ONLY_AGENCY_FIELDS set.
+ */
+const statusSchema = z.object({
   tier: z.enum(['om_agency', 'ai_native', 'ai_native_expert', 'ai_native_core']),
   status: z.enum(['active', 'historical']),
   contractSigned: z.boolean(),
@@ -62,7 +59,29 @@ const updateSchema = z.object({
   onboarded: z.boolean(),
 })
 
-type UpdateValues = z.infer<typeof updateSchema>
+type StatusValues = z.infer<typeof statusSchema>
+
+/**
+ * "Profile" tab — agency-admin owned data. OM staff can edit too (mirrors the
+ * case-studies pattern where staff have a write override). Matches the field
+ * set exposed by the portal own-agency form.
+ */
+const profileSchema = z.object({
+  name: z.string().min(1).max(120),
+  description: z.string().max(8000).nullable().optional(),
+  websiteUrl: z.string().url().max(500).nullable().optional().or(z.literal('')),
+  logoUrl: z.string().max(2000).nullable().optional().or(z.literal('')),
+  headquartersCountry: z
+    .string()
+    .length(2)
+    .regex(/^[A-Z]{2}$/)
+    .optional()
+    .or(z.literal('')),
+  headquartersCity: z.string().max(120).nullable().optional().or(z.literal('')),
+  teamSizeBucket: z.enum(['1-5', '6-20', '21-50', '51-100', '100+']).nullable().optional(),
+})
+
+type ProfileValues = z.infer<typeof profileSchema>
 
 const inviteSchema = z.object({
   firstName: z.string().min(1).max(80),
@@ -104,7 +123,7 @@ export default function AgencyDetailPage() {
   const [members, setMembers] = React.useState<AgencyMember[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
-  const [tab, setTab] = React.useState<'profile' | 'members'>('profile')
+  const [tab, setTab] = React.useState<'status' | 'profile' | 'members'>('status')
 
   const loadAgency = React.useCallback(async () => {
     setLoading(true)
@@ -159,6 +178,18 @@ export default function AgencyDetailPage() {
               size="sm"
               className={cn(
                 'h-auto rounded-none border-b-2 px-3 py-2 text-sm hover:bg-transparent',
+                tab === 'status' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground',
+              )}
+              onClick={() => setTab('status')}
+            >
+              {t('prm.agencies.tab.status', 'Status')}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'h-auto rounded-none border-b-2 px-3 py-2 text-sm hover:bg-transparent',
                 tab === 'profile' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground',
               )}
               onClick={() => setTab('profile')}
@@ -180,15 +211,80 @@ export default function AgencyDetailPage() {
           </nav>
         </div>
 
-        {tab === 'profile' ? (
-          <CrudForm<UpdateValues>
-            schema={updateSchema}
+        {tab === 'status' ? (
+          <CrudForm<StatusValues>
+            schema={statusSchema}
+            fields={[
+              {
+                id: 'tier',
+                label: t('prm.agencies.fields.tier', 'Tier'),
+                type: 'select',
+                required: true,
+                options: [
+                  { value: 'om_agency', label: 'OM Agency' },
+                  { value: 'ai_native', label: 'AI Native' },
+                  { value: 'ai_native_expert', label: 'AI Native Expert' },
+                  { value: 'ai_native_core', label: 'AI Native Core' },
+                ],
+                description: t(
+                  'prm.agencies.fields.tier.help',
+                  'Admin-only — controls Marketing visibility and tier widgets.',
+                ),
+              },
+              {
+                id: 'status',
+                label: t('prm.agencies.fields.status', 'Status (admin-only)'),
+                type: 'select',
+                required: true,
+                options: [
+                  { value: 'active', label: 'Active' },
+                  { value: 'historical', label: 'Historical' },
+                ],
+              },
+              { id: 'contractSigned', label: t('prm.agencies.fields.contract', 'Contract signed (admin-only)'), type: 'checkbox' },
+              { id: 'ndaSigned', label: t('prm.agencies.fields.nda', 'NDA signed (admin-only)'), type: 'checkbox' },
+              { id: 'onboarded', label: t('prm.agencies.fields.onboarded', 'Onboarded (admin-only)'), type: 'checkbox' },
+            ]}
+            initialValues={{
+              tier: agency.tier as StatusValues['tier'],
+              status: agency.status as StatusValues['status'],
+              contractSigned: agency.contractSigned,
+              ndaSigned: agency.ndaSigned,
+              onboarded: agency.onboarded,
+            }}
+            cancelHref="/backend/prm"
+            onSubmit={async (values) => {
+              await apiCallOrThrow(
+                `/api/prm/agency/${agencyId}`,
+                {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(values),
+                },
+                { errorMessage: t('prm.agencies.detail.flash.error', 'Save failed.') },
+              )
+              flash(t('prm.agencies.detail.flash.saved', 'Agency saved.'), 'success')
+              await loadAgency()
+            }}
+          />
+        ) : tab === 'profile' ? (
+          <CrudForm<ProfileValues>
+            schema={profileSchema}
             fields={[
               { id: 'name', label: t('prm.agencies.fields.name', 'Name'), type: 'text', required: true },
               { id: 'description', label: t('prm.agencies.fields.description', 'Description'), type: 'textarea' },
               { id: 'websiteUrl', label: t('prm.agencies.fields.website', 'Website URL'), type: 'text' },
               { id: 'logoUrl', label: t('prm.agencies.fields.logo', 'Logo URL'), type: 'text' },
-              { id: 'headquartersCountry', label: t('prm.agencies.fields.country', 'Country'), type: 'text', required: true, layout: 'half' },
+              {
+                id: 'headquartersCountry',
+                label: t('prm.agencies.fields.country', 'Country'),
+                type: 'text',
+                layout: 'half',
+                description: t(
+                  'prm.agencies.fields.country.help',
+                  'ISO-3166 alpha-2 (e.g. US). The agency admin normally sets this from the portal; OM staff may also edit it here.',
+                ),
+              },
               { id: 'headquartersCity', label: t('prm.agencies.fields.city', 'City'), type: 'text', layout: 'half' },
               {
                 id: 'teamSizeBucket',
@@ -202,61 +298,34 @@ export default function AgencyDetailPage() {
                   { value: '100+', label: '100+' },
                 ],
               },
-              {
-                id: 'tier',
-                label: t('prm.agencies.fields.tier', 'Tier (admin-only)'),
-                type: 'select',
-                options: [
-                  { value: 'om_agency', label: 'OM Agency' },
-                  { value: 'ai_native', label: 'AI Native' },
-                  { value: 'ai_native_expert', label: 'AI Native Expert' },
-                  { value: 'ai_native_core', label: 'AI Native Core' },
-                ],
-                description: t('prm.agencies.fields.tier.help', 'Admin-only — controls Marketing visibility and tier widgets.'),
-              },
-              {
-                id: 'status',
-                label: t('prm.agencies.fields.status', 'Status (admin-only)'),
-                type: 'select',
-                options: [
-                  { value: 'active', label: 'Active' },
-                  { value: 'historical', label: 'Historical' },
-                ],
-              },
-              { id: 'contractSigned', label: t('prm.agencies.fields.contract', 'Contract signed (admin-only)'), type: 'checkbox' },
-              { id: 'ndaSigned', label: t('prm.agencies.fields.nda', 'NDA signed (admin-only)'), type: 'checkbox' },
-              { id: 'onboarded', label: t('prm.agencies.fields.onboarded', 'Onboarded (admin-only)'), type: 'checkbox' },
             ]}
             initialValues={{
               name: agency.name,
               description: agency.description ?? '',
               websiteUrl: agency.websiteUrl ?? '',
               logoUrl: agency.logoUrl ?? '',
-              headquartersCountry: agency.headquartersCountry,
+              headquartersCountry: agency.headquartersCountry ?? '',
               headquartersCity: agency.headquartersCity ?? '',
-              teamSizeBucket: (agency.teamSizeBucket ?? null) as UpdateValues['teamSizeBucket'],
-              tier: agency.tier as UpdateValues['tier'],
-              status: agency.status as UpdateValues['status'],
-              contractSigned: agency.contractSigned,
-              ndaSigned: agency.ndaSigned,
-              onboarded: agency.onboarded,
+              teamSizeBucket: (agency.teamSizeBucket ?? null) as ProfileValues['teamSizeBucket'],
             }}
             cancelHref="/backend/prm"
             onSubmit={async (values) => {
+              const country = (values.headquartersCountry ?? '').trim()
+              const payload: Record<string, unknown> = {
+                name: values.name,
+                description: values.description || null,
+                websiteUrl: values.websiteUrl || null,
+                logoUrl: values.logoUrl || null,
+                headquartersCity: values.headquartersCity || null,
+                teamSizeBucket: values.teamSizeBucket || null,
+              }
+              if (country) payload.headquartersCountry = country.toUpperCase()
               await apiCallOrThrow(
                 `/api/prm/agency/${agencyId}`,
                 {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    ...values,
-                    description: values.description || null,
-                    websiteUrl: values.websiteUrl || null,
-                    logoUrl: values.logoUrl || null,
-                    headquartersCity: values.headquartersCity || null,
-                    teamSizeBucket: values.teamSizeBucket || null,
-                    headquartersCountry: values.headquartersCountry.toUpperCase(),
-                  }),
+                  body: JSON.stringify(payload),
                 },
                 { errorMessage: t('prm.agencies.detail.flash.error', 'Save failed.') },
               )

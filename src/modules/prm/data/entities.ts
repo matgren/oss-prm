@@ -39,8 +39,8 @@ export class Agency {
   @Property({ name: 'logo_url', type: 'text', nullable: true })
   logoUrl?: string | null
 
-  @Property({ name: 'headquarters_country', type: 'text' })
-  headquartersCountry!: string
+  @Property({ name: 'headquarters_country', type: 'text', nullable: true })
+  headquartersCountry?: string | null
 
   @Property({ name: 'headquarters_city', type: 'text', nullable: true })
   headquartersCity?: string | null

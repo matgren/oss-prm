@@ -16,7 +16,15 @@ const githubHandleRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/
 
 const dictionaryIdArray = z.array(z.string().uuid()).default([])
 
-/** Backend create-agency payload (US1.1). */
+/**
+ * Backend create-agency payload (US1.1).
+ *
+ * Scope: OM staff bootstraps the agency record with identity + admin status.
+ * Profile fields (description, websiteUrl, logoUrl, headquartersCountry,
+ * headquartersCity, teamSizeBucket, industries, services, techCapabilities)
+ * are intentionally NOT here — the agency admin fills them in from the portal
+ * own-agency form (mirrors the case-study admin/portal split).
+ */
 export const createAgencySchema = z.object({
   name: z.string().min(1).max(120),
   slug: z
@@ -25,7 +33,10 @@ export const createAgencySchema = z.object({
     .max(64)
     .regex(slugRegex, 'prm.errors.invalidSlug'),
   tier: z.enum(AGENCY_TIERS).default('om_agency'),
-  headquartersCountry: z.string().length(2).regex(/^[A-Z]{2}$/, 'prm.errors.invalidCountry'),
+  status: z.enum(AGENCY_STATUSES).default('active').optional(),
+  contractSigned: z.boolean().default(false).optional(),
+  ndaSigned: z.boolean().default(false).optional(),
+  onboarded: z.boolean().default(false).optional(),
 })
 
 /** Backend partial update payload (US1.1, US1.3, US1.7). */
@@ -67,6 +78,11 @@ export const updateAgencyPortalSchema = z
     description: z.string().max(8_000).nullable().optional(),
     websiteUrl: z.string().url().max(500).nullable().optional(),
     logoUrl: z.string().max(2_000).nullable().optional(),
+    headquartersCountry: z
+      .string()
+      .length(2)
+      .regex(/^[A-Z]{2}$/, 'prm.errors.invalidCountry')
+      .optional(),
     headquartersCity: z.string().max(120).nullable().optional(),
     teamSizeBucket: z.enum(TEAM_SIZE_BUCKETS).nullable().optional(),
     industries: dictionaryIdArray.optional(),

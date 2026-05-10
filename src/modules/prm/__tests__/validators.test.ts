@@ -16,7 +16,6 @@ describe('PRM validators', () => {
       name: 'Acme',
       slug: 'acme-co',
       tier: 'om_agency',
-      headquartersCountry: 'US',
     })
     expect(ok.success).toBe(true)
 
@@ -24,25 +23,24 @@ describe('PRM validators', () => {
       name: 'Acme',
       slug: 'Bad Slug',
       tier: 'om_agency',
-      headquartersCountry: 'US',
     })
     expect(badSlug.success).toBe(false)
-
-    const badCountry = createAgencySchema.safeParse({
-      name: 'Acme',
-      slug: 'acme-co',
-      tier: 'om_agency',
-      headquartersCountry: 'us',
-    })
-    expect(badCountry.success).toBe(false)
 
     const unknownTier = createAgencySchema.safeParse({
       name: 'Acme',
       slug: 'acme-co',
       tier: 'platinum',
-      headquartersCountry: 'US',
     })
     expect(unknownTier.success).toBe(false)
+  })
+
+  it('portal update validates headquartersCountry (agency admin sets it)', () => {
+    const ok = updateAgencyPortalSchema.safeParse({ headquartersCountry: 'US' })
+    expect(ok.success).toBe(true)
+    const badCase = updateAgencyPortalSchema.safeParse({ headquartersCountry: 'us' })
+    expect(badCase.success).toBe(false)
+    const badLength = updateAgencyPortalSchema.safeParse({ headquartersCountry: 'USA' })
+    expect(badLength.success).toBe(false)
   })
 
   it('rejects unknown fields on portal update (strict)', () => {
