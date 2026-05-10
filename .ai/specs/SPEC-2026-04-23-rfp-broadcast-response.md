@@ -1,5 +1,7 @@
 # SPEC-2026-04-23: RFP Broadcast & Response (Portal-side cluster)
 
+> **AMENDED BY SPEC-2026-05-11 (Open-vocabulary tag fields).** B-RFP draft form — `requiredCapabilities` UX upgrades from comma-separated `<Input>` to `TagsInput` with tenant-wide tag suggestions (OM-staff-only form, no cross-agency leak risk). Validator tightens from `z.array(z.string())` to `openTagSlugArray` (trim + min(1) + max(80) + array max(50)). Saved-draft round-trip works because storage shape (`text[]` / `jsonb`) is unchanged. See `.ai/specs/SPEC-2026-05-11-open-vocab-tag-fields.md`.
+
 > **Cross-spec drift fixed 2026-05-05.** Routes live under `/api/prm/rfp/...` (backend) and `/api/prm/portal/rfp/...` (portal) per the shipped T0/T1/T2 namespace convention (OM auto-discovers from `src/modules/<module>/api/...`). Tables use the `prm_` prefix (`prm_rfps`, `prm_rfp_responses`). The cross-spec `prm_rfps.is_path_b_locked` column called out in Spec #3 §8.4 is owned here. All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
 >
 > **2026-05-05 follow-up:** body paths replaced inline — legacy `/api/{backend,portal}/...` and plural `rfps` mentions corrected to canonical singular `/api/prm/rfp/...` / `/api/prm/portal/rfp/...` throughout. Header now consistent with body.
