@@ -145,7 +145,6 @@ export default function CreateRfpPage() {
               type: 'select',
               layout: 'third',
               options: [
-                { value: '', label: '—' },
                 { value: '<50k', label: '< $50k' },
                 { value: '50k-250k', label: '$50k–$250k' },
                 { value: '250k-1m', label: '$250k–$1M' },
@@ -159,7 +158,6 @@ export default function CreateRfpPage() {
               type: 'select',
               layout: 'third',
               options: [
-                { value: '', label: '—' },
                 { value: '0-3m', label: '0–3 months' },
                 { value: '3-6m', label: '3–6 months' },
                 { value: '6-12m', label: '6–12 months' },
@@ -210,7 +208,6 @@ export default function CreateRfpPage() {
               type: 'select',
               layout: 'half',
               options: [
-                { value: '', label: '—' },
                 { value: 'om_agency', label: 'OM Agency' },
                 { value: 'ai_native', label: 'AI-Native' },
                 { value: 'ai_native_expert', label: 'AI-Native Expert' },
