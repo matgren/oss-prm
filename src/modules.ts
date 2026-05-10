@@ -40,9 +40,14 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'business_rules', from: '@open-mercato/core' },  // workflows/cli.ts + seeds.ts
   { id: 'progress', from: '@open-mercato/core' },        // query_index/subscribers/reindex.ts
 
-  // Platform infrastructure (admin users, audit observability).
+  // Platform infrastructure (admin users, audit observability, cron polling).
+  // `scheduler` is required because `mercato server dev` unconditionally spawns
+  // `mercato scheduler start` when autoSpawnScheduler is true (default) and
+  // queueStrategy === 'local'; without it the dev runtime exits on startup with
+  // `❌ Module not found: "scheduler"`. The npm package is already a dependency.
   { id: 'staff', from: '@open-mercato/core' },
   { id: 'audit_logs', from: '@open-mercato/core' },
+  { id: 'scheduler', from: '@open-mercato/scheduler' },
 
   // PRM application module.
   { id: 'prm', from: '@app' },
