@@ -12,6 +12,8 @@ import { hasFeature } from '@open-mercato/shared/security/features'
 import type { AgencyMemberService } from '../../../lib/agencyMemberService'
 import type { AgencyService } from '../../../lib/agencyService'
 import { computeTierProgress } from '../../../lib/tierRequirements'
+import { getPartnershipYearWindow } from '../../../lib/partnershipYear'
+import type { LicenseDealService } from '../../../lib/licenseDealService'
 import type { AgencyTier } from '../../../data/validators'
 
 /**
@@ -93,8 +95,24 @@ export async function GET(req: Request) {
   const month = parsed.data.month ?? now.getUTCMonth() + 1
   const monthStart = new Date(Date.UTC(year, month - 1, 1))
   const monthEnd = new Date(Date.UTC(year, month, 1))
-  const yearStart = new Date(Date.UTC(year, 0, 1))
-  const yearEnd = new Date(Date.UTC(year + 1, 0, 1))
+
+  // Partnership-year window (SPEC-2026-05-10). When the anchor is set, the
+  // "this year" toggles on WIP / WIC and the MIN window all use this same
+  // window. When null, fall back to calendar year + surface a warning.
+  const partnershipWindow = getPartnershipYearWindow(agency, now)
+  const yearStart = partnershipWindow?.start ?? new Date(Date.UTC(year, 0, 1))
+  const yearEnd = partnershipWindow?.end ?? new Date(Date.UTC(year + 1, 0, 1))
+  const periodWarnings: string[] = partnershipWindow ? [] : ['partnership_start_date_missing']
+
+  // Prior partnership-year window (for the MIN rollover affordance — caption
+  // "Year N-1 closed with X licenses" during the first 30 days of a new year).
+  let priorWindow: { start: Date; end: Date } | null = null
+  if (partnershipWindow && partnershipWindow.yearNumber > 1) {
+    const priorProbe = new Date(partnershipWindow.start)
+    priorProbe.setUTCFullYear(priorProbe.getUTCFullYear() - 1)
+    const prior = getPartnershipYearWindow(agency, priorProbe)
+    if (prior) priorWindow = { start: prior.start, end: prior.end }
+  }
 
   const em = container.resolve('em') as EntityManager
   const knex = em.getKnex()
@@ -227,6 +245,23 @@ export async function GET(req: Request) {
     wic = { awaiting: true, monthlyTotal: 0, yearlyTotal: 0, perMember: [] }
   }
 
+  // --- MIN counts for rollover affordance (SPEC-2026-05-10) ----------------
+  // Only computed when partnershipWindow is present — calendar-year MIN is
+  // already exposed by /api/prm/portal/min, no need to duplicate.
+  let priorYearMinCount: number | null = null
+  if (partnershipWindow && priorWindow) {
+    try {
+      const licenseDealService = container.resolve('licenseDealService') as LicenseDealService
+      const priorDeals = await licenseDealService.listForMinWidget(
+        { tenantId: auth.tenantId, agencyId: agency.id },
+        { yearStart: priorWindow.start, yearEnd: priorWindow.end },
+      )
+      priorYearMinCount = priorDeals.length
+    } catch {
+      priorYearMinCount = null
+    }
+  }
+
   // --- Tier widget ---------------------------------------------------------
   const wipMonthly = Number(wipMonthRow?.count ?? 0)
   const wipYearly = Number(wipYearRow?.count ?? 0)
@@ -253,6 +288,15 @@ export async function GET(req: Request) {
       period: {
         year,
         month,
+        partnershipYear: partnershipWindow
+          ? {
+              start: partnershipWindow.start.toISOString(),
+              end: partnershipWindow.end.toISOString(),
+              number: partnershipWindow.yearNumber,
+              priorYearMinCount,
+            }
+          : null,
+        ...(periodWarnings.length > 0 ? { warnings: periodWarnings } : {}),
       },
       wip: {
         monthly: wipMonthly,

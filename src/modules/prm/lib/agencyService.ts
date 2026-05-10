@@ -223,6 +223,7 @@ export class AgencyService {
       contractSigned: agency.contractSigned,
       ndaSigned: agency.ndaSigned,
       onboarded: agency.onboarded,
+      partnershipStartDate: agency.partnershipStartDate ?? null,
     }
 
     if ('name' in patch && typeof patch.name === 'string') agency.name = patch.name
@@ -252,6 +253,11 @@ export class AgencyService {
     if ('contractSigned' in patch) agency.contractSigned = !!patch.contractSigned
     if ('ndaSigned' in patch) agency.ndaSigned = !!patch.ndaSigned
     if ('onboarded' in patch) agency.onboarded = !!patch.onboarded
+    if ('partnershipStartDate' in patch) {
+      const raw = patch.partnershipStartDate
+      agency.partnershipStartDate =
+        raw == null ? null : new Date(`${String(raw)}T00:00:00Z`)
+    }
     agency.updatedAt = new Date()
     agency.version += 1
 
@@ -302,9 +308,33 @@ export class AgencyService {
         { context: { agencyId: agency.id, tenantId: agency.tenantId } },
       )
     }
+    const beforeAnchorIso = before.partnershipStartDate
+      ? toIsoDate(before.partnershipStartDate)
+      : null
+    const currentAnchorIso = agency.partnershipStartDate
+      ? toIsoDate(agency.partnershipStartDate)
+      : null
+    if (beforeAnchorIso !== currentAnchorIso) {
+      await safeEmit(
+        'prm.agency.partnership_anchor_changed',
+        {
+          agencyId: agency.id,
+          tenantId: agency.tenantId,
+          previous: beforeAnchorIso,
+          current: currentAnchorIso,
+          changedByUserId: scope.userId ?? null,
+        },
+        { context: { agencyId: agency.id, tenantId: agency.tenantId } },
+      )
+    }
 
     return agency
   }
+}
+
+/** Format a Date as YYYY-MM-DD in UTC. */
+function toIsoDate(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
 }
 
 export default AgencyService

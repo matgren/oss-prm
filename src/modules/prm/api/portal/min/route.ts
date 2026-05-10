@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import type { EntityManager } from '@mikro-orm/postgresql'
 import {
   requireCustomerAuth,
   requireCustomerFeature,
@@ -7,9 +8,11 @@ import {
 import { CustomerRbacService } from '@open-mercato/core/modules/customer_accounts/services/customerRbacService'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
+import { Agency } from '../../../data/entities'
 import { portalMinQuerySchema } from '../../../data/validators'
 import type { AgencyMemberService } from '../../../lib/agencyMemberService'
 import type { LicenseDealService } from '../../../lib/licenseDealService'
+import { getPartnershipYearWindow } from '../../../lib/partnershipYear'
 
 /**
  * Portal P2 MIN widget aggregate (Spec #3 §3.2 / US4.5).
@@ -63,16 +66,105 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       year: parsed.data.year ?? new Date().getUTCFullYear(),
+      calendarYear: parsed.data.year ?? new Date().getUTCFullYear(),
+      partnershipYear: null,
+      period: { partnershipYear: null, warnings: ['partnership_start_date_missing'] as const },
       ownCount: 0,
       ownAnnualValueUsd: 0,
       ownDeals: [],
     })
   }
 
+  const em = container.resolve('em') as EntityManager
+  const agency = await em.findOne(Agency, { id: member.agencyId, tenantId: auth.tenantId })
   const now = new Date()
-  const year = parsed.data.year ?? now.getUTCFullYear()
-  const yearStart = new Date(Date.UTC(year, 0, 1))
-  const yearEnd = new Date(Date.UTC(year + 1, 0, 1))
+  const currentCalendarYear = now.getUTCFullYear()
+
+  // Window resolution per SPEC-2026-05-10:
+  //  - ?partnershipYear=N → use partnership-year window (400 if anchor missing).
+  //  - ?year=N → if anchor set: deprecated, reinterpret as the partnership year containing Jan 1 of N.
+  //              if anchor missing: keep calendar-year semantics.
+  //  - neither: current partnership year (if anchor set) or current calendar year.
+  let yearStart: Date
+  let yearEnd: Date
+  let priorStart: Date | null = null
+  let priorEnd: Date | null = null
+  let partnershipYearNumber: number | null = null
+  let calendarYear: number = currentCalendarYear
+  const warnings: string[] = []
+
+  if (parsed.data.partnershipYear != null) {
+    if (!agency?.partnershipStartDate) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: 'anchor_missing',
+            message:
+              'Agency partnership_start_date is not set; use ?year=<calendar-year> as a fallback or ask OM staff to set the anchor.',
+          },
+        },
+        { status: 400 },
+      )
+    }
+    // Walk from anchor to the requested partnership year.
+    const anchor = agency.partnershipStartDate
+    const probeAsOf = new Date(anchor)
+    probeAsOf.setUTCFullYear(anchor.getUTCFullYear() + parsed.data.partnershipYear - 1)
+    const window = getPartnershipYearWindow(agency, probeAsOf)!
+    yearStart = window.start
+    yearEnd = window.end
+    partnershipYearNumber = window.yearNumber
+    calendarYear = window.start.getUTCFullYear()
+    if (partnershipYearNumber > 1) {
+      const priorProbe = new Date(anchor)
+      priorProbe.setUTCFullYear(anchor.getUTCFullYear() + partnershipYearNumber - 2)
+      const prior = getPartnershipYearWindow(agency, priorProbe)!
+      priorStart = prior.start
+      priorEnd = prior.end
+    }
+  } else if (parsed.data.year != null) {
+    if (agency?.partnershipStartDate) {
+      // Re-interpret ?year=N as the partnership year containing calendar Jan 1.
+      warnings.push('year_param_deprecated')
+      const asOf = new Date(Date.UTC(parsed.data.year, 0, 1))
+      const window = getPartnershipYearWindow(agency, asOf)!
+      yearStart = window.start
+      yearEnd = window.end
+      partnershipYearNumber = window.yearNumber
+      calendarYear = parsed.data.year
+      if (partnershipYearNumber > 1) {
+        const priorProbe = new Date(window.start)
+        priorProbe.setUTCFullYear(priorProbe.getUTCFullYear() - 1)
+        const prior = getPartnershipYearWindow(agency, priorProbe)!
+        priorStart = prior.start
+        priorEnd = prior.end
+      }
+    } else {
+      // No anchor → keep calendar-year semantics, no warning.
+      yearStart = new Date(Date.UTC(parsed.data.year, 0, 1))
+      yearEnd = new Date(Date.UTC(parsed.data.year + 1, 0, 1))
+      calendarYear = parsed.data.year
+      warnings.push('partnership_start_date_missing')
+    }
+  } else if (agency?.partnershipStartDate) {
+    const window = getPartnershipYearWindow(agency, now)!
+    yearStart = window.start
+    yearEnd = window.end
+    partnershipYearNumber = window.yearNumber
+    calendarYear = window.start.getUTCFullYear()
+    if (partnershipYearNumber > 1) {
+      const priorProbe = new Date(window.start)
+      priorProbe.setUTCFullYear(priorProbe.getUTCFullYear() - 1)
+      const prior = getPartnershipYearWindow(agency, priorProbe)!
+      priorStart = prior.start
+      priorEnd = prior.end
+    }
+  } else {
+    yearStart = new Date(Date.UTC(currentCalendarYear, 0, 1))
+    yearEnd = new Date(Date.UTC(currentCalendarYear + 1, 0, 1))
+    warnings.push('partnership_start_date_missing')
+  }
 
   const licenseDealService = container.resolve('licenseDealService') as LicenseDealService
   const deals = await licenseDealService.listForMinWidget(
@@ -91,9 +183,32 @@ export async function GET(req: Request) {
   }))
   const ownAnnualValueUsd = deals.reduce((sum, d) => sum + Number(d.annualValueUsd ?? 0), 0)
 
+  let priorYearMinCount: number | null = null
+  if (priorStart && priorEnd) {
+    const priorDeals = await licenseDealService.listForMinWidget(
+      { tenantId: auth.tenantId, agencyId: member.agencyId },
+      { yearStart: priorStart, yearEnd: priorEnd },
+    )
+    priorYearMinCount = priorDeals.length
+  }
+
   return NextResponse.json({
     ok: true,
-    year,
+    year: calendarYear,
+    calendarYear,
+    partnershipYear: partnershipYearNumber,
+    period: {
+      partnershipYear:
+        partnershipYearNumber != null
+          ? {
+              start: yearStart.toISOString(),
+              end: yearEnd.toISOString(),
+              number: partnershipYearNumber,
+              priorYearMinCount,
+            }
+          : null,
+      ...(warnings.length > 0 ? { warnings } : {}),
+    },
     ownCount: deals.length,
     ownAnnualValueUsd: Number(ownAnnualValueUsd.toFixed(2)),
     ownDeals,
@@ -135,6 +250,19 @@ const getDoc: OpenApiMethodDoc = {
       schema: z.object({
         ok: z.literal(true),
         year: z.number().int(),
+        calendarYear: z.number().int(),
+        partnershipYear: z.number().int().nullable(),
+        period: z.object({
+          partnershipYear: z
+            .object({
+              start: z.string(),
+              end: z.string(),
+              number: z.number().int(),
+              priorYearMinCount: z.number().int().nullable(),
+            })
+            .nullable(),
+          warnings: z.array(z.string()).optional(),
+        }),
         ownCount: z.number().int(),
         ownAnnualValueUsd: z.number(),
         ownDeals: z.array(dealSchema),
