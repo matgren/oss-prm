@@ -80,8 +80,8 @@ Update the canonical app-spec (`/Users/maciejgren/Documents/prm/app-spec/app-spe
 ### Phase 2: Helper + routes + validators + service + DTO
 
 - [x] 2.1 Helper `getPartnershipYearWindow` + unit tests — ba53654
-- [ ] 2.2 Validator updates (`updateAgencyBackendSchema`, `ADMIN_ONLY_AGENCY_FIELDS`, `portalMinQuerySchema`)
-- [ ] 2.3 `agencyService.updateAgency` field-diff branch + DTO update + portal min/dashboard route window swap
+- [x] 2.2 Validator updates (`updateAgencyBackendSchema`, `ADMIN_ONLY_AGENCY_FIELDS`, `portalMinQuerySchema`) — 3cad1d0
+- [x] 2.3 `agencyService.updateAgency` field-diff branch + DTO update + portal min/dashboard route window swap — 3cad1d0
 
 ### Phase 3: Event + edit-page UI
 
