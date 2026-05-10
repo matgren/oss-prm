@@ -51,4 +51,28 @@ describe('unionTagSlugs (SPEC-2026-05-11)', () => {
     const result = unionTagSlugs([dirty])
     expect(result.map((r) => r.value)).toEqual(['LangGraph'])
   })
+
+  it('handles the tenant-wide multi-agency shape (B-RFP driver scenario)', () => {
+    // §5.1.2 — tenant-wide endpoint passes agency profile arrays AND case-study
+    // arrays into the helper. The helper treats them uniformly.
+    const agencyTechs = [
+      ['React', 'PyTorch'],
+      ['Vue'],
+      ['React'], // duplicate across agencies — collapses.
+    ]
+    const caseStudyTechs = [
+      ['LangGraph'],
+      ['MLflow', 'PyTorch'], // duplicate from another source — collapses.
+      ['TensorFlow'],
+    ]
+    const result = unionTagSlugs([...agencyTechs, ...caseStudyTechs])
+    expect(result.map((r) => r.value)).toEqual([
+      'LangGraph',
+      'MLflow',
+      'PyTorch',
+      'React',
+      'TensorFlow',
+      'Vue',
+    ])
+  })
 })
