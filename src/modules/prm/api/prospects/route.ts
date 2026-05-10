@@ -43,7 +43,7 @@ export async function GET(req: Request) {
       { status: 400 },
     )
   }
-  const { page, pageSize, agencyId, status, normalizedCompanyName, lowercasedContactEmail } = parsed.data
+  const { page, pageSize, agencyId, status, normalizedCompanyName, lowercasedContactEmail, q } = parsed.data
 
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
@@ -98,6 +98,15 @@ export async function GET(req: Request) {
   if (prospectIds) where.id = { $in: prospectIds }
   if (agencyId) where.agencyId = agencyId
   if (status) where.status = status
+  // Free-text search applies only when no exact-keyed filter is in play.
+  if (q && !wantsKeyedFilter) {
+    const term = `%${q.replace(/[%_]/g, (c) => `\\${c}`)}%`
+    where.$or = [
+      { companyName: { $ilike: term } },
+      { contactName: { $ilike: term } },
+      { contactEmail: { $ilike: term } },
+    ]
+  }
 
   // Default route reads through the projection table for candidate-picker fairness.
   // When no normalized-key filter is provided, fall back to direct list ordered ascending
@@ -115,12 +124,20 @@ export async function GET(req: Request) {
   )
 
   if (!prospectIds) {
+    const term = q ? `%${q.replace(/[%_]/g, (c) => `\\${c}`)}%` : null
     const totalCount = (await knex('prm_prospects')
       .where('tenant_id', auth.tenantId)
       .whereNull('deleted_at')
-      .modify((q) => {
-        if (agencyId) q.where('agency_id', agencyId)
-        if (status) q.where('status', status)
+      .modify((qb) => {
+        if (agencyId) qb.where('agency_id', agencyId)
+        if (status) qb.where('status', status)
+        if (term) {
+          qb.where(function () {
+            this.where('company_name', 'ilike', term)
+              .orWhere('contact_name', 'ilike', term)
+              .orWhere('contact_email', 'ilike', term)
+          })
+        }
       })
       .count<{ count: string }[]>('* as count')) as Array<{ count: string }>
     total = Number(totalCount[0]?.count ?? 0)

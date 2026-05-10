@@ -4,9 +4,10 @@ import { useRouter } from 'next/navigation'
 import { z } from 'zod'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
+import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 
 const createSchema = z.object({
   licenseIdentifier: z.string().min(2).max(120),
@@ -21,37 +22,91 @@ const createSchema = z.object({
 
 type CreateValues = z.infer<typeof createSchema>
 
-const INITIAL: CreateValues = {
-  licenseIdentifier: '',
-  clientCompanyName: '',
-  clientIndustry: '',
-  type: 'enterprise',
-  isRenewal: false,
-  annualValueUsd: '',
-  monthlyLicenseAmount: '',
-  notes: '',
-}
+type SuggestResponse = { ok: true; identifier: string }
 
 export default function CreateLicenseDealPage() {
   const t = useT()
   const router = useRouter()
+  const [suggestedId, setSuggestedId] = React.useState<string | null>(null)
+  const [suggestError, setSuggestError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let active = true
+    apiCall<SuggestResponse>('/api/prm/license-deal/next-identifier').then((res) => {
+      if (!active) return
+      if (res.ok && res.result?.identifier) {
+        setSuggestedId(res.result.identifier)
+      } else {
+        setSuggestError(
+          t(
+            'prm.licenseDeals.create.suggestError',
+            'Could not load the next license identifier. Please refresh.',
+          ),
+        )
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [t])
+
+  if (suggestError) {
+    return (
+      <Page>
+        <PageHeader title={t('prm.licenseDeals.create.title', 'New license deal')} />
+        <PageBody>
+          <ErrorMessage label={suggestError} />
+        </PageBody>
+      </Page>
+    )
+  }
+
+  if (!suggestedId) {
+    return (
+      <Page>
+        <PageHeader title={t('prm.licenseDeals.create.title', 'New license deal')} />
+        <PageBody>
+          <LoadingMessage label={t('common.loading', 'Loading…')} />
+        </PageBody>
+      </Page>
+    )
+  }
+
+  const initialValues: CreateValues = {
+    licenseIdentifier: suggestedId,
+    clientCompanyName: '',
+    clientIndustry: '',
+    type: 'enterprise',
+    isRenewal: false,
+    annualValueUsd: '',
+    monthlyLicenseAmount: '',
+    notes: '',
+  }
+
   return (
     <Page>
-      <PageHeader title={t('prm.licenseDeals.create.title', 'New license deal')} />
+      <PageHeader
+        title={t('prm.licenseDeals.create.title', 'New license deal')}
+        description={t(
+          'prm.licenseDeals.create.hint',
+          "After creating, open the deal to attribute it to a Prospect (Path A) — attribution is what adds the deal to the partner agency's MIN. Direct deals can stay unattributed.",
+        )}
+      />
       <PageBody>
         <CrudForm<CreateValues>
           schema={createSchema}
-          initialValues={INITIAL}
+          initialValues={initialValues}
           fields={[
             {
               id: 'licenseIdentifier',
               label: t('prm.licenseDeals.fields.identifier', 'License identifier'),
               type: 'text',
               required: true,
+              disabled: true,
               layout: 'half',
               description: t(
-                'prm.licenseDeals.fields.identifier.help',
-                'Unique per tenant — e.g. OM-2026-0042.',
+                'prm.licenseDeals.fields.identifier.autoHelp',
+                'Auto-assigned by the system on create — not editable.',
               ),
             },
             {
@@ -104,8 +159,10 @@ export default function CreateLicenseDealPage() {
           cancelHref="/backend/prm/license-deals"
           backHref="/backend/prm/license-deals"
           onSubmit={async (values) => {
+            // licenseIdentifier is auto-generated server-side — do NOT forward
+            // the disabled-field value; the create handler picks the next
+            // identifier atomically and retries on race.
             const payload: Record<string, unknown> = {
-              licenseIdentifier: values.licenseIdentifier,
               clientCompanyName: values.clientCompanyName,
               type: values.type ?? 'enterprise',
               isRenewal: values.isRenewal ?? false,
@@ -115,7 +172,7 @@ export default function CreateLicenseDealPage() {
             if (values.monthlyLicenseAmount) payload.monthlyLicenseAmount = values.monthlyLicenseAmount
             if (values.notes) payload.notes = values.notes
 
-            const res = await apiCallOrThrow<{ ok: true; licenseDeal: { id: string } }>(
+            const res = await apiCallOrThrow<{ ok: true; licenseDeal: { id: string; licenseIdentifier: string } }>(
               '/api/prm/license-deal',
               {
                 method: 'POST',

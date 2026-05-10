@@ -94,7 +94,7 @@ Update the canonical app-spec (`/Users/maciejgren/Documents/prm/app-spec/app-spe
 
 ### Phase 5: Verification + spec status
 
-- [ ] 5.1 `yarn generate`, tests green, typecheck clean
+- [x] 5.1 `yarn generate`, tests green, typecheck clean — verified 2026-05-11 on develop (post-merge of PR #43): `yarn generate` clean, `yarn typecheck` exit 0, `yarn jest src/modules/prm` 690/691 (1 pre-existing failure in `llmScoringDraft.test.ts` is an env-leak from `OPENAI_API_KEY` placeholder in local `.env` — unrelated to this plan; logged separately)
 - [x] 5.2 Update spec Implementation Status section + `POST-MVP-FOLLOW-UPS.md` — be8dcf3
 
 ## Changelog
@@ -102,3 +102,4 @@ Update the canonical app-spec (`/Users/maciejgren/Documents/prm/app-spec/app-spe
 | Date | Change |
 |------|--------|
 | 2026-05-10 | Initial plan, four review passes complete (2× PM, 2× CTO), spec at Status: Ready |
+| 2026-05-11 | Step 5.1 verification closed post-merge: generate clean, typecheck exit 0, 690/691 PRM jest pass (1 pre-existing `llmScoringDraft` env-leak unrelated to this plan) |

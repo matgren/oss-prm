@@ -282,29 +282,83 @@ function SagaInstanceLink({ deal }: { deal: LicenseDeal }) {
   )
 }
 
-type PathTab = 'A' | 'B' | 'C'
+type PathTab = 'A' | 'B'
+
+type AgencyLite = {
+  id: string
+  name: string
+  slug: string
+  tier: string
+  status: string
+  headquartersCity: string | null
+}
+
+type RfpLite = {
+  id: string
+  title: string
+  status: string
+  selectedAgencyId: string | null
+  receivedFrom: string | null
+  closedAt: string | null
+}
+
+type ProspectLite = {
+  id: string
+  agencyId: string
+  agencyName: string | null
+  companyName: string
+  contactName: string
+  contactEmail: string
+  status: string
+  registeredAt: string
+}
 
 function AttributionPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: () => void }) {
   const t = useT()
   const [activeTab, setActiveTab] = React.useState<PathTab>('A')
+  const [agencyMap, setAgencyMap] = React.useState<Map<string, AgencyLite>>(() => new Map())
+
+  React.useEffect(() => {
+    let cancelled = false
+    async function loadAgencies() {
+      const res = await apiCall<{ ok: true; items: AgencyLite[] }>(
+        '/api/prm/agency?pageSize=100&status=active',
+      )
+      if (cancelled) return
+      if (res.ok && res.result?.items) {
+        setAgencyMap(new Map(res.result.items.map((a) => [a.id, a])))
+      }
+    }
+    void loadAgencies()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   return (
     <section className="mb-6 rounded-md border bg-card p-4">
-      <h3 className="mb-2 text-sm font-semibold">
-        {t('prm.licenseDeals.attribute.title', 'Attribute this deal')}
+      <h3 className="mb-2 text-base font-semibold">
+        {t('prm.licenseDeals.attribute.title', 'Attribute this license')}
       </h3>
-      <p className="mb-4 text-xs text-muted-foreground">
+      <p className="mb-4 text-sm text-muted-foreground">
         {t(
           'prm.licenseDeals.attribute.description',
-          'Choose Path A (Prospect), Path B (RFP), or Path C (Direct). Path A defaults to the oldest non-lost matching Prospect (Golden Rule).',
+          "Attribute the deal to the partner agency that brought this client — either via a prospect they registered or an RFP they won. Leave it unattributed if no partner is involved — that's tracked as a direct OM sale.",
         )}
       </p>
-      <div className="mb-4 flex gap-1 border-b">
-        {(['A', 'B', 'C'] as PathTab[]).map((tab) => (
+      <div
+        className="mb-4 flex gap-1 border-b"
+        role="tablist"
+        aria-label={t('prm.licenseDeals.attribute.title', 'Attribute this license')}
+      >
+        {(['A', 'B'] as PathTab[]).map((tab) => (
           <Button
             key={tab}
             type="button"
             variant="ghost"
             size="sm"
+            role="tab"
+            aria-selected={activeTab === tab}
             className={cn(
               '-mb-px h-auto rounded-none border-b-2 px-3 py-1 text-sm font-medium hover:bg-transparent',
               activeTab === tab
@@ -313,78 +367,135 @@ function AttributionPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttrib
             )}
             onClick={() => setActiveTab(tab)}
           >
-            {t(`prm.licenseDeals.path.${tab}`, `Path ${tab}`)}
+            {t(`prm.licenseDeals.path.${tab}`, defaultPathLabel(tab))}
           </Button>
         ))}
       </div>
       {activeTab === 'A' ? (
-        <PathAPicker deal={deal} onAttributed={onAttributed} />
-      ) : activeTab === 'B' ? (
-        <PathBPicker deal={deal} onAttributed={onAttributed} />
+        <PartnerProspectPicker deal={deal} onAttributed={onAttributed} agencyMap={agencyMap} />
       ) : (
-        <PathCPicker deal={deal} onAttributed={onAttributed} />
+        <PathBPicker deal={deal} onAttributed={onAttributed} agencyMap={agencyMap} />
       )}
     </section>
   )
 }
 
-function PathAPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: () => void }) {
+function defaultPathLabel(tab: PathTab): string {
+  switch (tab) {
+    case 'A':
+      return "Partner's Prospect"
+    case 'B':
+      return 'From a won RFP'
+  }
+}
+
+function PartnerProspectPicker({
+  deal,
+  onAttributed,
+  agencyMap,
+}: {
+  deal: LicenseDeal
+  onAttributed: () => void
+  agencyMap: Map<string, AgencyLite>
+}) {
   const t = useT()
-  const [candidates, setCandidates] = React.useState<Candidate[]>([])
+  // Golden-Rule default (oldest non-lost prospect matching the license client by
+  // normalized company name). Required by the attribute API for override
+  // detection. Fetched once on mount.
+  const [goldenDefaultId, setGoldenDefaultId] = React.useState<string | null>(null)
+  const [defaultLoading, setDefaultLoading] = React.useState(true)
+
+  const [prospects, setProspects] = React.useState<ProspectLite[]>([])
+  const [loadingProspects, setLoadingProspects] = React.useState(false)
+  const [search, setSearch] = React.useState('')
   const [picked, setPicked] = React.useState<string | null>(null)
-  const [defaultId, setDefaultId] = React.useState<string | null>(null)
   const [reasoning, setReasoning] = React.useState('')
   const [submitting, setSubmitting] = React.useState(false)
-  const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     let cancelled = false
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const params = new URLSearchParams({ clientCompanyName: deal.clientCompanyName })
-        const res = await apiCall<CandidatesResponse>(
-          `/api/prm/license-deal/golden-rule-candidates?${params.toString()}`,
-        )
-        if (!res.ok || !res.result?.ok) throw new Error('Failed to load candidates')
+    apiCall<CandidatesResponse>(
+      `/api/prm/license-deal/golden-rule-candidates?clientCompanyName=${encodeURIComponent(
+        deal.clientCompanyName,
+      )}`,
+    )
+      .then((res) => {
         if (cancelled) return
-        const found = res.result.candidates
-        setCandidates(found)
-        const def = found.find((c) => c.isDefaultPick)?.prospectId ?? null
-        setDefaultId(def)
-        setPicked(def)
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load candidates')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
+        if (res.ok && res.result?.ok) {
+          const def = res.result.candidates.find((c) => c.isDefaultPick)?.prospectId ?? null
+          setGoldenDefaultId(def)
+          if (def) setPicked((cur) => cur ?? def)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDefaultLoading(false)
+      })
     return () => {
       cancelled = true
     }
   }, [deal.clientCompanyName])
 
-  const isOverride = picked !== null && defaultId !== null && picked !== defaultId
+  // Search prospects, debounced. Empty search → prospects matching this license's
+  // client by normalized company name. Non-empty → free-text across all WIPs.
+  React.useEffect(() => {
+    let cancelled = false
+    setLoadingProspects(true)
+    const handle = window.setTimeout(async () => {
+      const params = new URLSearchParams({ pageSize: '50' })
+      const trimmed = search.trim()
+      if (trimmed.length > 0) {
+        params.set('q', trimmed)
+      } else if (deal.clientCompanyName) {
+        params.set('normalizedCompanyName', deal.clientCompanyName)
+      }
+      const res = await apiCall<{ ok: true; items: ProspectLite[] }>(
+        `/api/prm/prospects?${params.toString()}`,
+      )
+      if (cancelled) return
+      if (res.ok && res.result?.items) setProspects(res.result.items)
+      else setProspects([])
+      setLoadingProspects(false)
+    }, 200)
+    return () => {
+      cancelled = true
+      window.clearTimeout(handle)
+    }
+  }, [search, deal.clientCompanyName])
+
+  const isOverride =
+    picked !== null && goldenDefaultId !== null && picked !== goldenDefaultId
 
   async function submit() {
-    if (!picked || !defaultId) return
+    if (!picked) {
+      setError(
+        t('prm.licenseDeals.attribute.A.errors.prospectRequired', 'Pick a prospect first.'),
+      )
+      return
+    }
     if (isOverride && reasoning.trim().length === 0) {
-      setError(t('prm.licenseDeals.attribute.errors.reasoningRequired', 'Reasoning required for non-default pick.'))
+      setError(
+        t(
+          'prm.licenseDeals.attribute.errors.reasoningRequired',
+          'Reasoning required when choosing a different match.',
+        ),
+      )
       return
     }
     setSubmitting(true)
     setError(null)
     try {
+      // When no Golden-Rule default exists, submit the picked prospect as its
+      // own "default" — the server requires a UUID and override-detection
+      // cleanly resolves to false.
+      const defaultForApi = goldenDefaultId ?? picked
       await apiCallOrThrow(`/api/prm/license-deal/${deal.id}/attribute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           attribution_path: 'A',
           prospect_id: picked,
-          golden_rule_default_prospect_id: defaultId,
+          golden_rule_default_prospect_id: defaultForApi,
           ...(reasoning.trim().length > 0 ? { attribution_reasoning: reasoning.trim() } : {}),
           competing_prospect_ids_to_retire: [],
         }),
@@ -398,96 +509,204 @@ function PathAPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: 
     }
   }
 
-  if (loading) return <LoadingMessage label={t('prm.licenseDeals.attribute.loading', 'Loading candidates…')} />
-  if (candidates.length === 0) {
-    return (
-      <Alert variant="warning">
-        <AlertDescription>
-          {t(
-            'prm.licenseDeals.attribute.A.empty',
-            'No matching Prospects found by Golden Rule. Switch to Path B (RFP) or Path C (Direct).',
-          )}
-        </AlertDescription>
-      </Alert>
-    )
-  }
+  const pickedRow = picked ? prospects.find((p) => p.id === picked) : null
+  const pickedAgencyName =
+    pickedRow?.agencyName ?? (pickedRow ? agencyMap.get(pickedRow.agencyId)?.name ?? null : null)
+
   return (
-    <div>
-      <ul className="mb-3 divide-y rounded-md border">
-        {candidates.map((c) => (
-          <li
-            key={c.prospectId}
-            className={`flex cursor-pointer items-start gap-3 p-3 hover:bg-muted/40 ${
-              picked === c.prospectId ? 'bg-muted/60' : ''
-            }`}
-            onClick={() => setPicked(c.prospectId)}
-          >
-            <input
-              type="radio"
-              checked={picked === c.prospectId}
-              readOnly
-              className="mt-1"
-              aria-label={c.companyName}
-            />
-            <div className="flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{c.companyName}</span>
-                {c.isDefaultPick ? (
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                    {t('prm.licenseDeals.attribute.A.defaultBadge', 'Golden Rule default')}
-                  </span>
-                ) : null}
-                {c.status === 'lost' ? (
-                  <StatusBadge variant="error">
-                    {t('prm.licenseDeals.attribute.A.lostBadge', 'LOST')}
-                  </StatusBadge>
-                ) : (
-                  <span className="rounded-full border px-2 py-0.5 text-xs">{c.status}</span>
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        {t(
+          'prm.licenseDeals.attribute.A.intro',
+          "Search across every prospect (WIP) any partner has registered. Pre-filled with prospects that match this license's client name — type to broaden the search.",
+        )}
+      </p>
+      <Input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder={t(
+          'prm.licenseDeals.attribute.A.searchPlaceholder',
+          'Search prospects by company, contact, or email…',
+        )}
+      />
+      {defaultLoading || loadingProspects ? (
+        <LoadingMessage label={t('prm.licenseDeals.attribute.A.loading', 'Loading prospects…')} />
+      ) : prospects.length === 0 && search.trim().length > 0 ? (
+        <Alert variant="info">
+          <AlertDescription>
+            {t('prm.licenseDeals.attribute.A.searchEmpty', 'No prospects match your search.')}
+          </AlertDescription>
+        </Alert>
+      ) : prospects.length === 0 ? (
+        <Alert variant="warning">
+          <AlertDescription>
+            {t(
+              'prm.licenseDeals.attribute.A.empty',
+              "No partner has registered a prospect matching this client. Try searching for the client under a different name, or use 'From a won RFP'.",
+            )}
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <ul className="divide-y rounded-md border" role="radiogroup">
+          {prospects.map((p) => {
+            const agencyName = p.agencyName ?? agencyMap.get(p.agencyId)?.name ?? null
+            const registered = new Date(p.registeredAt)
+            const ageDays = Math.max(
+              0,
+              Math.floor((Date.now() - registered.getTime()) / 86_400_000),
+            )
+            const isSuggested = goldenDefaultId === p.id
+            return (
+              <li
+                key={p.id}
+                role="radio"
+                aria-checked={picked === p.id}
+                tabIndex={0}
+                onClick={() => setPicked(p.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setPicked(p.id)
+                  }
+                }}
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 p-3 hover:bg-muted/40',
+                  picked === p.id && 'bg-muted/60',
                 )}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {c.contactName} · {c.contactEmail}
-              </div>
-              <div className="mt-0.5 text-xs text-muted-foreground">
-                {t('prm.licenseDeals.attribute.A.registeredAt', 'Registered')}
-                {': '}
-                {new Date(c.registeredAt).toLocaleDateString()} · agency {c.agencyId.slice(0, 8)}…
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
+              >
+                <input
+                  type="radio"
+                  checked={picked === p.id}
+                  readOnly
+                  className="mt-1"
+                  aria-label={p.companyName}
+                  tabIndex={-1}
+                />
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{p.companyName}</span>
+                    {isSuggested ? (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                        {t('prm.licenseDeals.attribute.A.suggestedBadge', 'Suggested match')}
+                      </span>
+                    ) : null}
+                    {p.status === 'lost' ? (
+                      <StatusBadge variant="error">
+                        {t('prm.licenseDeals.attribute.A.lostBadge', 'LOST')}
+                      </StatusBadge>
+                    ) : (
+                      <span className="rounded-full border px-2 py-0.5 text-xs">{p.status}</span>
+                    )}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {t('prm.licenseDeals.attribute.A.registeredBy', 'Registered by')}{' '}
+                    <span className="font-medium text-foreground">
+                      {agencyName ?? `agency ${p.agencyId.slice(0, 8)}…`}
+                    </span>{' '}
+                    {t('prm.licenseDeals.attribute.A.onDate', 'on')}{' '}
+                    {registered.toLocaleDateString()}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {p.contactName} · {p.contactEmail}
+                  </div>
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  {t('prm.licenseDeals.attribute.A.ageDays', '{days} days old').replace(
+                    '{days}',
+                    String(ageDays),
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
       {isOverride ? (
-        <label className="mb-3 flex flex-col gap-1 text-sm">
+        <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">
-            {t('prm.licenseDeals.attribute.A.reasoningLabel', 'Reasoning (required for non-default pick)')}
+            {t(
+              'prm.licenseDeals.attribute.A.reasoningLabel',
+              'Reasoning (required when choosing anything other than the suggested match)',
+            )}
           </span>
           <Textarea
             className="min-h-[5rem]"
             value={reasoning}
             onChange={(e) => setReasoning(e.target.value)}
+            placeholder={t(
+              'prm.licenseDeals.attribute.A.reasoningPlaceholder',
+              'Why is this partner being attributed instead of the suggested match?',
+            )}
           />
         </label>
       ) : null}
       {error ? <ErrorMessage label={error} /> : null}
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-3">
+        {pickedAgencyName ? (
+          <span className="mr-auto text-xs text-muted-foreground">
+            {t('prm.licenseDeals.attribute.A.summary', 'Attributing to {agency}.').replace(
+              '{agency}',
+              pickedAgencyName,
+            )}
+          </span>
+        ) : null}
         <Button onClick={submit} disabled={submitting || !picked}>
-          {t('prm.licenseDeals.attribute.A.submit', 'Attribute Path A')}
+          {t('prm.licenseDeals.attribute.A.submit', 'Attribute to this partner')}
         </Button>
       </div>
     </div>
   )
 }
 
-function PathBPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: () => void }) {
+function PathBPicker({
+  deal,
+  onAttributed,
+  agencyMap,
+}: {
+  deal: LicenseDeal
+  onAttributed: () => void
+  agencyMap: Map<string, AgencyLite>
+}) {
   const t = useT()
-  const [rfpId, setRfpId] = React.useState('')
+  const [search, setSearch] = React.useState('')
+  const [rfps, setRfps] = React.useState<RfpLite[]>([])
+  const [loading, setLoading] = React.useState(false)
+  const [pickedRfpId, setPickedRfpId] = React.useState<string | null>(null)
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
+  React.useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      try {
+        const params = new URLSearchParams({ pageSize: '50' })
+        if (search.trim().length > 0) params.set('q', search.trim())
+        const res = await apiCall<{ ok: true; items: RfpLite[] }>(
+          `/api/prm/rfp?${params.toString()}`,
+        )
+        if (cancelled) return
+        if (res.ok && res.result?.items) {
+          // Only RFPs with a selected winner are valid for Path B.
+          setRfps(res.result.items.filter((r) => r.selectedAgencyId != null))
+        }
+      } catch {
+        // soft-fail; show empty state below.
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    const handle = window.setTimeout(() => void load(), 200)
+    return () => {
+      cancelled = true
+      window.clearTimeout(handle)
+    }
+  }, [search])
+
   async function submit() {
-    if (!rfpId.trim()) {
-      setError(t('prm.licenseDeals.attribute.B.errors.rfpRequired', 'RFP id required.'))
+    if (!pickedRfpId) {
+      setError(t('prm.licenseDeals.attribute.B.errors.rfpRequired', 'Pick an RFP first.'))
       return
     }
     setSubmitting(true)
@@ -496,7 +715,7 @@ function PathBPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: 
       await apiCallOrThrow(`/api/prm/license-deal/${deal.id}/attribute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ attribution_path: 'B', rfp_id: rfpId.trim() }),
+        body: JSON.stringify({ attribution_path: 'B', rfp_id: pickedRfpId }),
       })
       flash(t('prm.licenseDeals.attribute.flash.success', 'License deal attributed.'), 'success')
       onAttributed()
@@ -506,98 +725,116 @@ function PathBPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: 
       setSubmitting(false)
     }
   }
+
+  const pickedRfp = pickedRfpId ? rfps.find((r) => r.id === pickedRfpId) : null
+  const pickedWinner = pickedRfp?.selectedAgencyId
+    ? agencyMap.get(pickedRfp.selectedAgencyId)?.name
+    : null
+
   return (
-    <div>
-      <p className="mb-3 text-sm text-muted-foreground">
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
         {t(
-          'prm.licenseDeals.attribute.B.description',
-          'Path B is for RFP-driven deals. The RFP module ships in Spec #5 — when the RFP table is missing, the writer accepts the rfp_id as a placeholder and the saga will snapshot the winner once Spec #5 lands.',
+          'prm.licenseDeals.attribute.B.intro',
+          'Only RFPs that already have a selected winner are shown. The deal gets attributed to that winning agency.',
         )}
       </p>
-      <label className="mb-3 flex flex-col gap-1 text-sm">
-        <span className="font-medium">{t('prm.licenseDeals.attribute.B.rfpLabel', 'RFP id')}</span>
-        <Input
-          type="text"
-          value={rfpId}
-          onChange={(e) => setRfpId(e.target.value)}
-        />
-      </label>
+      <Input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder={t('prm.licenseDeals.attribute.B.searchPlaceholder', 'Search RFPs by title…')}
+      />
+      {loading ? (
+        <LoadingMessage label={t('prm.licenseDeals.attribute.B.loading', 'Searching RFPs…')} />
+      ) : rfps.length === 0 ? (
+        <Alert variant="info">
+          <AlertDescription>
+            {t(
+              'prm.licenseDeals.attribute.B.empty',
+              'No RFPs with a selected winner match your search.',
+            )}
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <ul className="divide-y rounded-md border" role="radiogroup">
+          {rfps.map((r) => {
+            const winnerName = r.selectedAgencyId
+              ? agencyMap.get(r.selectedAgencyId)?.name ?? null
+              : null
+            return (
+              <li
+                key={r.id}
+                role="radio"
+                aria-checked={pickedRfpId === r.id}
+                tabIndex={0}
+                onClick={() => setPickedRfpId(r.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setPickedRfpId(r.id)
+                  }
+                }}
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 p-3 hover:bg-muted/40',
+                  pickedRfpId === r.id && 'bg-muted/60',
+                )}
+              >
+                <input
+                  type="radio"
+                  checked={pickedRfpId === r.id}
+                  readOnly
+                  className="mt-1"
+                  aria-label={r.title}
+                  tabIndex={-1}
+                />
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{r.title}</span>
+                    <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                      {r.status}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {t('prm.licenseDeals.attribute.B.winner', 'Winner:')}{' '}
+                    <span className="font-medium text-foreground">
+                      {winnerName ?? r.selectedAgencyId?.slice(0, 8) ?? '—'}
+                    </span>
+                    {r.receivedFrom ? (
+                      <>
+                        {' · '}
+                        {t('prm.licenseDeals.attribute.B.client', 'Client:')}{' '}
+                        <span className="text-foreground">{r.receivedFrom}</span>
+                      </>
+                    ) : null}
+                  </div>
+                  {r.closedAt ? (
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      {t('prm.licenseDeals.attribute.B.closedAt', 'Closed')}{' '}
+                      {new Date(r.closedAt).toLocaleDateString()}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  {r.id.slice(0, 8)}…
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
       {error ? <ErrorMessage label={error} /> : null}
-      <div className="flex justify-end">
-        <Button onClick={submit} disabled={submitting}>
-          {t('prm.licenseDeals.attribute.B.submit', 'Attribute Path B')}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function PathCPicker({ deal, onAttributed }: { deal: LicenseDeal; onAttributed: () => void }) {
-  const t = useT()
-  const [agencyId, setAgencyId] = React.useState('')
-  const [reasoning, setReasoning] = React.useState('')
-  const [submitting, setSubmitting] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-
-  async function submit() {
-    if (!agencyId.trim()) {
-      setError(t('prm.licenseDeals.attribute.C.errors.agencyRequired', 'Agency id required.'))
-      return
-    }
-    if (reasoning.trim().length === 0) {
-      setError(t('prm.licenseDeals.attribute.C.errors.reasoningRequired', 'Reasoning required for Path C.'))
-      return
-    }
-    setSubmitting(true)
-    setError(null)
-    try {
-      await apiCallOrThrow(`/api/prm/license-deal/${deal.id}/attribute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          attribution_path: 'C',
-          attributed_agency_id: agencyId.trim(),
-          attribution_reasoning: reasoning.trim(),
-        }),
-      })
-      flash(t('prm.licenseDeals.attribute.flash.success', 'License deal attributed.'), 'success')
-      onAttributed()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to attribute')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-  return (
-    <div>
-      <p className="mb-3 text-sm text-muted-foreground">
-        {t(
-          'prm.licenseDeals.attribute.C.description',
-          'Path C captures direct OM sales. Reasoning is required for audit.',
-        )}
-      </p>
-      <label className="mb-3 flex flex-col gap-1 text-sm">
-        <span className="font-medium">{t('prm.licenseDeals.attribute.C.agencyLabel', 'Attributed agency id')}</span>
-        <Input
-          type="text"
-          value={agencyId}
-          onChange={(e) => setAgencyId(e.target.value)}
-        />
-      </label>
-      <label className="mb-3 flex flex-col gap-1 text-sm">
-        <span className="font-medium">
-          {t('prm.licenseDeals.attribute.C.reasoningLabel', 'Reasoning (required)')}
-        </span>
-        <Textarea
-          className="min-h-[5rem]"
-          value={reasoning}
-          onChange={(e) => setReasoning(e.target.value)}
-        />
-      </label>
-      {error ? <ErrorMessage label={error} /> : null}
-      <div className="flex justify-end">
-        <Button onClick={submit} disabled={submitting}>
-          {t('prm.licenseDeals.attribute.C.submit', 'Attribute Path C')}
+      <div className="flex items-center justify-end gap-3">
+        {pickedWinner ? (
+          <span className="mr-auto text-xs text-muted-foreground">
+            {t(
+              'prm.licenseDeals.attribute.B.summary',
+              'Attributing to the RFP winner — {agency}.',
+            ).replace('{agency}', pickedWinner)}
+          </span>
+        ) : null}
+        <Button onClick={submit} disabled={submitting || !pickedRfpId}>
+          {t('prm.licenseDeals.attribute.B.submit', 'Attribute to the RFP winner')}
         </Button>
       </div>
     </div>

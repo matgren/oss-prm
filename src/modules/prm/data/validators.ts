@@ -278,6 +278,12 @@ export const listProspectsBackendSchema = z.object({
   normalizedCompanyName: z.string().trim().max(200).optional(),
   /** Server lowercases input. */
   lowercasedContactEmail: z.string().trim().max(200).optional(),
+  /**
+   * Free-text substring search across company name, contact name, and contact
+   * email. Mutually exclusive with the normalized filters above (when both are
+   * present, normalized filters take precedence).
+   */
+  q: z.string().trim().min(1).max(120).optional(),
 })
 
 /** Portal P5 list filters (own-agency). */
@@ -362,7 +368,13 @@ export const listLicenseDealsBackendSchema = z.object({
 /** POST /api/backend/prm/license-deals — creates a `pending` deal (no auto-attribution). */
 export const createLicenseDealSchema = z
   .object({
-    licenseIdentifier: z.string().min(2).max(120),
+    /**
+     * Auto-generated server-side when omitted. The form prefetches the next
+     * suggestion via `GET /api/prm/license-deal/next-identifier` and shows it
+     * disabled, but the server is the source of truth — atomic generate + retry
+     * makes it race-safe.
+     */
+    licenseIdentifier: z.string().min(2).max(120).optional(),
     clientCompanyName: z.string().min(1).max(200),
     clientIndustry: z.string().max(120).nullable().optional(),
     type: z.string().max(40).default('enterprise'),

@@ -231,10 +231,68 @@ export class LicenseDealService {
   // -------------------------------------------------------------------------
 
   /**
+   * Generate the next `OM-YYYY-NNNN` identifier for the tenant. Scans existing
+   * identifiers for the current year (including soft-deleted rows — the unique
+   * index is not filtered by `deleted_at`) and returns `max+1` zero-padded to 4
+   * digits. Returns `OM-YYYY-0001` when no prior identifier exists for the year.
+   */
+  async generateNextIdentifier(tenantId: string, asOf: Date = new Date()): Promise<string> {
+    const year = asOf.getUTCFullYear()
+    const prefix = `OM-${year}-`
+    const knex = this.em.getKnex()
+    const row = await knex('prm_license_deals')
+      .where('tenant_id', tenantId)
+      .where('license_identifier', 'like', `${prefix}%`)
+      .max({ last: 'license_identifier' })
+      .first()
+    const last = (row?.last as string | null | undefined) ?? null
+    let next = 1
+    if (last) {
+      const m = last.match(/^OM-\d{4}-(\d+)$/)
+      if (m) next = Number(m[1]) + 1
+    }
+    return `${prefix}${String(next).padStart(4, '0')}`
+  }
+
+  /**
    * Create a `pending` LicenseDeal. NEVER auto-attributes — every attribution is
    * an explicit OM PartnerOps decision via `attribute()`.
+   *
+   * When `input.licenseIdentifier` is omitted, the server generates the next
+   * `OM-YYYY-NNNN` and retries on race (up to 3 attempts) so concurrent creates
+   * stay safe even without a SERIALIZABLE transaction.
    */
   async create(
+    input: CreateLicenseDealInput,
+    scope: { tenantId: string; organizationId: string; actor: LicenseDealActor },
+  ): Promise<LicenseDeal> {
+    const autoIdentifier = input.licenseIdentifier === undefined
+    const maxAttempts = autoIdentifier ? 3 : 1
+    let lastErr: unknown = null
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const licenseIdentifier = autoIdentifier
+        ? await this.generateNextIdentifier(scope.tenantId)
+        : (input.licenseIdentifier as string)
+      try {
+        return await this.createWithIdentifier(licenseIdentifier, input, scope)
+      } catch (err) {
+        lastErr = err
+        if (
+          autoIdentifier &&
+          err instanceof PrmDomainError &&
+          err.code === PRM_ERROR_CODES.LICENSE_IDENTIFIER_TAKEN
+        ) {
+          // Race with a concurrent create — recompute and retry.
+          continue
+        }
+        throw err
+      }
+    }
+    throw lastErr ?? new Error('Failed to allocate a license identifier after retries')
+  }
+
+  private async createWithIdentifier(
+    licenseIdentifier: string,
     input: CreateLicenseDealInput,
     scope: { tenantId: string; organizationId: string; actor: LicenseDealActor },
   ): Promise<LicenseDeal> {
@@ -242,7 +300,7 @@ export class LicenseDealService {
     const existing = await findOneWithDecryption(
       this.em,
       LicenseDeal,
-      { tenantId: scope.tenantId, licenseIdentifier: input.licenseIdentifier, deletedAt: null },
+      { tenantId: scope.tenantId, licenseIdentifier, deletedAt: null },
       undefined,
       { tenantId: scope.tenantId },
     )
@@ -258,7 +316,7 @@ export class LicenseDealService {
     const deal = this.em.create(LicenseDeal, {
       tenantId: scope.tenantId,
       organizationId: scope.organizationId,
-      licenseIdentifier: input.licenseIdentifier,
+      licenseIdentifier,
       clientCompanyName: input.clientCompanyName,
       clientIndustry: input.clientIndustry ?? null,
       type: input.type ?? 'enterprise',
