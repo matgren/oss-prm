@@ -44,7 +44,12 @@ export const rfpFormSchema = z
     industry: z.string().max(120).optional(),
     budgetBucket: z.enum(BUDGET_VALUES).optional(),
     timelineBucket: z.enum(TIMELINE_VALUES).optional(),
-    requiredCapabilities: z.string().optional(),
+    /**
+     * Open-vocabulary technology tags (SPEC-2026-05-11). Client schema is a
+     * loose array; the server-side `openTagSlugArray` enforces trim + min(1)
+     * + max(80) per element and `.max(50)` per array.
+     */
+    requiredCapabilities: z.array(z.string()).default([]),
     additionalCriterionName: z.string().max(120).optional(),
     deadlineToRespond: z.string().optional(),
     eligibilityFilter: z.enum(ELIGIBILITY_VALUES),
@@ -87,7 +92,7 @@ export const RFP_FORM_INITIAL: RfpFormValues = {
   industry: '',
   budgetBucket: '',
   timelineBucket: '',
-  requiredCapabilities: '',
+  requiredCapabilities: [],
   additionalCriterionName: '',
   deadlineToRespond: '',
   eligibilityFilter: 'all_active',
@@ -125,7 +130,7 @@ export function rfpToFormValues(rfp: {
     industry: rfp.industry ?? '',
     budgetBucket: (rfp.budgetBucket ?? '') as RfpFormValues['budgetBucket'],
     timelineBucket: (rfp.timelineBucket ?? '') as RfpFormValues['timelineBucket'],
-    requiredCapabilities: rfp.requiredCapabilities.join(', '),
+    requiredCapabilities: rfp.requiredCapabilities ?? [],
     additionalCriterionName: rfp.additionalCriterionName ?? '',
     deadlineToRespond: rfp.deadlineToRespond ? rfp.deadlineToRespond.slice(0, 16) : '',
     eligibilityFilter: rfp.eligibilityFilter as RfpFormValues['eligibilityFilter'],
@@ -137,10 +142,9 @@ export function rfpToFormValues(rfp: {
 
 /** Map camelCase form values → snake_case API payload, dropping empties / irrelevant companions. */
 export function rfpFormValuesToPayload(values: RfpFormValues): Record<string, unknown> {
-  const capabilities = (values.requiredCapabilities ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
+  // Per SPEC-2026-05-11 — `requiredCapabilities` is now an array end-to-end.
+  // Server-side `openTagSlugArray` trims + caps; client passes through verbatim.
+  const capabilities = values.requiredCapabilities ?? []
   const explicitIds = (values.explicitAgencyIds ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -177,10 +181,8 @@ export function rfpFormValuesToPayload(values: RfpFormValues): Record<string, un
  * set. The server `updateRfpDraftSchema` accepts null for these.
  */
 export function rfpFormValuesToPatchPayload(values: RfpFormValues): Record<string, unknown> {
-  const capabilities = (values.requiredCapabilities ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
+  // Per SPEC-2026-05-11 — `requiredCapabilities` is now an array end-to-end.
+  const capabilities = values.requiredCapabilities ?? []
   const explicitIds = (values.explicitAgencyIds ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -285,7 +287,13 @@ function EligibilityGroup({ values, setValue, errors }: CrudFormGroupComponentPr
  * The eligibility trio lives in a custom-component group; everything else
  * is a regular CrudForm field.
  */
-export function buildRfpFormConfig(t: (key: string, fallback?: string) => string): {
+export function buildRfpFormConfig(
+  t: (key: string, fallback?: string) => string,
+  tagOptions: {
+    /** Pre-loaded tenant-wide tech tag suggestions for `requiredCapabilities`. */
+    capabilities?: Array<{ value: string; label: string }>
+  } = {},
+): {
   fields: CrudField[]
   groups: CrudFormGroup[]
 } {
@@ -359,10 +367,11 @@ export function buildRfpFormConfig(t: (key: string, fallback?: string) => string
     {
       id: 'requiredCapabilities',
       label: t('prm.rfp.fields.requiredCapabilities', 'Required capabilities'),
-      type: 'text',
+      type: 'tags',
+      options: tagOptions.capabilities ?? [],
       description: t(
         'prm.rfp.fields.requiredCapabilities.help',
-        'Comma-separated capability slugs (e.g. nextjs,postgres).',
+        'Open vocabulary — type to add. Suggestions come from the agency network (tech capabilities + case-study tech).',
       ),
     },
     {
