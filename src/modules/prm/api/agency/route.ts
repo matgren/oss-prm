@@ -10,6 +10,11 @@ import { createAgencySchema } from '../../data/validators'
 import type { AgencyService } from '../../lib/agencyService'
 import { isPrmDomainError, toPrmErrorBody } from '../../lib/errors'
 
+/** Format a Date as YYYY-MM-DD in UTC. */
+function toIsoDate(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
 /**
  * Backend Agency CRUD route.
  *
@@ -51,6 +56,10 @@ function summariseAgency(agency: Agency) {
     contractSigned: agency.contractSigned,
     ndaSigned: agency.ndaSigned,
     onboarded: agency.onboarded,
+    /** YYYY-MM-DD string or null (SPEC-2026-05-10 — partnership-year anchor). */
+    partnershipStartDate: agency.partnershipStartDate
+      ? toIsoDate(agency.partnershipStartDate)
+      : null,
     /** Optimistic-concurrency token — clients echo back as `ifMatchVersion` on PATCH. */
     version: agency.version,
     createdAt: agency.createdAt.toISOString(),

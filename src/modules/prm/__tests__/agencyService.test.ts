@@ -255,3 +255,92 @@ describe('AgencyService.updateAgency — optimistic concurrency (ifMatchVersion)
     },
   )
 })
+
+describe('AgencyService.updateAgency — partnership_start_date (SPEC-2026-05-10)', () => {
+  const TENANT = 'tenant-1'
+  const AGENCY_ID = 'agency-1'
+
+  function seedAgency(em: FakeEntityManager, overrides: Partial<Persisted> = {}): void {
+    em.setSeed('agency', [
+      {
+        id: AGENCY_ID,
+        tenantId: TENANT,
+        organizationId: 'org-1',
+        name: 'Acme',
+        slug: 'acme',
+        headquartersCountry: 'US',
+        tier: 'om_agency',
+        status: 'active',
+        contractSigned: false,
+        ndaSigned: false,
+        onboarded: false,
+        partnershipStartDate: null,
+        industries: [],
+        services: [],
+        techCapabilities: [],
+        version: 1,
+        deletedAt: null,
+        ...overrides,
+      },
+    ])
+  }
+
+  it('sets partnership_start_date when patch supplies an ISO date string', async () => {
+    const em = new FakeEntityManager()
+    seedAgency(em)
+    const svc = new AgencyService(em as any)
+
+    const updated = await svc.updateAgency(
+      AGENCY_ID,
+      { partnershipStartDate: '2025-08-15' },
+      { tenantId: TENANT, userId: 'user-1' },
+    )
+
+    expect(updated.partnershipStartDate).toBeInstanceOf(Date)
+    expect(updated.partnershipStartDate?.toISOString().slice(0, 10)).toBe('2025-08-15')
+    expect(updated.version).toBe(2)
+  })
+
+  it('clears partnership_start_date when patch supplies null', async () => {
+    const em = new FakeEntityManager()
+    seedAgency(em, { partnershipStartDate: new Date('2025-08-15T00:00:00Z'), version: 7 })
+    const svc = new AgencyService(em as any)
+
+    const updated = await svc.updateAgency(
+      AGENCY_ID,
+      { partnershipStartDate: null },
+      { tenantId: TENANT },
+    )
+
+    expect(updated.partnershipStartDate).toBeNull()
+    expect(updated.version).toBe(8)
+  })
+
+  it('leaves partnership_start_date untouched when patch omits the key', async () => {
+    const em = new FakeEntityManager()
+    const anchor = new Date('2025-08-15T00:00:00Z')
+    seedAgency(em, { partnershipStartDate: anchor })
+    const svc = new AgencyService(em as any)
+
+    const updated = await svc.updateAgency(
+      AGENCY_ID,
+      { description: 'unrelated' },
+      { tenantId: TENANT },
+    )
+
+    // Equality on Date instances is reference, so compare ISO.
+    expect(updated.partnershipStartDate?.toISOString()).toBe(anchor.toISOString())
+  })
+
+  it('findById returns partnership_start_date (canonical lookup path for portal MIN/dashboard routes)', async () => {
+    const em = new FakeEntityManager()
+    const anchor = new Date('2025-08-15T00:00:00Z')
+    seedAgency(em, { partnershipStartDate: anchor })
+    const svc = new AgencyService(em as any)
+
+    const loaded = await svc.findById(AGENCY_ID, { tenantId: TENANT })
+
+    expect(loaded).not.toBeNull()
+    expect(loaded?.partnershipStartDate?.toISOString()).toBe(anchor.toISOString())
+  })
+})

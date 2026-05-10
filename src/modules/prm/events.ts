@@ -16,6 +16,10 @@ const events = [
   { id: 'prm.agency.tier_changed', label: 'Agency tier changed', entity: 'agency', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.agency.status_changed', label: 'Agency status changed', entity: 'agency', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.agency.onboarding_state_changed', label: 'Agency onboarding state changed', entity: 'agency', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
+  // SPEC-2026-05-10 — fires on any change (set / edit / clear) to `partnership_start_date`.
+  // Distinct from `onboarding_state_changed`; setting the anchor does NOT count as an
+  // onboarding state change.
+  { id: 'prm.agency.partnership_anchor_changed', label: 'Agency partnership anchor changed', entity: 'agency', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.agency.deleted', label: 'Agency deleted', entity: 'agency', category: 'lifecycle' },
 
   // Agency member lifecycle
@@ -25,6 +29,7 @@ const events = [
   { id: 'prm.agency_member.reactivated', label: 'Agency member reactivated (portal access restored)', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.agency_member.role_changed', label: 'Agency member role changed', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.agency_member.updated', label: 'Agency member personal fields updated', entity: 'agency_member', category: 'crud', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.agency_member.invite_resent', label: 'Agency member invitation re-sent', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true },
 
   // Telemetry / diagnostic events
   { id: 'prm.agency_member.github_profile_conflict_attempted', label: 'GitHub profile conflict attempted', entity: 'agency_member', category: 'system' },

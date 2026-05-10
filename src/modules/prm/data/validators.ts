@@ -58,6 +58,27 @@ export const updateAgencyBackendSchema = z
     ndaSigned: z.boolean().optional(),
     onboarded: z.boolean().optional(),
     /**
+     * Anchor for partnership-year KPI windows. Admin-only.
+     * See SPEC-2026-05-10-partnership-year.md.
+     */
+    partnershipStartDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'prm.errors.invalidDate')
+      .refine((s) => new Date(`${s}T00:00:00Z`) >= new Date('2020-01-01T00:00:00Z'), {
+        message: 'prm.errors.partnershipStartTooOld',
+      })
+      .refine(
+        (s) => {
+          const candidate = new Date(`${s}T00:00:00Z`)
+          const max = new Date()
+          max.setUTCDate(max.getUTCDate() + 30)
+          return candidate <= max
+        },
+        { message: 'prm.errors.partnershipStartTooFar' },
+      )
+      .nullable()
+      .optional(),
+    /**
      * Optimistic concurrency token — `version` returned by GET. Optional for
      * backwards-compatibility; when present, mismatches raise 409 status_conflict.
      */
@@ -103,9 +124,11 @@ export const ADMIN_ONLY_AGENCY_FIELDS = [
   'contractSigned',
   'ndaSigned',
   'onboarded',
+  'partnershipStartDate',
   // Snake-case mirrors that may arrive over-the-wire from older clients.
   'contract_signed',
   'nda_signed',
+  'partnership_start_date',
 ] as const
 
 export const inviteAgencyMemberSchema = z.object({
@@ -436,9 +459,18 @@ export const transitionLicenseDealStatusSchema = z.object({
   ifMatchVersion: z.number().int().nonnegative().optional(),
 })
 
-/** Portal `/api/portal/min` query. */
+/**
+ * Portal `/api/portal/min` query.
+ *
+ * `year` is the legacy calendar-year param. `partnershipYear` is the canonical
+ * post-SPEC-2026-05-10 param. When both are supplied, `partnershipYear` wins.
+ * Calling with `?partnershipYear=N` against an agency whose
+ * `partnershipStartDate` is null returns HTTP 400 (`anchor_missing`) at the
+ * route layer — the schema accepts both forms.
+ */
 export const portalMinQuerySchema = z.object({
   year: z.coerce.number().int().min(2000).max(3000).optional(),
+  partnershipYear: z.coerce.number().int().positive().max(200).optional(),
 })
 
 export type CreateLicenseDealInput = z.infer<typeof createLicenseDealSchema>
