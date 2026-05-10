@@ -20,15 +20,21 @@ export type TierRequirement = {
   minWip: number
   /** Minimum monthly WIC contribution count required to unlock this tier. */
   minMonthlyWic: number
+  /**
+   * Minimum MIN (attributed enterprise licenses) per partnership year — the
+   * third KPI rail in tier evaluation. Values derived from App Spec §1.4
+   * tier-thresholds table.
+   */
+  minYearlyMin: number
   /** Display rank (used to compute pct-to-next-tier and order in widgets). */
   rank: number
 }
 
 const REQUIREMENTS: Readonly<Record<AgencyTier, TierRequirement>> = {
-  om_agency: { tier: 'om_agency', minWip: 0, minMonthlyWic: 0, rank: 0 },
-  ai_native: { tier: 'ai_native', minWip: 5, minMonthlyWic: 1, rank: 1 },
-  ai_native_expert: { tier: 'ai_native_expert', minWip: 15, minMonthlyWic: 3, rank: 2 },
-  ai_native_core: { tier: 'ai_native_core', minWip: 40, minMonthlyWic: 8, rank: 3 },
+  om_agency: { tier: 'om_agency', minWip: 0, minMonthlyWic: 0, minYearlyMin: 1, rank: 0 },
+  ai_native: { tier: 'ai_native', minWip: 5, minMonthlyWic: 1, minYearlyMin: 2, rank: 1 },
+  ai_native_expert: { tier: 'ai_native_expert', minWip: 15, minMonthlyWic: 3, minYearlyMin: 5, rank: 2 },
+  ai_native_core: { tier: 'ai_native_core', minWip: 40, minMonthlyWic: 8, minYearlyMin: 5, rank: 3 },
 }
 
 export function getTierRequirement(tier: AgencyTier): TierRequirement {
@@ -56,10 +62,12 @@ export function computeTierProgress(input: {
   current: AgencyTier
   currentWip: number
   currentMonthlyWic: number
+  /** Optional — when omitted, MIN does not bound pctToNext. */
+  currentYearlyMin?: number
 }): {
   current: TierRequirement
   next: TierRequirement | null
-  /** 0..1, fraction toward next tier across both metrics (whichever is lagging). */
+  /** 0..1, fraction toward next tier across all 3 metrics (whichever is lagging). */
   pctToNext: number
 } {
   const current = REQUIREMENTS[input.current]
@@ -70,5 +78,9 @@ export function computeTierProgress(input: {
   const wipPct = next.minWip > 0 ? Math.min(1, input.currentWip / next.minWip) : 1
   const wicPct =
     next.minMonthlyWic > 0 ? Math.min(1, input.currentMonthlyWic / next.minMonthlyWic) : 1
-  return { current, next, pctToNext: Math.min(wipPct, wicPct) }
+  const minPct =
+    input.currentYearlyMin == null || next.minYearlyMin === 0
+      ? 1
+      : Math.min(1, input.currentYearlyMin / next.minYearlyMin)
+  return { current, next, pctToNext: Math.min(wipPct, wicPct, minPct) }
 }

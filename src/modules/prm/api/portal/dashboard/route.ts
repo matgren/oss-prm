@@ -11,7 +11,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { hasFeature } from '@open-mercato/shared/security/features'
 import type { AgencyMemberService } from '../../../lib/agencyMemberService'
 import type { AgencyService } from '../../../lib/agencyService'
-import { computeTierProgress } from '../../../lib/tierRequirements'
+import { computeTierProgress, listTierRequirements } from '../../../lib/tierRequirements'
 import { getPartnershipYearWindow } from '../../../lib/partnershipYear'
 import type { LicenseDealService } from '../../../lib/licenseDealService'
 import type { AgencyTier } from '../../../data/validators'
@@ -245,21 +245,31 @@ export async function GET(req: Request) {
     wic = { awaiting: true, monthlyTotal: 0, yearlyTotal: 0, perMember: [] }
   }
 
-  // --- MIN counts for rollover affordance (SPEC-2026-05-10) ----------------
-  // Only computed when partnershipWindow is present — calendar-year MIN is
-  // already exposed by /api/prm/portal/min, no need to duplicate.
+  // --- MIN counts: current year + prior year (for rollover affordance) ----
+  // Current-year count feeds the tier widget's MIN rail; prior-year count
+  // feeds the MIN widget's rollover caption (SPEC-2026-05-10).
+  let currentYearMinCount = 0
   let priorYearMinCount: number | null = null
-  if (partnershipWindow && priorWindow) {
-    try {
-      const licenseDealService = container.resolve('licenseDealService') as LicenseDealService
+  try {
+    const licenseDealService = container.resolve('licenseDealService') as LicenseDealService
+    const currentDeals = await licenseDealService.listForMinWidget(
+      { tenantId: auth.tenantId, agencyId: agency.id },
+      { yearStart, yearEnd },
+    )
+    currentYearMinCount = currentDeals.length
+    if (partnershipWindow && priorWindow) {
       const priorDeals = await licenseDealService.listForMinWidget(
         { tenantId: auth.tenantId, agencyId: agency.id },
         { yearStart: priorWindow.start, yearEnd: priorWindow.end },
       )
       priorYearMinCount = priorDeals.length
-    } catch {
-      priorYearMinCount = null
     }
+  } catch {
+    // License-deal service unavailable — leave counts at defaults so the
+    // dashboard renders without the MIN rail (matches the WIC `awaiting`
+    // graceful-fallback pattern).
+    currentYearMinCount = 0
+    priorYearMinCount = null
   }
 
   // --- Tier widget ---------------------------------------------------------
@@ -269,7 +279,9 @@ export async function GET(req: Request) {
     current: agency.tier as AgencyTier,
     currentWip: wipYearly,
     currentMonthlyWic: wic.monthlyTotal,
+    currentYearlyMin: currentYearMinCount,
   })
+  const allTiers = listTierRequirements()
 
   const features = auth.resolvedFeatures
   const canViewWic = hasFeature(features, 'prm.wic.read_own_agency')
@@ -308,11 +320,15 @@ export async function GET(req: Request) {
       wic: canViewWic
         ? wic
         : { awaiting: true, monthlyTotal: 0, yearlyTotal: 0, perMember: [] },
+      min: {
+        currentYearCount: currentYearMinCount,
+      },
       tier: canViewTier
         ? {
             current: tier.current,
             next: tier.next,
             pctToNext: tier.pctToNext,
+            all: allTiers,
           }
         : null,
     },

@@ -4,8 +4,8 @@ import PortalWipWidget from './widget.client'
 const widget: InjectionWidgetModule = {
   metadata: {
     id: 'prm.injection.portal-wip',
-    title: 'Work In Progress',
-    description: 'Active prospects (excluding lost).',
+    title: 'WIP — Wildly Important Prospects',
+    description: "Agency-owned prospects you've registered, excluding lost.",
     features: ['prm.dashboard.view'],
     priority: 5,
     enabled: true,
