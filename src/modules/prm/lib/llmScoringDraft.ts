@@ -54,7 +54,7 @@ async function ensureBootstrapped(): Promise<void> {
   bootstrapInFlight = (async () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      await import('@open-mercato/ai-assistant/src/modules/ai_assistant/lib/ai-sdk' as any)
+      await import('@open-mercato/ai-assistant/ai-sdk' as any)
     } catch {
       // Ignore — registry just stays empty and the consumer returns 503.
     } finally {
