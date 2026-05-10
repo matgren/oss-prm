@@ -15,6 +15,7 @@ import { seedTopicsDictionary } from './lib/topicsDictionarySeed'
 import { seedIndustriesDictionary } from './lib/industriesDictionarySeed'
 import { seedServicesDictionary } from './lib/servicesDictionarySeed'
 import { seedTechnologiesDictionary } from './lib/technologiesDictionarySeed'
+import { seedPartnersFirstSidebarOrder } from './lib/sidebarPreferenceSeed'
 
 /**
  * PRM module setup.
@@ -290,6 +291,7 @@ export const setup: ModuleSetupConfig = {
     await seedIndustriesDictionary(em as EntityManager, { tenantId, organizationId })
     await seedServicesDictionary(em as EntityManager, { tenantId, organizationId })
     await seedTechnologiesDictionary(em as EntityManager, { tenantId, organizationId })
+    await seedPartnersFirstSidebarOrder(em as EntityManager, { tenantId })
   },
 
   async seedDefaults({ em, tenantId, organizationId }) {
@@ -300,6 +302,7 @@ export const setup: ModuleSetupConfig = {
     await seedIndustriesDictionary(em as EntityManager, { tenantId, organizationId })
     await seedServicesDictionary(em as EntityManager, { tenantId, organizationId })
     await seedTechnologiesDictionary(em as EntityManager, { tenantId, organizationId })
+    await seedPartnersFirstSidebarOrder(em as EntityManager, { tenantId })
   },
 }
 
