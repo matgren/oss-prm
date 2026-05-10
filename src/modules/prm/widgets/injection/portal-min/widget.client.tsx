@@ -128,37 +128,28 @@ export default function PortalMinWidget() {
           )}
         </div>
       ) : null}
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">
-            {t('prm.min.summary.count', 'Attributed deals')}
-          </div>
-          <div className="text-3xl font-semibold tracking-tight">{data.ownCount}</div>
+      <div className="rounded-md border bg-muted/30 px-3 py-3">
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {t('prm.min.summary.count', 'Attributed licenses ({year})', {
+            year: partnership ? `Year ${partnership.number}` : new Date().getUTCFullYear(),
+          })}
         </div>
-        <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">
-            {t('prm.min.summary.total', 'Total annual value (USD)')}
-          </div>
-          <div className="text-3xl font-semibold tracking-tight">
-            ${data.ownAnnualValueUsd.toLocaleString()}
-          </div>
-        </div>
+        <div className="mt-0.5 text-3xl font-semibold tracking-tight">{data.ownCount}</div>
       </div>
       <PortalCardDivider />
-      <ul className="space-y-1 text-xs">
+      <ul className="divide-y text-xs">
         {data.ownDeals.slice(0, 8).map((d) => (
-          <li key={d.licenseIdentifier} className="flex items-center justify-between gap-2">
-            <span className="truncate font-medium">{d.licenseIdentifier}</span>
-            <span className="truncate text-muted-foreground">{d.clientIndustry ?? '—'}</span>
-            <span className="text-muted-foreground">
+          <li key={d.licenseIdentifier} className="flex items-center justify-between gap-2 py-2">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{d.licenseIdentifier}</span>
+              <span className="block truncate text-muted-foreground">
+                {d.clientIndustry ?? '—'}
+              </span>
+            </span>
+            <span className="shrink-0 text-right text-muted-foreground">
               {d.signedAt ? new Date(d.signedAt).toLocaleDateString() : '—'}
             </span>
-            <span className="font-medium text-foreground">
-              {d.annualValueUsd
-                ? `$${d.annualValueUsd.low.toLocaleString()}–$${d.annualValueUsd.high.toLocaleString()}`
-                : '—'}
-            </span>
-            <span className="rounded-full border px-2 py-0.5">{d.status}</span>
+            <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px]">{d.status}</span>
           </li>
         ))}
       </ul>
