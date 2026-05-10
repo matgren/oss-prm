@@ -227,6 +227,13 @@ export const setup: ModuleSetupConfig = {
    * For dedicated `OMPartnerOps` / `OMMarketing` named roles, operators create them
    * via the staff-roles UI and grant the appropriate `prm.*` features. Documenting the
    * intended grants here so the role-creator UI shows them as suggested presets.
+   *
+   * Note for OMMarketing: also grant `dictionaries.manage` (core feature) so staff can
+   * extend the seeded `topics` / `industries` / `services` / `technologies` dictionaries
+   * via Settings → Module Configs → Dictionaries. The new/edit Marketing Material forms
+   * pull those entries through `/api/prm/dictionaries/[key]/entries` (gated by
+   * `prm.marketing_material.write`). `admin` already has `dictionaries.manage` from
+   * `@open-mercato/core/modules/dictionaries/setup.ts`.
    */
   defaultRoleFeatures: {
     superadmin: ['prm.*', 'portal.partner.*'],
