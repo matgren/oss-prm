@@ -7,6 +7,7 @@ export type TierRequirement = {
   tier: string
   minWip: number
   minMonthlyWic: number
+  minYearlyMin: number
   rank: number
 }
 
@@ -49,10 +50,16 @@ export type DashboardData = {
       yearly: number
     }>
   }
+  min: {
+    /** Current partnership-year MIN count (or calendar-year when anchor unset). */
+    currentYearCount: number
+  }
   tier: {
     current: TierRequirement
     next: TierRequirement | null
     pctToNext: number
+    /** All 4 tiers in rank order — used by the tier widget's stepper + hover tooltips. */
+    all: TierRequirement[]
   } | null
 }
 
