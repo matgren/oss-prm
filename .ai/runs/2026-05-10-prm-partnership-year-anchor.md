@@ -85,8 +85,8 @@ Update the canonical app-spec (`/Users/maciejgren/Documents/prm/app-spec/app-spe
 
 ### Phase 3: Event + edit-page UI
 
-- [ ] 3.1 `prm.agency.partnership_anchor_changed` event + emission in `agencyService.updateAgency`
-- [ ] 3.2 Agency edit page date input + confirm dialog
+- [x] 3.1 `prm.agency.partnership_anchor_changed` event + emission in `agencyService.updateAgency` — 58b49d2
+- [x] 3.2 Agency edit page date input + confirm dialog — 58b49d2
 
 ### Phase 4: App-spec edits
 
