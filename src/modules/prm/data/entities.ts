@@ -77,6 +77,16 @@ export class Agency {
   @Property({ name: 'contract_signed', type: 'boolean', default: false })
   contractSigned: boolean = false
 
+  /**
+   * Admin-only field. Anchors the partnership-year window used for MIN
+   * aggregation and the dashboard's "this year" KPI toggles. Nullable —
+   * when null, KPI windows fall back to calendar year and the portal
+   * dashboard shows a banner asking OM staff to set the date.
+   * See SPEC-2026-05-10-partnership-year.md.
+   */
+  @Property({ name: 'partnership_start_date', type: 'date', nullable: true })
+  partnershipStartDate?: Date | null
+
   @Property({ name: 'nda_signed', type: 'boolean', default: false })
   ndaSigned: boolean = false
 

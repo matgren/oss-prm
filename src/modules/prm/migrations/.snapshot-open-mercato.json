@@ -278,6 +278,22 @@
           "enumItems": [],
           "mappedType": "boolean"
         },
+        "partnership_start_date": {
+          "name": "partnership_start_date",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 0,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "date"
+        },
         "nda_signed": {
           "name": "nda_signed",
           "type": "boolean",
