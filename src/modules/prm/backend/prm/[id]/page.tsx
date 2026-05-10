@@ -11,6 +11,7 @@ import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { useT, type TranslateFn } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 
 type AgencyDetail = {
   id: string
@@ -30,6 +31,8 @@ type AgencyDetail = {
   contractSigned: boolean
   ndaSigned: boolean
   onboarded: boolean
+  /** YYYY-MM-DD string or null — SPEC-2026-05-10 partnership-year anchor. */
+  partnershipStartDate: string | null
   createdAt: string
   updatedAt: string
 }
@@ -57,6 +60,8 @@ const statusSchema = z.object({
   contractSigned: z.boolean(),
   ndaSigned: z.boolean(),
   onboarded: z.boolean(),
+  /** Empty string treated as null on submit. */
+  partnershipStartDate: z.string().optional(),
 })
 
 type StatusValues = z.infer<typeof statusSchema>
@@ -124,6 +129,7 @@ export default function AgencyDetailPage() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [tab, setTab] = React.useState<'status' | 'profile' | 'members'>('status')
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
 
   const loadAgency = React.useCallback(async () => {
     setLoading(true)
@@ -244,6 +250,15 @@ export default function AgencyDetailPage() {
               { id: 'contractSigned', label: t('prm.agencies.fields.contract', 'Contract signed (admin-only)'), type: 'checkbox' },
               { id: 'ndaSigned', label: t('prm.agencies.fields.nda', 'NDA signed (admin-only)'), type: 'checkbox' },
               { id: 'onboarded', label: t('prm.agencies.fields.onboarded', 'Onboarded (admin-only)'), type: 'checkbox' },
+              {
+                id: 'partnershipStartDate',
+                label: t('prm.agencies.fields.partnershipStartDate', 'Partnership start date (admin-only)'),
+                type: 'date',
+                description: t(
+                  'prm.agencies.fields.partnershipStartDate.help',
+                  'Anchors the partnership-year window used for MIN and the "this year" KPI toggles. Empty = falls back to calendar year (dashboard shows a banner asking for this date).',
+                ),
+              },
             ]}
             initialValues={{
               tier: agency.tier as StatusValues['tier'],
@@ -251,15 +266,38 @@ export default function AgencyDetailPage() {
               contractSigned: agency.contractSigned,
               ndaSigned: agency.ndaSigned,
               onboarded: agency.onboarded,
+              partnershipStartDate: agency.partnershipStartDate ?? '',
             }}
             cancelHref="/backend/prm"
             onSubmit={async (values) => {
+              const rawAnchor = (values.partnershipStartDate ?? '').trim()
+              const nextAnchor: string | null = rawAnchor === '' ? null : rawAnchor
+              const prevAnchor = agency.partnershipStartDate
+
+              // SPEC-2026-05-10 §5 — confirm dialog when PM edits a non-null anchor to a
+              // different non-null value (history-mutation hazard). Null↔value transitions
+              // do not require confirm.
+              if (prevAnchor && nextAnchor && prevAnchor !== nextAnchor) {
+                const ok = await confirm({
+                  title: t(
+                    'prm.agencies.partnership.confirmTitle',
+                    'Change partnership start date?',
+                  ),
+                  description: t(
+                    'prm.agencies.partnership.confirmBody',
+                    'Changing this date will retroactively recompute every prior partnership year — historical "Year N closed with X" captions will move and tier-eval history will be non-deterministic. Continue?',
+                  ),
+                  confirmText: t('prm.agencies.partnership.confirmYes', 'Change date'),
+                })
+                if (!ok) return
+              }
+
               await apiCallOrThrow(
                 `/api/prm/agency/${agencyId}`,
                 {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(values),
+                  body: JSON.stringify({ ...values, partnershipStartDate: nextAnchor }),
                 },
                 { errorMessage: t('prm.agencies.detail.flash.error', 'Save failed.') },
               )
@@ -337,6 +375,7 @@ export default function AgencyDetailPage() {
           <MembersTab agencyId={agencyId} members={members} reload={loadAgency} t={t} />
         )}
       </PageBody>
+      {ConfirmDialogElement}
     </Page>
   )
 }
