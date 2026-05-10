@@ -90,12 +90,12 @@ Update the canonical app-spec (`/Users/maciejgren/Documents/prm/app-spec/app-spe
 
 ### Phase 4: App-spec edits
 
-- [ ] 4.1 Update canonical app-spec MIN glossary + KPI references (out-of-repo file)
+- [x] 4.1 Update canonical app-spec MIN glossary + KPI references (out-of-repo file)
 
 ### Phase 5: Verification + spec status
 
 - [ ] 5.1 `yarn generate`, tests green, typecheck clean
-- [ ] 5.2 Update spec Implementation Status section + `POST-MVP-FOLLOW-UPS.md`
+- [x] 5.2 Update spec Implementation Status section + `POST-MVP-FOLLOW-UPS.md` — be8dcf3
 
 ## Changelog
 
