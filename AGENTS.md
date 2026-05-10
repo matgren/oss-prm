@@ -13,25 +13,25 @@ To customise a built-in module beyond extensions, eject with `yarn mercato eject
 
 ## Task → Context Map
 
-Match your task below, then **STOP and Read the listed file(s)** before writing
-any code. A task may match multiple rows — load all of them. If you skip this
-step, you WILL produce incorrect imports and miss required patterns.
+Match your task below, then **STOP** and either invoke the listed skill OR `Read` the listed file(s) before writing any code. A task may match multiple rows — load all of them. If you skip this step, you WILL produce incorrect imports and miss required patterns.
+
+> **Skill invocation note:** rows that say `invoke om-superpowers:om-<name>` mean call the Skill tool with that name. The skill's Task Router then loads the right reference (e.g., `om-implement-spec` routes module-scaffold, data-model-design, system-extension, integration-builder via its internal router). Do NOT try to `Read` `.ai/skills/...` files — those moved into the om-superpowers plugin during the v1.x migration.
 
 ### Module Development
 
 | Task | Load |
 |---|---|
-| Scaffold a new module from scratch | `.ai/skills/module-scaffold/SKILL.md` |
-| Design entities and relationships | `.ai/skills/data-model-design/SKILL.md` |
-| Build backend UI (forms, tables, pages) | `.ai/skills/backend-ui-design/SKILL.md` |
-| Build an integration provider | `.ai/skills/integration-builder/SKILL.md` |
+| Scaffold a new module from scratch | invoke `om-superpowers:om-implement-spec` (router → module-scaffold reference) |
+| Design entities and relationships | invoke `om-superpowers:om-implement-spec` (router → data-model-design reference) |
+| Build backend UI (forms, tables, pages) | invoke `om-superpowers:om-ds-guardian` (DS-compliant CRUD/data-table/form pages) |
+| Build an integration provider | invoke `om-superpowers:om-implement-spec` (router → integration-builder reference) |
 
 ### Extending Core Modules (UMES)
 
 | Task | Load |
 |---|---|
-| Extend a core module (add fields, columns, menus, interceptors, enrichers) | `.ai/skills/system-extension/SKILL.md` |
-| Eject and customize a core module | `.ai/skills/eject-and-customize/SKILL.md` |
+| Extend a core module (add fields, columns, menus, interceptors, enrichers) | invoke `om-superpowers:om-implement-spec` (router → system-extension reference) |
+| Eject and customize a core module | invoke `om-superpowers:om-implement-spec` (router → system-extension/eject.md) |
 | Add a response enricher to another module's API | `.ai/guides/core.md` → Response Enrichers |
 | Add an API interceptor (before/after hooks) | `.ai/guides/core.md` → API Interceptors |
 | Inject widgets into forms/tables/menus | `.ai/guides/core.md` → Widget Injection |
@@ -44,7 +44,7 @@ step, you WILL produce incorrect imports and miss required patterns.
 | Add/modify an entity, create migration | `.ai/guides/core.md` → Module Files, then `yarn mercato db generate` |
 | Add a REST API endpoint | `.ai/guides/core.md` → API Routes |
 | Add a backend page | `.ai/guides/ui.md` → CrudForm / DataTable |
-| Configure sidebar navigation, page groups, settings pages | `.ai/skills/module-scaffold/references/navigation-patterns.md` |
+| Configure sidebar navigation, page groups, settings pages | invoke `om-superpowers:om-implement-spec` (router → module-scaffold/navigation-patterns) |
 | Add event subscribers or emit events | `.ai/guides/events.md` |
 | Add real-time browser updates (SSE) | `.ai/guides/events.md` → DOM Event Bridge |
 | Add search to a module | `.ai/guides/search.md` |
@@ -77,13 +77,13 @@ These guides ship automatically when the corresponding module is installed.
 
 | Task | Load |
 |---|---|
-| Debug / fix errors | `.ai/skills/troubleshooter/SKILL.md` |
-| Review code changes | `.ai/skills/code-review/SKILL.md` |
-| Write a spec | `.ai/skills/spec-writing/SKILL.md`, `.ai/specs/SPEC-000-template.md` |
-| Implement a spec (or selected phases) | `.ai/skills/implement-spec/SKILL.md` |
-| Create / run integration tests | `.ai/skills/integration-tests/SKILL.md` |
+| Debug / fix errors | invoke `om-superpowers:om-troubleshooter` |
+| Review code changes | invoke `om-superpowers:om-code-review` |
+| Write a spec | invoke `om-superpowers:om-cto` (router → spec-writing), plus `.ai/specs/SPEC-000-template.md` |
+| Implement a spec (or selected phases) | invoke `om-superpowers:om-implement-spec` |
+| Create / run integration tests | invoke `om-superpowers:om-integration-tests` |
 | Add / run PRM integration tests (tenant-per-worker fixture) | `.ai/guides/prm.testing.md` |
-| Upgrade framework from 0.4.10 to 0.5.0 | `.ai/skills/auto-upgrade-0.4.10-to-0.5.0/SKILL.md` |
+| Upgrade framework from 0.4.10 to 0.5.0 | One-off skill not vendored to consumer apps; clone OM and read `OM/.ai/skills/auto-upgrade-0.4.10-to-0.5.0/SKILL.md` |
 
 ## Module Anatomy
 
@@ -130,10 +130,11 @@ Register in `src/modules.ts`: `{ id: '<id>', from: '@app' }`
 4. **Confirm migrations with user** before running `yarn mercato db migrate`
 5. **BEFORE writing ANY code**, you MUST:
    - Match your task against the **Task → Context Map** above
-   - `Read` every file listed in the "Load" column for your task type
+   - For each matched row: if the row says `invoke om-superpowers:om-<name>`, call that Skill via the Skill tool (do not Read the plugin files manually — the skill's Task Router decides which references load). If the row lists a `.ai/guides/...` path, `Read` it.
    - Only then proceed to implementation
-   - If your task matches multiple rows, load ALL listed files
-   - **Do NOT skip this step.** The guides contain canonical import paths, required patterns, and conventions that CANNOT be reliably inferred from existing code alone. Skipping leads to wrong imports, missing conventions, and rework.
+   - If your task matches multiple rows, load ALL listed files / invoke ALL listed skills
+   - **Do NOT skip this step.** The guides + skill references contain canonical import paths, required patterns, and conventions that CANNOT be reliably inferred from existing code alone. Skipping leads to wrong imports, missing conventions, and rework.
+   - **Do NOT silently skip a "missing" `.ai/skills/<name>/SKILL.md` reference.** If you find one in older docs or PR feedback, the file moved into the om-superpowers plugin — invoke `om-superpowers:om-<name>` (or the closest plugin skill per this map) instead of giving up.
 
 ## Additional Conventions
 
