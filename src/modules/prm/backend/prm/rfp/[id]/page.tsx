@@ -1,50 +1,4 @@
 'use client'
-/**
- * Why this page does NOT use `CrudForm` + `updateCrud` (deviation auditable
- * against commit 20ceeb7).
- *
- * The RFP draft editor needs **dynamic dependent-field rendering** driven by
- * live form state: when `eligibility_filter` is `by_min_tier`, the `minTier`
- * select must be visible; when it's `explicit`, the `explicitAgencyIds`
- * textarea must be visible; otherwise both are hidden. The companion-field
- * rules (server `updateRfpDraftSchema`) reject submissions where the wrong
- * companion is populated, so the UI must hide the irrelevant ones — not just
- * show them with a hint label.
- *
- * `CrudForm` (`@open-mercato/ui/backend/CrudForm`) accepts `fields` as a
- * **static `CrudField[]` array**. `CrudFieldBase` (lines 121-131 of
- * `node_modules/@open-mercato/ui/src/backend/CrudForm.tsx`) does not expose
- * `visibleWhen` / `showIf` / `dependsOn`. The `visibleWhen` rule **only**
- * applies to UMES-injected fields (`InjectionFieldDefinition` at
- * `@open-mercato/shared/src/modules/widgets/injection.ts:315`) — fields that
- * downstream modules add via injection. The host page's own field list has
- * no equivalent hook.
- *
- * The sibling create page (`new/page.tsx`) works around this by always
- * rendering `minTier` + `explicitAgencyIds` and folding the condition into
- * the field label ("(when filter = by_min_tier)"). That's a UX regression we
- * deliberately don't repeat on the edit page — once a draft has a real
- * eligibility filter chosen, hiding the irrelevant companion is materially
- * clearer.
- *
- * Refactor paths considered and rejected:
- *   1. Adopt the create page's compromise — regresses UX with no offsetting
- *      consistency win (the two pages are still different surfaces).
- *   2. Wrap `CrudForm` in a custom adapter that rebuilds `fields` on every
- *      keystroke — adds ~150 LOC of indirection for a single dynamic rule.
- *   3. Use a custom `CrudFormGroup.component` callback — the body of the
- *      group becomes hand-rolled JSX inside `CrudForm` chrome, which is
- *      "inline form inside a CrudForm shell" rather than "CrudForm".
- *
- * Trade-off owned: this page hand-rolls field state + `apiCallOrThrow`
- * PATCH instead of `updateCrud`, with explicit camelCase→snake_case mapping
- * matching the create page's `onSubmit`. The action surface (publish,
- * unpublish, close, reopen, delete) lives outside any form and would not be
- * served by `CrudForm` regardless.
- *
- * Re-evaluate this decision when `CrudForm` ships per-field `visibleWhen`
- * for non-injected fields. Until then, do NOT migrate this page.
- */
 import * as React from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
@@ -94,11 +48,12 @@ type BroadcastsResponse = {
 }
 
 /**
- * B7 — RFP detail (Spec #5 §3.1 + §10 Commit 1).
+ * B7 — RFP read-only detail page.
  *
- * Edit-while-draft, plus publish / unpublish / close / reopen lifecycle
- * actions. Uses native dialog primitives that honour Cmd/Ctrl+Enter +
- * Escape per AGENTS.md UI conventions.
+ * Draft editing lives on the sibling `/edit` page (canonical OM CRUD pattern:
+ * separate detail and edit, list-with-flash redirect on save). This page
+ * shows the Overview + lifecycle ActionsBar (publish / unpublish / close /
+ * reopen / delete) and links to `/edit` while the RFP is still a draft.
  */
 function resolveDynamicId(params: Record<string, unknown> | null): string | undefined {
   // OM framework routes module pages through a catch-all `/backend/[...slug]`.
@@ -175,16 +130,20 @@ export default function RfpDetailPage() {
           .replace('{eligibility}', rfp.eligibilityFilter)
           .replace('{from}', rfp.receivedFrom)}
         actions={
-          <Link href="/backend/prm/rfp">
-            <Button variant="outline">{t('prm.rfp.detail.back', 'Back to list')}</Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {rfp.status === 'draft' ? (
+              <Link href={`/backend/prm/rfp/${rfp.id}/edit`}>
+                <Button>{t('prm.rfp.detail.edit', 'Edit draft')}</Button>
+              </Link>
+            ) : null}
+            <Link href="/backend/prm/rfp">
+              <Button variant="outline">{t('prm.rfp.detail.back', 'Back to list')}</Button>
+            </Link>
+          </div>
         }
       />
       <PageBody>
         <RfpOverview rfp={rfp} broadcastTotal={broadcastTotal} />
-        {rfp.status === 'draft' ? (
-          <DraftEditor rfp={rfp} onSaved={() => void load()} />
-        ) : null}
         <ActionsBar
           rfp={rfp}
           broadcastTotal={broadcastTotal}
@@ -294,327 +253,6 @@ function Section({ label, value }: { label: string; value: string }) {
         {value}
       </pre>
     </div>
-  )
-}
-
-/**
- * Inline draft editor — only mounted when status === 'draft'. PATCHes the
- * subset of fields that change here. Eligibility companion-field rules
- * mirror the server validator.
- */
-function DraftEditor({ rfp, onSaved }: { rfp: Rfp; onSaved: () => void }) {
-  const t = useT()
-  const [busy, setBusy] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-  const [title, setTitle] = React.useState(rfp.title)
-  const [receivedFrom, setReceivedFrom] = React.useState(rfp.receivedFrom)
-  const [receivedAt, setReceivedAt] = React.useState(rfp.receivedAt.slice(0, 10))
-  const [description, setDescription] = React.useState(rfp.description)
-  const [techRequirements, setTechRequirements] = React.useState(rfp.techRequirements)
-  const [domainRequirements, setDomainRequirements] = React.useState(rfp.domainRequirements)
-  const [industry, setIndustry] = React.useState(rfp.industry ?? '')
-  const [budgetBucket, setBudgetBucket] = React.useState(rfp.budgetBucket ?? '')
-  const [timelineBucket, setTimelineBucket] = React.useState(rfp.timelineBucket ?? '')
-  const [requiredCapabilities, setRequiredCapabilities] = React.useState(
-    rfp.requiredCapabilities.join(', '),
-  )
-  const [additionalCriterionName, setAdditionalCriterionName] = React.useState(
-    rfp.additionalCriterionName ?? '',
-  )
-  const [deadlineToRespond, setDeadlineToRespond] = React.useState(
-    rfp.deadlineToRespond ? rfp.deadlineToRespond.slice(0, 16) : '',
-  )
-  const [eligibilityFilter, setEligibilityFilter] = React.useState(rfp.eligibilityFilter)
-  const [minTier, setMinTier] = React.useState(rfp.minTier ?? '')
-  const [explicitAgencyIds, setExplicitAgencyIds] = React.useState(
-    (rfp.explicitAgencyIds ?? []).join(', '),
-  )
-  const [notes, setNotes] = React.useState(rfp.notes ?? '')
-
-  async function save() {
-    setBusy(true)
-    setError(null)
-    try {
-      // Companion-field guards (mirror server validator).
-      if (eligibilityFilter === 'by_min_tier' && !minTier) {
-        throw new Error(
-          t(
-            'prm.rfp.edit.errors.minTierRequired',
-            'Min tier is required when eligibility = by_min_tier.',
-          ),
-        )
-      }
-      const explicitIds = explicitAgencyIds
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-      if (eligibilityFilter === 'explicit' && explicitIds.length === 0) {
-        throw new Error(
-          t(
-            'prm.rfp.edit.errors.explicitRequired',
-            'At least one agency UUID required when eligibility = explicit.',
-          ),
-        )
-      }
-      const capabilities = requiredCapabilities
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-
-      const payload: Record<string, unknown> = {
-        title,
-        received_from: receivedFrom,
-        received_at: receivedAt,
-        description,
-        tech_requirements: techRequirements,
-        domain_requirements: domainRequirements,
-        required_capabilities: capabilities,
-        eligibility_filter: eligibilityFilter,
-        industry: industry || null,
-        budget_bucket: budgetBucket || null,
-        timeline_bucket: timelineBucket || null,
-        additional_criterion_name: additionalCriterionName || null,
-        deadline_to_respond: deadlineToRespond || null,
-        min_tier: eligibilityFilter === 'by_min_tier' ? minTier || null : null,
-        explicit_agency_ids: eligibilityFilter === 'explicit' ? explicitIds : null,
-        notes: notes || null,
-      }
-      await apiCallOrThrow(`/api/prm/rfp/${rfp.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      flash(t('prm.rfp.edit.flash.saved', 'Draft saved.'), 'success')
-      onSaved()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save draft')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <section className="mb-6 rounded-md border bg-card p-4">
-      <h3 className="mb-3 text-sm font-semibold">
-        {t('prm.rfp.edit.title', 'Edit draft')}
-      </h3>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <LabelInput
-          label={t('prm.rfp.fields.title', 'Title')}
-          value={title}
-          onChange={setTitle}
-          required
-        />
-        <LabelInput
-          label={t('prm.rfp.fields.receivedFrom', 'Received from')}
-          value={receivedFrom}
-          onChange={setReceivedFrom}
-          required
-        />
-        <LabelInput
-          label={t('prm.rfp.fields.receivedAt', 'Received at')}
-          type="date"
-          value={receivedAt}
-          onChange={setReceivedAt}
-          required
-        />
-        <LabelInput
-          label={t('prm.rfp.fields.industry', 'Industry')}
-          value={industry}
-          onChange={setIndustry}
-        />
-        <LabelSelect
-          label={t('prm.rfp.fields.budgetBucket', 'Budget bucket')}
-          value={budgetBucket}
-          onChange={setBudgetBucket}
-          options={[
-            { value: '', label: '—' },
-            { value: '<50k', label: '< $50k' },
-            { value: '50k-250k', label: '$50k–$250k' },
-            { value: '250k-1m', label: '$250k–$1M' },
-            { value: '1m+', label: '$1M+' },
-            { value: 'unknown', label: 'Unknown' },
-          ]}
-        />
-        <LabelSelect
-          label={t('prm.rfp.fields.timelineBucket', 'Timeline bucket')}
-          value={timelineBucket}
-          onChange={setTimelineBucket}
-          options={[
-            { value: '', label: '—' },
-            { value: '0-3m', label: '0–3 months' },
-            { value: '3-6m', label: '3–6 months' },
-            { value: '6-12m', label: '6–12 months' },
-            { value: '12m+', label: '12+ months' },
-            { value: 'unknown', label: 'Unknown' },
-          ]}
-        />
-        <LabelInput
-          label={t('prm.rfp.fields.deadlineToRespond', 'Deadline to respond')}
-          type="datetime-local"
-          value={deadlineToRespond}
-          onChange={setDeadlineToRespond}
-        />
-        <LabelInput
-          label={t('prm.rfp.fields.additionalCriterionName', 'Additional scoring criterion')}
-          value={additionalCriterionName}
-          onChange={setAdditionalCriterionName}
-        />
-        <LabelSelect
-          label={t('prm.rfp.fields.eligibilityFilter', 'Eligibility filter')}
-          value={eligibilityFilter}
-          onChange={setEligibilityFilter}
-          options={[
-            { value: 'all_active', label: 'All active agencies' },
-            { value: 'by_min_tier', label: 'By minimum tier' },
-            { value: 'explicit', label: 'Explicit agency list' },
-          ]}
-          required
-        />
-        {eligibilityFilter === 'by_min_tier' ? (
-          <LabelSelect
-            label={t('prm.rfp.fields.minTier', 'Min tier')}
-            value={minTier}
-            onChange={setMinTier}
-            options={[
-              { value: '', label: '—' },
-              { value: 'om_agency', label: 'OM Agency' },
-              { value: 'ai_native', label: 'AI-Native' },
-              { value: 'ai_native_expert', label: 'AI-Native Expert' },
-              { value: 'ai_native_core', label: 'AI-Native Core' },
-            ]}
-          />
-        ) : null}
-      </div>
-      {eligibilityFilter === 'explicit' ? (
-        <LabelTextarea
-          label={t('prm.rfp.fields.explicitAgencyIds', 'Explicit agency IDs')}
-          help={t('prm.rfp.fields.explicitAgencyIds.help', 'Comma-separated UUIDs.')}
-          value={explicitAgencyIds}
-          onChange={setExplicitAgencyIds}
-        />
-      ) : null}
-      <LabelInput
-        label={t('prm.rfp.fields.requiredCapabilities', 'Required capabilities')}
-        value={requiredCapabilities}
-        onChange={setRequiredCapabilities}
-        help={t(
-          'prm.rfp.fields.requiredCapabilities.help',
-          'Comma-separated capability slugs (e.g. nextjs,postgres).',
-        )}
-      />
-      <LabelTextarea
-        label={t('prm.rfp.fields.description', 'Description (markdown)')}
-        value={description}
-        onChange={setDescription}
-      />
-      <LabelTextarea
-        label={t('prm.rfp.fields.techRequirements', 'Tech requirements (markdown)')}
-        value={techRequirements}
-        onChange={setTechRequirements}
-      />
-      <LabelTextarea
-        label={t('prm.rfp.fields.domainRequirements', 'Domain requirements (markdown)')}
-        value={domainRequirements}
-        onChange={setDomainRequirements}
-      />
-      <LabelTextarea
-        label={t('prm.rfp.fields.notes', 'Internal notes')}
-        value={notes}
-        onChange={setNotes}
-      />
-      {error ? <ErrorMessage label={error} /> : null}
-      <div className="mt-4 flex justify-end">
-        <Button onClick={() => void save()} disabled={busy}>
-          {busy ? t('prm.rfp.edit.saving', 'Saving…') : t('prm.rfp.edit.submit', 'Save draft')}
-        </Button>
-      </div>
-    </section>
-  )
-}
-
-function LabelInput({
-  label,
-  value,
-  onChange,
-  type = 'text',
-  required,
-  help,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  type?: string
-  required?: boolean
-  help?: string
-}) {
-  return (
-    <label className="mt-3 flex flex-col gap-1 text-sm">
-      <span className="font-medium">
-        {label}
-        {required ? <span className="text-destructive"> *</span> : null}
-      </span>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
-      {help ? <span className="text-xs text-muted-foreground">{help}</span> : null}
-    </label>
-  )
-}
-
-function LabelTextarea({
-  label,
-  value,
-  onChange,
-  help,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  help?: string
-}) {
-  return (
-    <label className="mt-3 flex flex-col gap-1 text-sm">
-      <span className="font-medium">{label}</span>
-      <Textarea
-        className="min-h-24"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      {help ? <span className="text-xs text-muted-foreground">{help}</span> : null}
-    </label>
-  )
-}
-
-function LabelSelect({
-  label,
-  value,
-  onChange,
-  options,
-  required,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  options: { value: string; label: string }[]
-  required?: boolean
-}) {
-  return (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="font-medium">
-        {label}
-        {required ? <span className="text-destructive"> *</span> : null}
-      </span>
-      <select
-        className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
   )
 }
 

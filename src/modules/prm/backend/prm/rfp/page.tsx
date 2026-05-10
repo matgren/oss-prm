@@ -98,14 +98,19 @@ export default function RfpsBackendPage() {
         id: 'title',
         header: t('prm.rfp.col.title', 'Title'),
         accessorKey: 'title',
-        cell: ({ row }) => (
-          <Link
-            href={`/backend/prm/rfp/${row.original.id}`}
-            className="font-medium text-primary hover:underline"
-          >
-            {row.original.title}
-          </Link>
-        ),
+        cell: ({ row }) => {
+          // Drafts → straight into the edit form (most common next action).
+          // Non-drafts → read-only detail with lifecycle actions.
+          const href =
+            row.original.status === 'draft'
+              ? `/backend/prm/rfp/${row.original.id}/edit`
+              : `/backend/prm/rfp/${row.original.id}`
+          return (
+            <Link href={href} className="font-medium text-primary hover:underline">
+              {row.original.title}
+            </Link>
+          )
+        },
       },
       {
         id: 'receivedFrom',
