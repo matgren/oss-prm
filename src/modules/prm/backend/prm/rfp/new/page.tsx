@@ -203,25 +203,59 @@ export default function CreateRfpPage() {
               defaultValue: 'all_active',
             },
             {
+              // Empty label suppresses CrudForm's outer label row; the
+              // component renders its own label only when applicable, so
+              // when hidden the field collapses to a zero-height grid cell.
               id: 'minTier',
-              label: t('prm.rfp.fields.minTier', 'Minimum tier (when filter = by_min_tier)'),
-              type: 'select',
+              label: '',
+              type: 'custom',
               layout: 'half',
-              options: [
-                { value: 'om_agency', label: 'OM Agency' },
-                { value: 'ai_native', label: 'AI-Native' },
-                { value: 'ai_native_expert', label: 'AI-Native Expert' },
-                { value: 'ai_native_core', label: 'AI-Native Core' },
-              ],
+              component: ({ value, setValue, values: formValues }) => {
+                if (formValues?.eligibilityFilter !== 'by_min_tier') return null
+                return (
+                  <>
+                    <label className="block text-sm font-medium">
+                      {t('prm.rfp.fields.minTier', 'Minimum tier')}
+                      <span className="text-red-600"> *</span>
+                    </label>
+                    <select
+                      className="w-full h-9 rounded border pl-3 pr-8 text-sm"
+                      value={typeof value === 'string' ? value : ''}
+                      onChange={(e) => setValue(e.target.value || '')}
+                    >
+                      <option value="">{t('ui.forms.select.emptyOption', '—')}</option>
+                      <option value="om_agency">OM Agency</option>
+                      <option value="ai_native">AI-Native</option>
+                      <option value="ai_native_expert">AI-Native Expert</option>
+                      <option value="ai_native_core">AI-Native Core</option>
+                    </select>
+                  </>
+                )
+              },
             },
             {
               id: 'explicitAgencyIds',
-              label: t('prm.rfp.fields.explicitAgencyIds', 'Explicit agency IDs (when filter = explicit)'),
-              type: 'textarea',
-              description: t(
-                'prm.rfp.fields.explicitAgencyIds.help',
-                'Comma-separated UUIDs.',
-              ),
+              label: '',
+              type: 'custom',
+              component: ({ value, setValue, values: formValues }) => {
+                if (formValues?.eligibilityFilter !== 'explicit') return null
+                return (
+                  <>
+                    <label className="block text-sm font-medium">
+                      {t('prm.rfp.fields.explicitAgencyIds', 'Explicit agency IDs')}
+                      <span className="text-red-600"> *</span>
+                    </label>
+                    <textarea
+                      className="w-full rounded border px-2 py-2 min-h-[80px] sm:min-h-[120px] text-sm"
+                      value={typeof value === 'string' ? value : ''}
+                      onChange={(e) => setValue(e.target.value)}
+                    />
+                    <div className="text-xs text-muted-foreground">
+                      {t('prm.rfp.fields.explicitAgencyIds.help', 'Comma-separated UUIDs.')}
+                    </div>
+                  </>
+                )
+              },
             },
             {
               id: 'notes',
