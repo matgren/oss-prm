@@ -331,4 +331,16 @@ describe('AgencyService.updateAgency — partnership_start_date (SPEC-2026-05-10
     // Equality on Date instances is reference, so compare ISO.
     expect(updated.partnershipStartDate?.toISOString()).toBe(anchor.toISOString())
   })
+
+  it('findById returns partnership_start_date (canonical lookup path for portal MIN/dashboard routes)', async () => {
+    const em = new FakeEntityManager()
+    const anchor = new Date('2025-08-15T00:00:00Z')
+    seedAgency(em, { partnershipStartDate: anchor })
+    const svc = new AgencyService(em as any)
+
+    const loaded = await svc.findById(AGENCY_ID, { tenantId: TENANT })
+
+    expect(loaded).not.toBeNull()
+    expect(loaded?.partnershipStartDate?.toISOString()).toBe(anchor.toISOString())
+  })
 })

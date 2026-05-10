@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import type { EntityManager } from '@mikro-orm/postgresql'
 import {
   requireCustomerAuth,
   requireCustomerFeature,
@@ -8,9 +7,9 @@ import {
 import { CustomerRbacService } from '@open-mercato/core/modules/customer_accounts/services/customerRbacService'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
-import { Agency } from '../../../data/entities'
 import { portalMinQuerySchema } from '../../../data/validators'
 import type { AgencyMemberService } from '../../../lib/agencyMemberService'
+import type { AgencyService } from '../../../lib/agencyService'
 import type { LicenseDealService } from '../../../lib/licenseDealService'
 import { getPartnershipYearWindow } from '../../../lib/partnershipYear'
 
@@ -75,8 +74,12 @@ export async function GET(req: Request) {
     })
   }
 
-  const em = container.resolve('em') as EntityManager
-  const agency = await em.findOne(Agency, { id: member.agencyId, tenantId: auth.tenantId })
+  // Canonical pattern: load the Agency via the service helper (mirrors the
+  // dashboard route at api/portal/dashboard/route.ts). The helper uses
+  // `findOneWithDecryption` + `deletedAt: null` so encryption + soft-delete
+  // semantics stay consistent across portal entry points.
+  const agencyService = container.resolve('agencyService') as AgencyService
+  const agency = await agencyService.findById(member.agencyId, { tenantId: auth.tenantId })
   const now = new Date()
   const currentCalendarYear = now.getUTCFullYear()
 
