@@ -154,3 +154,28 @@ export function isUniqueViolation(err: unknown): boolean {
  */
 export const GITHUB_PROFILE_CONFLICT_MESSAGE =
   'A profile with this GitHub handle is already active in our partner network. Please contact OM PartnerOps if you believe this is in error.'
+
+/**
+ * Extract a user-facing message from an error thrown by `apiCallOrThrow` against a PRM route.
+ *
+ * `@open-mercato/ui`'s `raiseCrudError` only unpacks `data.error` when it is a string
+ * or `data.message` at the top level; PRM routes use the structured envelope
+ * `{ ok: false, error: { code, message } }` (see `toPrmErrorBody`), so the parser falls
+ * through to the generic `"Request failed (NNN)"` placeholder. The original payload is
+ * preserved on the thrown Error via `...data` spread, so we can recover the nested
+ * message here. See `Documents/OM/ISSUE_LOG.md` ISSUE-006 for the upstream-side fix.
+ */
+export function extractPrmErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const nested = (err as { error?: { message?: unknown } }).error
+    if (nested && typeof nested === 'object' && typeof (nested as { message?: unknown }).message === 'string') {
+      const m = (nested as { message: string }).message.trim()
+      if (m) return m
+    }
+    const direct = (err as { message?: unknown }).message
+    if (typeof direct === 'string' && direct.trim() && !/^Request failed \(\d+\)$/.test(direct)) {
+      return direct
+    }
+  }
+  return fallback
+}

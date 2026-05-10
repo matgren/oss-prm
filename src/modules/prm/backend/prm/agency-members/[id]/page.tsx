@@ -4,10 +4,12 @@ import { useParams } from 'next/navigation'
 import { z } from 'zod'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
+import { Button } from '@open-mercato/ui/primitives/button'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { extractPrmErrorMessage } from '../../../../lib/errors'
 import { ConfirmDialog, type ConfirmDialogCopy } from './confirmDialog'
 
 type MemberDetail = {
@@ -21,6 +23,7 @@ type MemberDetail = {
   isActive: boolean
   githubProfile: string | null
   customerUserId: string | null
+  activatedAt: string | null
 }
 
 const updateSchema = z.object({
@@ -48,6 +51,7 @@ export default function MemberEditPage() {
   const [error, setError] = React.useState<string | null>(null)
   const [pendingDeactivate, setPendingDeactivate] = React.useState<UpdateValues | null>(null)
   const [submittingDeactivation, setSubmittingDeactivation] = React.useState(false)
+  const [resendingInvite, setResendingInvite] = React.useState(false)
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -102,6 +106,26 @@ export default function MemberEditPage() {
     [memberId, t, member, load],
   )
 
+  const resendInvite = React.useCallback(async () => {
+    if (!member) return
+    setResendingInvite(true)
+    try {
+      await apiCallOrThrow(`/api/prm/agency-member/${member.id}/resend-invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      flash(t('prm.members.detail.flash.resent', 'Invitation resent.'), 'success')
+      await load()
+    } catch (err) {
+      flash(
+        extractPrmErrorMessage(err, t('prm.members.detail.flash.error', 'Save failed.')),
+        'error',
+      )
+    } finally {
+      setResendingInvite(false)
+    }
+  }, [member, t, load])
+
   const confirmCopy: ConfirmDialogCopy = {
     title: t('prm.members.detail.deactivate.title', 'Deactivate member?'),
     body: t(
@@ -126,6 +150,27 @@ export default function MemberEditPage() {
         })}
       />
       <PageBody>
+        {member.isActive && !member.activatedAt ? (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-dashed bg-muted/40 px-4 py-3 text-sm">
+            <span className="text-muted-foreground">
+              {t(
+                'prm.members.detail.invitedHint',
+                'This member has not accepted their invitation yet. Resending issues a fresh token and cancels the previous one.',
+              )}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={resendingInvite}
+              onClick={() => void resendInvite()}
+            >
+              {resendingInvite
+                ? t('prm.members.detail.action.resending', 'Resending…')
+                : t('prm.members.detail.action.resend', 'Resend invite')}
+            </Button>
+          </div>
+        ) : null}
         <CrudForm<UpdateValues>
           schema={updateSchema}
           fields={[
