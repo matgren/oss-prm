@@ -273,6 +273,119 @@ export class AgencyMemberService {
   }
 
   /**
+   * Re-issue an invitation for a member that was invited but never activated.
+   *
+   * Mirrors `auth/api/users/resend-invite/route.ts` (the canonical OM staff-user
+   * resend pattern): cancel the prior `customer_user_invitation` row by stamping
+   * `cancelled_at`, mint a fresh invitation via `CustomerInvitationService`, and
+   * point the `agency_member` row at the new invitation. The bcrypt-hashed token
+   * is rotated; the old token will fail `findByToken` because it now matches a
+   * cancelled invitation (see `customerInvitationService.findByToken` line 62).
+   *
+   * Caller (route) is responsible for:
+   * - authorization (`prm.agency_member.manage_partner_member` from portal,
+   *   matching the create-invite path),
+   * - re-invite cooldown (`ReinviteCooldownService.consume` — same
+   *   `(agency_id, lower(email))` key as create, so the throttle is shared and
+   *   `TC-PRM-T0-006-reinvite-cooldown` invariants still hold),
+   * - committing the request transaction (this method calls `em.flush()` and
+   *   relies on the route's `em.transactional` wrapper for atomicity).
+   *
+   * Refuses non-portal-managed states (activated, deactivated, non-partner_member)
+   * with `PrmDomainError` rather than silently mutating — those states have
+   * different semantics (deactivate / reactivate / OM-staff-only) and the
+   * caller should route through the right surface instead.
+   */
+  async resendInvite(args: {
+    member: AgencyMember
+    agency: Agency
+    invitedByUserId?: string | null
+    invitedByCustomerUserId?: string | null
+  }): Promise<AgencyMemberInviteResult> {
+    const { member, agency } = args
+
+    if (member.customerUserId) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        'Member has already activated — cannot resend invite.',
+        409,
+      )
+    }
+    if (!member.isActive) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.VALIDATION_FAILED,
+        'Member is deactivated — reactivate before resending an invite.',
+        409,
+      )
+    }
+
+    if (member.invitationId) {
+      const existing = await findOneWithDecryption(
+        this.em,
+        CustomerUserInvitation,
+        { id: member.invitationId } as any,
+        undefined,
+        { tenantId: agency.tenantId, organizationId: agency.organizationId },
+      )
+      if (existing && !existing.cancelledAt) {
+        existing.cancelledAt = new Date()
+        this.em.persist(existing)
+      }
+    }
+
+    const role = await findOneWithDecryption(
+      this.em,
+      CustomerRole,
+      {
+        tenantId: agency.tenantId,
+        slug: member.roleSlug,
+        deletedAt: null,
+      },
+      undefined,
+      { tenantId: agency.tenantId, organizationId: agency.organizationId },
+    )
+    if (!role) {
+      throw new PrmDomainError(
+        PRM_ERROR_CODES.ROLE_SLUG_NOT_SEEDED,
+        `Role "${member.roleSlug}" is not seeded in this tenant. Run the PRM tenant setup first.`,
+        500,
+      )
+    }
+
+    const invitationService = new CustomerInvitationService(this.em as any)
+    const { invitation, rawToken } = await invitationService.createInvitation(
+      member.email,
+      { tenantId: agency.tenantId, organizationId: agency.organizationId },
+      {
+        roleIds: [role.id],
+        invitedByUserId: args.invitedByUserId ?? null,
+        invitedByCustomerUserId: args.invitedByCustomerUserId ?? null,
+        displayName: `${member.firstName} ${member.lastName}`.trim(),
+      },
+    )
+
+    member.invitationId = invitation.id
+    member.invitedAt = new Date()
+    member.updatedAt = new Date()
+    this.em.persist(member)
+    await this.em.flush()
+
+    await safeEmit(
+      'prm.agency_member.invite_resent',
+      {
+        agencyId: agency.id,
+        tenantId: agency.tenantId,
+        agencyMemberId: member.id,
+        invitationId: invitation.id,
+        roleSlug: member.roleSlug,
+      },
+      { context: { agencyId: agency.id, tenantId: agency.tenantId, agencyMemberId: member.id } },
+    )
+
+    return { member, invitation, rawToken }
+  }
+
+  /**
    * Update mutable fields on a member row; emits role/removal events as appropriate.
    * Caller authorizes self-vs-staff scope before calling.
    */

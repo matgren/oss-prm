@@ -7,6 +7,7 @@ import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { PartnerStatusBanner } from '../_components/PartnerStatusBanner'
+import { extractPrmErrorMessage } from '../../../../lib/errors'
 
 type Member = {
   id: string
@@ -158,7 +159,7 @@ export default function PortalMembersPage() {
       setShowInvite(false)
       await load()
     } catch (err) {
-      flash(err instanceof Error ? err.message : t('prm.portal.members.inviteError', 'Invite failed.'), 'error')
+      flash(extractPrmErrorMessage(err, t('prm.portal.members.inviteError', 'Invite failed.')), 'error')
     } finally {
       setSubmitting(false)
     }
@@ -183,7 +184,30 @@ export default function PortalMembersPage() {
         await load()
       } catch (err) {
         flash(
-          err instanceof Error ? err.message : t('prm.portal.members.flash.error', 'Update failed.'),
+          extractPrmErrorMessage(err, t('prm.portal.members.flash.error', 'Update failed.')),
+          'error',
+        )
+      } finally {
+        setBusyMemberId(null)
+      }
+    },
+    [agencyId, t, load],
+  )
+
+  const resendMemberInvite = React.useCallback(
+    async (member: Member) => {
+      if (!agencyId) return
+      setBusyMemberId(member.id)
+      try {
+        await apiCallOrThrow(
+          `/api/prm/portal/agency/${agencyId}/member/${member.id}/resend-invite`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+        )
+        flash(t('prm.portal.members.flash.resent', 'Invitation resent.'), 'success')
+        await load()
+      } catch (err) {
+        flash(
+          extractPrmErrorMessage(err, t('prm.portal.members.flash.error', 'Update failed.')),
           'error',
         )
       } finally {
@@ -226,9 +250,9 @@ export default function PortalMembersPage() {
       />
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">{t('prm.portal.members.title', 'Members')}</h1>
-        {isPartnerAdmin ? (
-          <Button type="button" onClick={() => setShowInvite((s) => !s)}>
-            {showInvite ? t('prm.portal.members.hideInvite', 'Hide form') : t('prm.portal.members.invite', 'Invite member')}
+        {isPartnerAdmin && !showInvite ? (
+          <Button type="button" onClick={() => setShowInvite(true)}>
+            {t('prm.portal.members.invite', 'Invite member')}
           </Button>
         ) : null}
       </header>
@@ -323,29 +347,44 @@ export default function PortalMembersPage() {
                 {isPartnerAdmin ? (
                   <td className="px-3 py-2">
                     {canManage(m) ? (
-                      m.isActive ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          disabled={busyMemberId === m.id}
-                          onClick={() => setPendingDeactivate(m)}
-                        >
-                          {t('prm.portal.members.action.deactivate', 'Deactivate')}
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={busyMemberId === m.id}
-                          onClick={() => void patchMemberActive(m, true)}
-                        >
-                          {busyMemberId === m.id
-                            ? t('prm.portal.members.action.reactivating', 'Reactivating…')
-                            : t('prm.portal.members.action.reactivate', 'Reactivate')}
-                        </Button>
-                      )
+                      <div className="flex flex-wrap items-center gap-2">
+                        {m.isActive && !m.activatedAt ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busyMemberId === m.id}
+                            onClick={() => void resendMemberInvite(m)}
+                          >
+                            {busyMemberId === m.id
+                              ? t('prm.portal.members.action.resending', 'Resending…')
+                              : t('prm.portal.members.action.resend', 'Resend invite')}
+                          </Button>
+                        ) : null}
+                        {m.isActive ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            disabled={busyMemberId === m.id}
+                            onClick={() => setPendingDeactivate(m)}
+                          >
+                            {t('prm.portal.members.action.deactivate', 'Deactivate')}
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busyMemberId === m.id}
+                            onClick={() => void patchMemberActive(m, true)}
+                          >
+                            {busyMemberId === m.id
+                              ? t('prm.portal.members.action.reactivating', 'Reactivating…')
+                              : t('prm.portal.members.action.reactivate', 'Reactivate')}
+                          </Button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}

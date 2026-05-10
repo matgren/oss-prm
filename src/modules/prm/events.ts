@@ -25,6 +25,7 @@ const events = [
   { id: 'prm.agency_member.reactivated', label: 'Agency member reactivated (portal access restored)', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true, portalBroadcast: true },
   { id: 'prm.agency_member.role_changed', label: 'Agency member role changed', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true },
   { id: 'prm.agency_member.updated', label: 'Agency member personal fields updated', entity: 'agency_member', category: 'crud', clientBroadcast: true, portalBroadcast: true },
+  { id: 'prm.agency_member.invite_resent', label: 'Agency member invitation re-sent', entity: 'agency_member', category: 'lifecycle', clientBroadcast: true },
 
   // Telemetry / diagnostic events
   { id: 'prm.agency_member.github_profile_conflict_attempted', label: 'GitHub profile conflict attempted', entity: 'agency_member', category: 'system' },
