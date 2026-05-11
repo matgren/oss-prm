@@ -167,7 +167,10 @@ export default function NewMarketingMaterialPage() {
               id: '__attachments',
               label: t('prm.backend.marketingMaterials.form.attachments', 'Files'),
               type: 'custom',
-              required: true,
+              // Not flagged required: CrudForm's required check reads
+              // values[field.id], but the picker's state lives outside the
+              // form bag in `pickerValue`. The onSubmit handler below
+              // enforces "at least one file" with a translated flash.
               component: () => (
                 <AttachmentPicker
                   value={pickerValue}
