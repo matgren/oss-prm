@@ -9,6 +9,7 @@ import { Input } from '@open-mercato/ui/primitives/input'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { resolveDynamicId } from '../../../../lib/dynamicParams'
 
 type CaseStudyDto = {
   id: string
@@ -39,21 +40,6 @@ type CaseStudyDto = {
  * detail is intentionally read-only-ish: only the publication flag +
  * URL are mutable here.
  */
-function resolveDynamicId(params: Record<string, unknown> | null): string {
-  // OM framework routes module pages through a catch-all `/backend/[...slug]`,
-  // so `useParams()` returns `{ slug: ['prm', 'case-studies', '<uuid>'] }`
-  // instead of `{ id: '<uuid>' }`. Cover both shapes.
-  const slug = (params as { slug?: unknown } | null)?.slug
-  if (Array.isArray(slug) && slug.length > 0) {
-    const last = slug[slug.length - 1]
-    if (typeof last === 'string') return last
-  }
-  const id = (params as { id?: unknown } | null)?.id
-  if (Array.isArray(id) && id.length > 0 && typeof id[0] === 'string') return id[0]
-  if (typeof id === 'string') return id
-  return ''
-}
-
 export default function CaseStudyBackendDetailPage() {
   const t = useT()
   const params = useParams() as Record<string, unknown> | null

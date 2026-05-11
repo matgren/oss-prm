@@ -15,6 +15,7 @@ import {
   type PickerFile,
   type PickerValue,
 } from '../components/AttachmentPicker'
+import { resolveDynamicId } from '../../../../lib/dynamicParams'
 
 type AttachmentDto = {
   id: string
@@ -69,21 +70,6 @@ const dtoToPickerFile = (a: AttachmentDto): PickerFile => ({
   url: a.url,
   source: 'bound',
 })
-
-function resolveDynamicId(params: Record<string, unknown> | null): string {
-  // OM framework routes module pages through a catch-all `/backend/[...slug]`,
-  // so `useParams()` returns `{ slug: ['prm', 'marketing-materials', '<uuid>'] }`
-  // instead of `{ id: '<uuid>' }`. Cover both shapes.
-  const slug = (params as { slug?: unknown } | null)?.slug
-  if (Array.isArray(slug) && slug.length > 0) {
-    const last = slug[slug.length - 1]
-    if (typeof last === 'string') return last
-  }
-  const id = (params as { id?: unknown } | null)?.id
-  if (Array.isArray(id) && id.length > 0 && typeof id[0] === 'string') return id[0]
-  if (typeof id === 'string') return id
-  return ''
-}
 
 export default function EditMarketingMaterialPage() {
   const t = useT()

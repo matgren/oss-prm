@@ -12,6 +12,7 @@ import { useT, type TranslateFn } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
+import { resolveDynamicId } from '../../../lib/dynamicParams'
 
 type AgencyDetail = {
   id: string
@@ -109,22 +110,6 @@ const inviteSchema = z.object({
 })
 
 type InviteValues = z.infer<typeof inviteSchema>
-
-function resolveDynamicId(params: Record<string, unknown> | null): string {
-  // OM framework routes module pages through a catch-all `/backend/[...slug]`.
-  // For `/backend/prm/<uuid>` the params arrive as `slug = ['prm', 'uuid']`;
-  // only when Next.js routes the page directly do we get `params.id`. Cover
-  // both shapes.
-  const slug = (params as { slug?: unknown } | null)?.slug
-  if (Array.isArray(slug) && slug.length > 0) {
-    const last = slug[slug.length - 1]
-    if (typeof last === 'string') return last
-  }
-  const id = (params as { id?: unknown } | null)?.id
-  if (Array.isArray(id) && id.length > 0 && typeof id[0] === 'string') return id[0]
-  if (typeof id === 'string') return id
-  return ''
-}
 
 export default function AgencyDetailPage() {
   const t = useT()

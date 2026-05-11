@@ -10,6 +10,7 @@ import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { resolveDynamicId } from '../../../../lib/dynamicParams'
 
 type Rfp = {
   id: string
@@ -55,19 +56,6 @@ type BroadcastsResponse = {
  * shows the Overview + lifecycle ActionsBar (publish / unpublish / close /
  * reopen / delete) and links to `/edit` while the RFP is still a draft.
  */
-function resolveDynamicId(params: Record<string, unknown> | null): string | undefined {
-  // OM framework routes module pages through a catch-all `/backend/[...slug]`.
-  const slug = (params as { slug?: unknown } | null)?.slug
-  if (Array.isArray(slug) && slug.length > 0) {
-    const last = slug[slug.length - 1]
-    if (typeof last === 'string') return last
-  }
-  const id = (params as { id?: unknown } | null)?.id
-  if (Array.isArray(id) && id.length > 0 && typeof id[0] === 'string') return id[0]
-  if (typeof id === 'string') return id
-  return undefined
-}
-
 export default function RfpDetailPage() {
   const t = useT()
   const router = useRouter()

@@ -7,6 +7,7 @@ import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { resolveDynamicId } from '../../../../lib/dynamicParams'
 
 type AuditRow = {
   broadcast_id: string
@@ -35,21 +36,6 @@ type ListResponse = {
  * OM PartnerOps read-only audit of a single RFP's broadcast set. Shows
  * per-Agency timing, response status, and final outcome.
  */
-function resolveDynamicId(params: Record<string, unknown> | null): string {
-  // OM framework routes module pages through a catch-all `/backend/[...slug]`,
-  // so `useParams()` returns `{ slug: [...,'<uuid>'] }` instead of `{ id: '<uuid>' }`.
-  // Cover both shapes.
-  const slug = (params as { slug?: unknown } | null)?.slug
-  if (Array.isArray(slug) && slug.length > 0) {
-    const last = slug[slug.length - 1]
-    if (typeof last === 'string') return last
-  }
-  const id = (params as { id?: unknown } | null)?.id
-  if (Array.isArray(id) && id.length > 0 && typeof id[0] === 'string') return id[0]
-  if (typeof id === 'string') return id
-  return ''
-}
-
 export default function RfpAuditPage() {
   const t = useT()
   const params = useParams() as Record<string, unknown> | null
