@@ -1,5 +1,13 @@
+import { randomUUID } from 'node:crypto'
 import type { AwilixContainer } from 'awilix'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { hash } from 'bcryptjs'
+import { hashForLookup } from '@open-mercato/shared/lib/encryption/aes'
+import {
+  CustomerRole,
+  CustomerUser,
+  CustomerUserRole,
+} from '@open-mercato/core/modules/customer_accounts/data/entities'
 import { Agency, AgencyMember, Prospect, CaseStudy } from '../data/entities'
 import type { AgencyService } from './agencyService'
 import type { ProspectService } from './prospectService'
@@ -10,12 +18,13 @@ import type { CaseStudyService } from './caseStudyService'
  * convention; runs during `mercato init` unless `--no-examples`).
  *
  * Modest v1 fixture set so a fresh `yarn reinstall` lands with something
- * clickable in every PRM backend page:
+ * clickable in every PRM backend page AND a working customer-portal login:
  *   - 3 agencies across the tier ladder (each gets its own paired
  *     `directory.organization` via `AgencyService.createAgencyWithOrganization`)
- *   - 4 agency members (Vernon C6 placeholder rows — `customer_user_id` NULL,
- *     i.e. invited-but-not-accepted; enough for the Members tables and as
- *     `registered_by` for prospects)
+ *   - 4 agency members, each activated as a real `customer_user` (password
+ *     `secret`) with its `partner_admin` / `partner_member` role linked, so
+ *     the partner portal is testable without running an invitation through
+ *     to acceptance — mirrors `customer_accounts`' own `seedExamples` recipe
  *   - 5 prospects (all in `new` — lifecycle variety is v2)
  *   - 2 case-study drafts
  *
@@ -27,6 +36,10 @@ import type { CaseStudyService } from './caseStudyService'
  * Idempotent: every insert is guarded by a natural-ish key lookup, so
  * re-running `mercato init` on an existing DB adds only what is missing.
  */
+
+/** Password for every seeded customer-portal account. Dev-only. */
+const DEMO_PORTAL_PASSWORD = 'secret'
+const BCRYPT_COST = 10
 
 type Scope = { tenantId: string; organizationId: string }
 
@@ -261,15 +274,23 @@ export async function seedPrmDemo(
     agencyBySlug.set(spec.slug, agency)
   }
 
-  // --- Agency members (Vernon C6 placeholder rows) --------------------------
+  // --- Agency members + activated customer-portal logins --------------------
+  // Each member is created as a placeholder row (Vernon C6) then immediately
+  // "accepted": a real `customer_user` (password `secret`) is created in the
+  // agency's org, its `partner_admin`/`partner_member` role is linked, and the
+  // member row is wired (`customer_user_id` + `activated_at`). This short-
+  // circuits the invitation flow — fine for a dev seed — and mirrors the
+  // `customer_accounts` `seedExamples` recipe (bcrypt hash + emailHash lookup
+  // + CustomerUserRole link). The `partner_*` customer roles + their ACLs are
+  // already in place: `setup.seedDefaults` runs before `seedExamples`.
   const memberByEmail = new Map<string, AgencyMember>()
   for (const spec of MEMBERS) {
     const agency = agencyBySlug.get(spec.agencySlug)
     if (!agency) continue
-    const emailLookup = spec.email.toLowerCase()
+    const email = spec.email.toLowerCase()
     let member = await em.findOne(AgencyMember, {
       agencyId: agency.id,
-      emailLookup,
+      emailLookup: email,
       deletedAt: null,
     } as any)
     if (!member) {
@@ -279,7 +300,7 @@ export async function seedPrmDemo(
         customerUserId: null,
         invitationId: null,
         email: spec.email,
-        emailLookup,
+        emailLookup: email,
         firstName: spec.firstName,
         lastName: spec.lastName,
         roleInAgency: spec.roleInAgency,
@@ -296,7 +317,55 @@ export async function seedPrmDemo(
       em.persist(member)
       await em.flush()
     }
-    memberByEmail.set(spec.email.toLowerCase(), member)
+    memberByEmail.set(email, member)
+
+    // Activate the member as a portal login. Pre-generate the customer-user
+    // UUID in-process: the PK uses `defaultRaw: 'gen_random_uuid()'`, so
+    // MikroORM leaves `user.id` undefined until after flush — and we need it
+    // now to set `member.customer_user_id`. Same pattern as
+    // `AgencyService.createAgencyWithOrganization` does for the paired org.
+    const emailHash = hashForLookup(email)
+    let user = await em.findOne(CustomerUser, {
+      emailHash,
+      tenantId: scope.tenantId,
+      deletedAt: null,
+    } as any)
+    if (!user) {
+      user = em.create(CustomerUser, {
+        id: randomUUID(),
+        email,
+        emailHash,
+        passwordHash: await hash(DEMO_PORTAL_PASSWORD, BCRYPT_COST),
+        displayName: `${spec.firstName} ${spec.lastName}`,
+        tenantId: scope.tenantId,
+        organizationId: agency.organizationId,
+        isActive: true,
+        failedLoginAttempts: 0,
+        emailVerifiedAt: new Date(),
+        createdAt: new Date(),
+      } as any)
+      em.persist(user)
+    }
+    const role = await em.findOne(CustomerRole, {
+      tenantId: scope.tenantId,
+      slug: spec.roleSlug,
+      deletedAt: null,
+    } as any)
+    if (role) {
+      const linked = await em.findOne(CustomerUserRole, {
+        user: user.id,
+        role: role.id,
+      } as any)
+      if (!linked) {
+        em.persist(em.create(CustomerUserRole, { user, role, createdAt: new Date() } as any))
+      }
+    }
+    if (!member.customerUserId) {
+      member.customerUserId = user.id
+      member.activatedAt = member.activatedAt ?? new Date()
+      em.persist(member)
+    }
+    await em.flush()
   }
 
   // --- Prospects (all `new`) ------------------------------------------------
