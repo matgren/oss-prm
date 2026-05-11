@@ -39,10 +39,25 @@ type CaseStudyDto = {
  * detail is intentionally read-only-ish: only the publication flag +
  * URL are mutable here.
  */
+function resolveDynamicId(params: Record<string, unknown> | null): string {
+  // OM framework routes module pages through a catch-all `/backend/[...slug]`,
+  // so `useParams()` returns `{ slug: ['prm', 'case-studies', '<uuid>'] }`
+  // instead of `{ id: '<uuid>' }`. Cover both shapes.
+  const slug = (params as { slug?: unknown } | null)?.slug
+  if (Array.isArray(slug) && slug.length > 0) {
+    const last = slug[slug.length - 1]
+    if (typeof last === 'string') return last
+  }
+  const id = (params as { id?: unknown } | null)?.id
+  if (Array.isArray(id) && id.length > 0 && typeof id[0] === 'string') return id[0]
+  if (typeof id === 'string') return id
+  return ''
+}
+
 export default function CaseStudyBackendDetailPage() {
   const t = useT()
-  const params = useParams<{ id: string }>()
-  const id = params?.id
+  const params = useParams() as Record<string, unknown> | null
+  const id = resolveDynamicId(params)
   const [data, setData] = React.useState<CaseStudyDto | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)

@@ -42,10 +42,25 @@ const updateSchema = z.object({
 
 type UpdateValues = z.infer<typeof updateSchema>
 
+function resolveDynamicId(params: Record<string, unknown> | null): string {
+  // OM framework routes module pages through a catch-all `/backend/[...slug]`,
+  // so `useParams()` returns `{ slug: ['prm', 'agency-members', '<uuid>'] }`
+  // instead of `{ id: '<uuid>' }`. Cover both shapes.
+  const slug = (params as { slug?: unknown } | null)?.slug
+  if (Array.isArray(slug) && slug.length > 0) {
+    const last = slug[slug.length - 1]
+    if (typeof last === 'string') return last
+  }
+  const id = (params as { id?: unknown } | null)?.id
+  if (Array.isArray(id) && id.length > 0 && typeof id[0] === 'string') return id[0]
+  if (typeof id === 'string') return id
+  return ''
+}
+
 export default function MemberEditPage() {
   const t = useT()
-  const params = useParams<{ id: string }>()
-  const memberId = String(params?.id ?? '')
+  const params = useParams() as Record<string, unknown> | null
+  const memberId = resolveDynamicId(params)
   const [member, setMember] = React.useState<MemberDetail | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
