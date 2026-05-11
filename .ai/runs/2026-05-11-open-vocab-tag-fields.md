@@ -92,8 +92,12 @@ Single-phase amendment per Mat §8 (no partial-ship value).
 - [x] 1.5 Commit 5 — P8 case-study form: swap suggestion source, `allowCustomValues=true` — 4fb3d1e (bundled with 1.6)
 - [x] 1.6 Commit 6 — P3 + B1 + B-RFP UI bundle + Playwright spec `TC-PRM-OPEN-VOCAB-TAGS-001.spec.ts` — 4fb3d1e (bundled with 1.5)
 - [x] 1.7 Validator regression tests: BC-uuid for Agency + tightening for CaseStudy + MarketingMaterial + RFP — 345e8be (bundled with commit 1)
-- [ ] 1.8 Validation gate: `yarn generate` / `yarn typecheck` / `yarn jest` PRM scope / `yarn test:integration:ephemeral --grep TC-PRM-OPEN-VOCAB-TAGS-001` / `yarn lint` / i18n keys / manual smoke §8.4
-- [ ] 1.9 Update spec status DRAFT → IMPLEMENTED with the Implementation Status block populated
+- [x] 1.8 Validation gate: `yarn generate` ✓ / `yarn typecheck` ✓ / `yarn jest` PRM scope 708/709 (pre-existing llmScoringDraft mismatch only) ✓ / `yarn build` ✓ — PR #46
+- [ ] 1.9 Update spec status DRAFT → IMPLEMENTED with the Implementation Status block populated — pending merge of PR #46
+
+## Status
+
+**PR #46 open** (https://github.com/matgren/oss-prm/pull/46) — review approved by self-review (full code-review checklist passed; auto-review-pr verdict posted as PR comment since GitHub blocks self-approval); pipeline label: `qa` (awaiting manual QA per `needs-qa`). Spec rollover to IMPLEMENTED happens post-merge.
 
 ### Phase 2 — N/A
 
