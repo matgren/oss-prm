@@ -4,11 +4,9 @@ import Link from 'next/link'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
-import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { ErrorMessage } from '@open-mercato/ui/backend/detail'
-import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { PortalEmptyState } from '@open-mercato/ui/portal/components/PortalEmptyState'
-import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
 type ProspectRow = {
   id: string
@@ -60,9 +58,14 @@ const STATUS_OPTIONS = [
  * Per OQ-010: custom React, no DataTable. Filters: status, source, registered_month.
  * Quick-action transitions are wired through P6 (detail page), not from this list,
  * because every transition requires the optimistic-concurrency token.
+ *
+ * Registration lives on a separate `/prospects/new` page so the list view stays
+ * list-only (no inline create form).
  */
 export default function PortalProspectsListPage() {
   const t = useT()
+  const newHref = './prospects/new'
+
   const [items, setItems] = React.useState<ProspectRow[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -73,15 +76,6 @@ export default function PortalProspectsListPage() {
   const [status, setStatus] = React.useState('')
   const [source, setSource] = React.useState('')
   const [registeredMonth, setRegisteredMonth] = React.useState('')
-  const [showRegister, setShowRegister] = React.useState(false)
-  const [register, setRegister] = React.useState({
-    companyName: '',
-    contactName: '',
-    contactEmail: '',
-    source: 'agency_owned',
-    notes: '',
-  })
-  const [submitting, setSubmitting] = React.useState(false)
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -109,36 +103,6 @@ export default function PortalProspectsListPage() {
     void load()
   }, [load])
 
-  const onRegister = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setSubmitting(true)
-    try {
-      await apiCallOrThrow('/api/prm/portal/prospects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          companyName: register.companyName.trim(),
-          contactName: register.contactName.trim(),
-          contactEmail: register.contactEmail.trim(),
-          source: register.source,
-          notes: register.notes.trim() ? register.notes.trim() : null,
-        }),
-      })
-      flash(t('prm.portal.prospects.flash.registered', 'Prospect registered.'), 'success')
-      setRegister({ companyName: '', contactName: '', contactEmail: '', source: 'agency_owned', notes: '' })
-      setShowRegister(false)
-      setPage(1)
-      await load()
-    } catch (err) {
-      flash(
-        err instanceof Error ? err.message : t('prm.portal.prospects.flash.registerError', 'Could not register prospect.'),
-        'error',
-      )
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-6">
       <header className="flex items-center justify-between">
@@ -151,91 +115,10 @@ export default function PortalProspectsListPage() {
             )}
           </p>
         </div>
-        <Button type="button" onClick={() => setShowRegister((s) => !s)}>
-          {showRegister
-            ? t('prm.portal.prospects.hideRegister', 'Hide form')
-            : t('prm.portal.prospects.register', 'Register prospect')}
+        <Button asChild>
+          <Link href={newHref}>{t('prm.portal.prospects.register', 'Register prospect')}</Link>
         </Button>
       </header>
-
-      {showRegister ? (
-        <form
-          className="grid grid-cols-1 gap-3 rounded-md border p-4 md:grid-cols-2"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowRegister(false)
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              ;(e.currentTarget as HTMLFormElement).requestSubmit()
-            }
-          }}
-          onSubmit={onRegister}
-        >
-          <label className="flex flex-col gap-1 text-sm md:col-span-2">
-            <span className="text-muted-foreground">
-              {t('prm.portal.prospects.fields.company', 'Company name')}
-            </span>
-            <Input
-              value={register.companyName}
-              required
-              onChange={(e) => setRegister((r) => ({ ...r, companyName: e.target.value }))}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">
-              {t('prm.portal.prospects.fields.contactName', 'Contact name')}
-            </span>
-            <Input
-              value={register.contactName}
-              required
-              onChange={(e) => setRegister((r) => ({ ...r, contactName: e.target.value }))}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">
-              {t('prm.portal.prospects.fields.contactEmail', 'Contact email')}
-            </span>
-            <Input
-              type="email"
-              value={register.contactEmail}
-              required
-              onChange={(e) => setRegister((r) => ({ ...r, contactEmail: e.target.value }))}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">
-              {t('prm.portal.prospects.fields.source', 'Source')}
-            </span>
-            <select
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              value={register.source}
-              onChange={(e) => setRegister((r) => ({ ...r, source: e.target.value }))}
-            >
-              {SOURCE_OPTIONS.filter((opt) => opt.value).map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {t(opt.labelKey, opt.label)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm md:col-span-2">
-            <span className="text-muted-foreground">{t('prm.portal.prospects.fields.notes', 'Notes')}</span>
-            <Textarea
-              className="min-h-20"
-              value={register.notes}
-              onChange={(e) => setRegister((r) => ({ ...r, notes: e.target.value }))}
-            />
-          </label>
-          <div className="md:col-span-2 flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setShowRegister(false)}>
-              {t('prm.portal.prospects.cancel', 'Cancel')}
-            </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting
-                ? t('prm.portal.prospects.submitting', 'Saving…')
-                : t('prm.portal.prospects.submit', 'Register')}
-            </Button>
-          </div>
-        </form>
-      ) : null}
 
       <section className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/20 p-3 text-sm">
         <label className="flex flex-col gap-1">
@@ -360,11 +243,13 @@ export default function PortalProspectsListPage() {
                     )}
                     description={t(
                       'prm.portal.prospects.empty.description',
-                      'Register your first prospect above to start tracking companies you have introduced to Open Mercato. New registrations appear in the WIP widget.',
+                      'Register your first prospect to start tracking companies you have introduced to Open Mercato. New registrations appear in the WIP widget.',
                     )}
                     action={
-                      <Button type="button" size="sm" onClick={() => setShowRegister(true)}>
-                        {t('prm.portal.prospects.empty.action', 'Register a prospect')}
+                      <Button asChild size="sm">
+                        <Link href={newHref}>
+                          {t('prm.portal.prospects.empty.action', 'Register a prospect')}
+                        </Link>
                       </Button>
                     }
                   />
