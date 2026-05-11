@@ -1365,6 +1365,38 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
+        "license_start_date": {
+          "name": "license_start_date",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 0,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "date"
+        },
+        "license_end_date": {
+          "name": "license_end_date",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 0,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "date"
+        },
         "annual_value_usd": {
           "name": "annual_value_usd",
           "type": "numeric(12,2)",

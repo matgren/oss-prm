@@ -430,6 +430,18 @@ export class LicenseDeal {
   signedAt?: Date | null
 
   /**
+   * Contract term start — the date from which the licence is effective.
+   * Distinct from `signed_at` (when OM marked the deal signed) and
+   * `attributed_at` (when attribution was committed). Editable by OM staff.
+   */
+  @Property({ name: 'license_start_date', type: 'date', nullable: true })
+  licenseStartDate?: Date | null
+
+  /** Contract term end. Nullable — open-ended subscriptions leave this empty. */
+  @Property({ name: 'license_end_date', type: 'date', nullable: true })
+  licenseEndDate?: Date | null
+
+  /**
    * Stored as decimal-string in the DB (numeric(12,2)). MikroORM marshals to string
    * to preserve precision; service-layer code re-parses to `number` for math.
    */

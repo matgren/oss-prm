@@ -2,9 +2,11 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
+import { z } from 'zod'
 import { Page, PageBody, PageHeader } from '@open-mercato/ui/backend/Page'
 import { Alert, AlertDescription, AlertTitle } from '@open-mercato/ui/primitives/alert'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { StatusBadge } from '@open-mercato/ui/primitives/status-badge'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
@@ -31,6 +33,8 @@ type LicenseDeal = {
   previousLicenseDealId: string | null
   closedAt: string | null
   signedAt: string | null
+  licenseStartDate: string | null
+  licenseEndDate: string | null
   annualValueUsd: string | null
   monthlyLicenseAmount: string | null
   attributionPath: string
@@ -141,7 +145,8 @@ export default function LicenseDealDetailPage() {
         }
       />
       <PageBody>
-        <DealOverview deal={deal} />
+        <DealEditor deal={deal} onSaved={() => void load()} />
+        <LifecycleMetadata deal={deal} />
 
         {!isAttributed && deal.status === 'pending' ? (
           <AttributionPicker deal={deal} onAttributed={() => void load()} />
@@ -162,24 +167,192 @@ export default function LicenseDealDetailPage() {
   )
 }
 
-function DealOverview({ deal }: { deal: LicenseDeal }) {
+const editSchema = z.object({
+  clientCompanyName: z.string().min(1).max(200),
+  clientIndustry: z.string().max(120).optional(),
+  type: z.string().max(40).optional(),
+  isRenewal: z.boolean().optional(),
+  annualValueUsd: z.string().optional(),
+  monthlyLicenseAmount: z.string().optional(),
+  licenseStartDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'prm.licenseDeals.errors.invalidDate')
+    .or(z.literal(''))
+    .optional(),
+  licenseEndDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'prm.licenseDeals.errors.invalidDate')
+    .or(z.literal(''))
+    .optional(),
+  notes: z.string().max(10_000).optional(),
+})
+
+type EditValues = z.infer<typeof editSchema>
+
+function DealEditor({ deal, onSaved }: { deal: LicenseDeal; onSaved: () => void }) {
   const t = useT()
+  const initialValues: EditValues = {
+    clientCompanyName: deal.clientCompanyName,
+    clientIndustry: deal.clientIndustry ?? '',
+    type: deal.type,
+    isRenewal: deal.isRenewal,
+    annualValueUsd: deal.annualValueUsd ?? '',
+    monthlyLicenseAmount: deal.monthlyLicenseAmount ?? '',
+    licenseStartDate: deal.licenseStartDate ?? '',
+    licenseEndDate: deal.licenseEndDate ?? '',
+    notes: deal.notes ?? '',
+  }
   return (
     <section className="mb-6 rounded-md border bg-card p-4">
       <h3 className="mb-3 text-sm font-semibold">
         {t('prm.licenseDeals.detail.overview', 'Overview')}
       </h3>
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-        <Row label={t('prm.licenseDeals.fields.identifier', 'License identifier')} value={deal.licenseIdentifier} />
-        <Row label={t('prm.licenseDeals.fields.client', 'Client')} value={deal.clientCompanyName} />
-        <Row label={t('prm.licenseDeals.fields.industry', 'Industry')} value={deal.clientIndustry ?? '—'} />
-        <Row label={t('prm.licenseDeals.fields.type', 'Type')} value={deal.type} />
+      <CrudForm<EditValues>
+        // Re-mount when the deal version changes so initialValues update after save.
+        key={`${deal.id}:${deal.version}`}
+        schema={editSchema}
+        initialValues={initialValues}
+        fields={[
+          {
+            id: 'licenseIdentifier',
+            label: t('prm.licenseDeals.fields.identifier', 'License identifier'),
+            type: 'text',
+            disabled: true,
+            layout: 'half',
+            description: t(
+              'prm.licenseDeals.fields.identifier.autoHelp',
+              'Auto-assigned by the system on create — not editable.',
+            ),
+            defaultValue: deal.licenseIdentifier,
+          },
+          {
+            id: 'clientCompanyName',
+            label: t('prm.licenseDeals.fields.client', 'Client company name'),
+            type: 'text',
+            required: true,
+            layout: 'half',
+          },
+          {
+            id: 'clientIndustry',
+            label: t('prm.licenseDeals.fields.industry', 'Client industry'),
+            type: 'text',
+            layout: 'half',
+          },
+          {
+            id: 'type',
+            label: t('prm.licenseDeals.fields.type', 'Type'),
+            type: 'select',
+            layout: 'half',
+            options: [{ value: 'enterprise', label: 'Enterprise' }],
+          },
+          {
+            id: 'isRenewal',
+            label: t('prm.licenseDeals.fields.isRenewal', 'Renewal'),
+            type: 'checkbox',
+          },
+          {
+            id: 'annualValueUsd',
+            label: t('prm.licenseDeals.fields.annualValueUsd', 'Annual value (USD)'),
+            type: 'text',
+            layout: 'half',
+            placeholder: '120000.00',
+          },
+          {
+            id: 'monthlyLicenseAmount',
+            label: t('prm.licenseDeals.fields.monthlyLicenseAmount', 'Monthly license amount (USD)'),
+            type: 'text',
+            layout: 'half',
+            placeholder: '10000.00',
+          },
+          {
+            id: 'licenseStartDate',
+            label: t('prm.licenseDeals.fields.licenseStartDate', 'License start date'),
+            type: 'text',
+            layout: 'half',
+            placeholder: 'YYYY-MM-DD',
+            description: t(
+              'prm.licenseDeals.fields.licenseStartDate.help',
+              'When the licence becomes effective. Optional.',
+            ),
+          },
+          {
+            id: 'licenseEndDate',
+            label: t('prm.licenseDeals.fields.licenseEndDate', 'License end date'),
+            type: 'text',
+            layout: 'half',
+            placeholder: 'YYYY-MM-DD',
+            description: t(
+              'prm.licenseDeals.fields.licenseEndDate.help',
+              'When the licence term ends. Leave empty for open-ended.',
+            ),
+          },
+          {
+            id: 'notes',
+            label: t('prm.licenseDeals.fields.notes', 'Internal notes'),
+            type: 'textarea',
+          },
+        ]}
+        submitLabel={t('prm.licenseDeals.detail.save', 'Save changes')}
+        onSubmit={async (values) => {
+          const payload: Record<string, unknown> = {
+            clientCompanyName: values.clientCompanyName,
+            clientIndustry: values.clientIndustry ? values.clientIndustry : null,
+            type: values.type ?? 'enterprise',
+            isRenewal: values.isRenewal ?? false,
+            annualValueUsd: values.annualValueUsd ? values.annualValueUsd : null,
+            monthlyLicenseAmount: values.monthlyLicenseAmount
+              ? values.monthlyLicenseAmount
+              : null,
+            licenseStartDate: values.licenseStartDate ? values.licenseStartDate : null,
+            licenseEndDate: values.licenseEndDate ? values.licenseEndDate : null,
+            notes: values.notes ? values.notes : null,
+            ifMatchVersion: deal.version,
+          }
+          await apiCallOrThrow(`/api/prm/license-deal/${deal.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }, {
+            errorMessage: t('prm.licenseDeals.detail.saveError', 'Failed to save changes.'),
+          })
+          flash(t('prm.licenseDeals.detail.saved', 'License deal saved.'), 'success')
+          onSaved()
+        }}
+      />
+    </section>
+  )
+}
+
+function LifecycleMetadata({ deal }: { deal: LicenseDeal }) {
+  const t = useT()
+  const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—')
+  return (
+    <section className="mb-6 rounded-md border bg-muted/20 p-4">
+      <h3 className="mb-3 text-sm font-semibold">
+        {t('prm.licenseDeals.detail.lifecycle', 'Lifecycle')}
+      </h3>
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
         <Row label={t('prm.licenseDeals.fields.status', 'Status')} value={deal.status} />
-        <Row label={t('prm.licenseDeals.fields.path', 'Attribution path')} value={deal.attributionPath} />
-        <Row label={t('prm.licenseDeals.fields.annualValueUsd', 'Annual value (USD)')} value={deal.annualValueUsd ?? '—'} />
-        <Row label={t('prm.licenseDeals.fields.monthlyLicenseAmount', 'Monthly amount (USD)')} value={deal.monthlyLicenseAmount ?? '—'} />
-        <Row label={t('prm.licenseDeals.fields.signedAt', 'Signed at')} value={deal.signedAt ? new Date(deal.signedAt).toLocaleString() : '—'} />
-        <Row label={t('prm.licenseDeals.fields.attributedAt', 'Attributed at')} value={deal.attributedAt ? new Date(deal.attributedAt).toLocaleString() : '—'} />
+        <Row
+          label={t('prm.licenseDeals.fields.path', 'Attribution path')}
+          value={t(`prm.licenseDeals.path.${deal.attributionPath}`, deal.attributionPath)}
+        />
+        <Row
+          label={t('prm.licenseDeals.fields.signedAt', 'Signed at')}
+          value={fmt(deal.signedAt)}
+        />
+        <Row
+          label={t('prm.licenseDeals.fields.closedAt', 'Closed at')}
+          value={fmt(deal.closedAt)}
+        />
+        <Row
+          label={t('prm.licenseDeals.fields.attributedAt', 'Attributed at')}
+          value={fmt(deal.attributedAt)}
+        />
+        <Row
+          label={t('prm.licenseDeals.fields.version', 'Version')}
+          value={String(deal.version)}
+        />
       </dl>
     </section>
   )
@@ -991,6 +1164,14 @@ function ActionsBar({
       </h3>
       {error ? <ErrorMessage label={error} /> : null}
       <div className="flex flex-wrap gap-2">
+        {deal.status === 'pending' && deal.attributionPath === 'none' ? (
+          <Button onClick={() => transition('signed')} disabled={busy}>
+            {t(
+              'prm.licenseDeals.actions.markSignedDirect',
+              'Mark signed (direct OM sale)',
+            )}
+          </Button>
+        ) : null}
         {deal.status === 'signed' ? (
           <Button onClick={() => transition('active')} disabled={busy}>
             {t('prm.licenseDeals.actions.activate', 'Mark active')}

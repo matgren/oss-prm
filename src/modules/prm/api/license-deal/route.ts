@@ -11,6 +11,11 @@ import { LicenseDeal } from '../../data/entities'
 import type { LicenseDealService } from '../../lib/licenseDealService'
 import { isPrmDomainError, toPrmErrorBody } from '../../lib/errors'
 
+/** Format a Date as YYYY-MM-DD in UTC (date-only columns). */
+function toIsoDate(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
 /**
  * Backend LicenseDeal list + create (Spec #3 — attribution-loop, B5).
  *
@@ -39,6 +44,8 @@ export function summariseLicenseDeal(deal: LicenseDeal) {
     previousLicenseDealId: deal.previousLicenseDealId ?? null,
     closedAt: deal.closedAt?.toISOString() ?? null,
     signedAt: deal.signedAt?.toISOString() ?? null,
+    licenseStartDate: deal.licenseStartDate ? toIsoDate(deal.licenseStartDate) : null,
+    licenseEndDate: deal.licenseEndDate ? toIsoDate(deal.licenseEndDate) : null,
     annualValueUsd: deal.annualValueUsd ?? null,
     monthlyLicenseAmount: deal.monthlyLicenseAmount ?? null,
     attributionPath: deal.attributionPath,
@@ -137,6 +144,8 @@ const licenseDealSchema = z.object({
   previousLicenseDealId: z.string().uuid().nullable(),
   closedAt: z.string().nullable(),
   signedAt: z.string().nullable(),
+  licenseStartDate: z.string().nullable(),
+  licenseEndDate: z.string().nullable(),
   annualValueUsd: z.string().nullable(),
   monthlyLicenseAmount: z.string().nullable(),
   attributionPath: z.string(),

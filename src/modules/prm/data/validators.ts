@@ -406,6 +406,18 @@ export const createLicenseDealSchema = z
       .union([z.number().nonnegative().max(1e10), z.string().regex(/^\d+(?:\.\d{1,2})?$/)])
       .nullable()
       .optional(),
+    /** Contract term start (YYYY-MM-DD). Optional — leave empty if unknown. */
+    licenseStartDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    /** Contract term end (YYYY-MM-DD). Optional — leave empty for open-ended. */
+    licenseEndDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
     notes: z.string().max(10_000).nullable().optional(),
   })
   .strict()
@@ -425,6 +437,16 @@ export const updateLicenseDealSchema = z
       .optional(),
     monthlyLicenseAmount: z
       .union([z.number().nonnegative().max(1e10), z.string().regex(/^\d+(?:\.\d{1,2})?$/)])
+      .nullable()
+      .optional(),
+    licenseStartDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    licenseEndDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
       .nullable()
       .optional(),
     notes: z.string().max(10_000).nullable().optional(),

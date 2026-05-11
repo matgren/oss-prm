@@ -17,6 +17,16 @@ const createSchema = z.object({
   isRenewal: z.boolean().optional(),
   annualValueUsd: z.string().optional(),
   monthlyLicenseAmount: z.string().optional(),
+  licenseStartDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'prm.licenseDeals.errors.invalidDate')
+    .or(z.literal(''))
+    .optional(),
+  licenseEndDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'prm.licenseDeals.errors.invalidDate')
+    .or(z.literal(''))
+    .optional(),
   notes: z.string().max(10_000).optional(),
 })
 
@@ -80,6 +90,8 @@ export default function CreateLicenseDealPage() {
     isRenewal: false,
     annualValueUsd: '',
     monthlyLicenseAmount: '',
+    licenseStartDate: '',
+    licenseEndDate: '',
     notes: '',
   }
 
@@ -150,6 +162,28 @@ export default function CreateLicenseDealPage() {
               placeholder: '10000.00',
             },
             {
+              id: 'licenseStartDate',
+              label: t('prm.licenseDeals.fields.licenseStartDate', 'License start date'),
+              type: 'text',
+              layout: 'half',
+              placeholder: 'YYYY-MM-DD',
+              description: t(
+                'prm.licenseDeals.fields.licenseStartDate.help',
+                'When the licence becomes effective. Optional.',
+              ),
+            },
+            {
+              id: 'licenseEndDate',
+              label: t('prm.licenseDeals.fields.licenseEndDate', 'License end date'),
+              type: 'text',
+              layout: 'half',
+              placeholder: 'YYYY-MM-DD',
+              description: t(
+                'prm.licenseDeals.fields.licenseEndDate.help',
+                'When the licence term ends. Leave empty for open-ended.',
+              ),
+            },
+            {
               id: 'notes',
               label: t('prm.licenseDeals.fields.notes', 'Internal notes'),
               type: 'textarea',
@@ -170,6 +204,8 @@ export default function CreateLicenseDealPage() {
             if (values.clientIndustry) payload.clientIndustry = values.clientIndustry
             if (values.annualValueUsd) payload.annualValueUsd = values.annualValueUsd
             if (values.monthlyLicenseAmount) payload.monthlyLicenseAmount = values.monthlyLicenseAmount
+            if (values.licenseStartDate) payload.licenseStartDate = values.licenseStartDate
+            if (values.licenseEndDate) payload.licenseEndDate = values.licenseEndDate
             if (values.notes) payload.notes = values.notes
 
             const res = await apiCallOrThrow<{ ok: true; licenseDeal: { id: string; licenseIdentifier: string } }>(

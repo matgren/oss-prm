@@ -325,6 +325,8 @@ export class LicenseDealService {
       previousLicenseDealId: input.previousLicenseDealId ?? null,
       annualValueUsd: stringifyDecimal(input.annualValueUsd ?? null),
       monthlyLicenseAmount: stringifyDecimal(input.monthlyLicenseAmount ?? null),
+      licenseStartDate: parseIsoDate(input.licenseStartDate ?? null),
+      licenseEndDate: parseIsoDate(input.licenseEndDate ?? null),
       attributionPath: 'none',
       attributionSource: 'direct',
       prospectId: null,
@@ -410,6 +412,10 @@ export class LicenseDealService {
       deal.annualValueUsd = stringifyDecimal(patch.annualValueUsd ?? null)
     if (patch.monthlyLicenseAmount !== undefined)
       deal.monthlyLicenseAmount = stringifyDecimal(patch.monthlyLicenseAmount ?? null)
+    if (patch.licenseStartDate !== undefined)
+      deal.licenseStartDate = parseIsoDate(patch.licenseStartDate ?? null)
+    if (patch.licenseEndDate !== undefined)
+      deal.licenseEndDate = parseIsoDate(patch.licenseEndDate ?? null)
     if (patch.notes !== undefined) deal.notes = patch.notes ?? null
 
     deal.updatedAt = new Date()
@@ -1000,6 +1006,14 @@ function stringifyDecimal(value: number | string | null | undefined): string | n
   if (value === null || value === undefined) return null
   if (typeof value === 'number') return value.toFixed(2)
   return value
+}
+
+/** Parse a YYYY-MM-DD string into a UTC Date (date-only columns), or null. */
+function parseIsoDate(value: string | null | undefined): Date | null {
+  if (!value) return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!m) return null
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
 }
 
 /**
