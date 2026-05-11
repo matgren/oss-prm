@@ -42,6 +42,7 @@ class FakeEm {
   async findAndCount(_Ctor: any, where: AnyRow, opts: AnyRow): Promise<[AnyRow[], number]> {
     let filtered = this.rows.filter((r) => {
       if (where.organizationId !== undefined && r.organizationId !== where.organizationId) return false
+      if (where.tenantId !== undefined && r.tenantId !== where.tenantId) return false
       if (where.materialType !== undefined && r.materialType !== where.materialType) return false
       if (where.publishedAt?.$ne === null && r.publishedAt == null) return false
       if (where.unpublishedAt === null && r.unpublishedAt != null) return false
@@ -80,6 +81,7 @@ class FakeEm {
 
 const ORG = 'org-1'
 const USER = 'staff-1'
+const TENANT = 'tenant-1'
 
 function baseInput(overrides: any = {}) {
   return {
@@ -98,7 +100,7 @@ describe('MarketingMaterialService.create', () => {
   it('creates a draft material with no tier gate', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER })
+    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER, tenantId: TENANT })
     expect(m.title).toBe('Sales playbook')
     expect(m.publishedAt).toBeNull()
     expect(m.unpublishedAt).toBeNull()
@@ -112,7 +114,7 @@ describe('MarketingMaterialService.create', () => {
     const service = new MarketingMaterialService(em as any)
     const m = await service.create(
       baseInput({ minTier: 'ai_native_expert' }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     expect(m.minTier).toBe('ai_native_expert')
     expect(m.minTierRank).toBe(3)
@@ -123,7 +125,7 @@ describe('MarketingMaterialService.create', () => {
     const service = new MarketingMaterialService(em as any)
     const m = await service.create(
       baseInput({ allowedRoles: ['partner_admin'] }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     expect(m.allowedRoles).toEqual(['partner_admin'])
   })
@@ -133,7 +135,7 @@ describe('MarketingMaterialService.publish + unpublish', () => {
   it('publishes a draft, then unpublishes it', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER })
+    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER, tenantId: TENANT })
     const published = await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     expect(published.publishedAt).toBeInstanceOf(Date)
     expect(published.unpublishedAt).toBeNull()
@@ -149,7 +151,7 @@ describe('MarketingMaterialService.publish + unpublish', () => {
   it('rejects unpublish on never-published material', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER })
+    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER, tenantId: TENANT })
     await expect(
       service.unpublish(m.id, {}, { organizationId: ORG }, { userId: USER }),
     ).rejects.toMatchObject({ code: PRM_ERROR_CODES.MARKETING_MATERIAL_NOT_PUBLISHED, status: 409 })
@@ -158,7 +160,7 @@ describe('MarketingMaterialService.publish + unpublish', () => {
   it('republishing a previously-unpublished material clears unpublished_at', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER })
+    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER, tenantId: TENANT })
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     await service.unpublish(m.id, {}, { organizationId: ORG }, { userId: USER })
     const republished = await service.publish(m.id, { organizationId: ORG }, { userId: USER })
@@ -170,7 +172,7 @@ describe('MarketingMaterialService.delete', () => {
   it('hard-deletes when never published', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER })
+    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER, tenantId: TENANT })
     await service.delete(m.id, { organizationId: ORG })
     expect(em.rows).toHaveLength(0)
   })
@@ -178,7 +180,7 @@ describe('MarketingMaterialService.delete', () => {
   it('refuses delete after publish (must unpublish + soft-retain)', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER })
+    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER, tenantId: TENANT })
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     await expect(service.delete(m.id, { organizationId: ORG })).rejects.toMatchObject({ status: 409 })
   })
@@ -188,10 +190,10 @@ describe('MarketingMaterialService.listPublishedForViewer (tier gate)', () => {
   it('shows ungated content (minTier = null) to any viewer', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER })
+    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER, tenantId: TENANT })
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     const result = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'om_agency' },
+      { tenantId: TENANT, viewerTier: 'om_agency' },
       { limit: 10, offset: 0 },
     )
     expect(result.items.map((it) => it.id)).toContain(m.id)
@@ -202,11 +204,11 @@ describe('MarketingMaterialService.listPublishedForViewer (tier gate)', () => {
     const service = new MarketingMaterialService(em as any)
     const m = await service.create(
       baseInput({ minTier: 'ai_native_expert' }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     const result = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'ai_native' },
+      { tenantId: TENANT, viewerTier: 'ai_native' },
       { limit: 10, offset: 0 },
     )
     expect(result.items).toHaveLength(0)
@@ -217,11 +219,11 @@ describe('MarketingMaterialService.listPublishedForViewer (tier gate)', () => {
     const service = new MarketingMaterialService(em as any)
     const m = await service.create(
       baseInput({ minTier: 'ai_native' }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     const result = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'ai_native_core' },
+      { tenantId: TENANT, viewerTier: 'ai_native_core' },
       { limit: 10, offset: 0 },
     )
     expect(result.items.map((it) => it.id)).toContain(m.id)
@@ -230,15 +232,15 @@ describe('MarketingMaterialService.listPublishedForViewer (tier gate)', () => {
   it('viewer with no tier sees only ungated content (tier-gated rows hidden)', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const ungated = await service.create(baseInput(), { organizationId: ORG, userId: USER })
+    const ungated = await service.create(baseInput(), { organizationId: ORG, userId: USER, tenantId: TENANT })
     const gated = await service.create(
       baseInput({ minTier: 'om_agency' }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     await service.publish(ungated.id, { organizationId: ORG }, { userId: USER })
     await service.publish(gated.id, { organizationId: ORG }, { userId: USER })
     const result = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: null },
+      { tenantId: TENANT, viewerTier: null },
       { limit: 10, offset: 0 },
     )
     const ids = result.items.map((it) => it.id)
@@ -249,9 +251,9 @@ describe('MarketingMaterialService.listPublishedForViewer (tier gate)', () => {
   it('hides unpublished material from viewer', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER })
+    const m = await service.create(baseInput(), { organizationId: ORG, userId: USER, tenantId: TENANT })
     const result = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'ai_native' },
+      { tenantId: TENANT, viewerTier: 'ai_native' },
       { limit: 10, offset: 0 },
     )
     expect(result.items.map((it) => it.id)).not.toContain(m.id)
@@ -260,12 +262,12 @@ describe('MarketingMaterialService.listPublishedForViewer (tier gate)', () => {
   it('applies topic filter as post-filter', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const a = await service.create(baseInput({ topics: ['sales-plays'] }), { organizationId: ORG, userId: USER })
-    const b = await service.create(baseInput({ topics: ['delivery-playbooks'] }), { organizationId: ORG, userId: USER })
+    const a = await service.create(baseInput({ topics: ['sales-plays'] }), { organizationId: ORG, userId: USER, tenantId: TENANT })
+    const b = await service.create(baseInput({ topics: ['delivery-playbooks'] }), { organizationId: ORG, userId: USER, tenantId: TENANT })
     await service.publish(a.id, { organizationId: ORG }, { userId: USER })
     await service.publish(b.id, { organizationId: ORG }, { userId: USER })
     const result = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'om_agency' },
+      { tenantId: TENANT, viewerTier: 'om_agency' },
       { topics: ['sales-plays'], limit: 10, offset: 0 },
     )
     expect(result.items.map((it) => it.id)).toEqual([a.id])
@@ -276,10 +278,10 @@ describe('MarketingMaterialService.listPublishedForViewer (role gate)', () => {
   it('material with empty allowedRoles is visible to any viewer role', async () => {
     const em = new FakeEm()
     const service = new MarketingMaterialService(em as any)
-    const m = await service.create(baseInput({ allowedRoles: [] }), { organizationId: ORG, userId: USER })
+    const m = await service.create(baseInput({ allowedRoles: [] }), { organizationId: ORG, userId: USER, tenantId: TENANT })
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     const result = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'om_agency' },
+      { tenantId: TENANT, viewerTier: 'om_agency' },
       { viewerRoleSlugs: ['partner_member'], limit: 10, offset: 0 },
     )
     expect(result.items.map((it) => it.id)).toContain(m.id)
@@ -290,11 +292,11 @@ describe('MarketingMaterialService.listPublishedForViewer (role gate)', () => {
     const service = new MarketingMaterialService(em as any)
     const m = await service.create(
       baseInput({ allowedRoles: ['partner_admin'] }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     const result = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'om_agency' },
+      { tenantId: TENANT, viewerTier: 'om_agency' },
       { viewerRoleSlugs: ['partner_member'], limit: 10, offset: 0 },
     )
     expect(result.items).toHaveLength(0)
@@ -305,11 +307,11 @@ describe('MarketingMaterialService.listPublishedForViewer (role gate)', () => {
     const service = new MarketingMaterialService(em as any)
     const m = await service.create(
       baseInput({ allowedRoles: ['partner_admin'] }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     const result = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'om_agency' },
+      { tenantId: TENANT, viewerTier: 'om_agency' },
       { viewerRoleSlugs: ['partner_admin'], limit: 10, offset: 0 },
     )
     expect(result.items.map((it) => it.id)).toContain(m.id)
@@ -320,11 +322,11 @@ describe('MarketingMaterialService.listPublishedForViewer (role gate)', () => {
     const service = new MarketingMaterialService(em as any)
     const m = await service.create(
       baseInput({ allowedRoles: ['partner_admin'] }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     const result = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'om_agency' },
+      { tenantId: TENANT, viewerTier: 'om_agency' },
       { viewerRoleSlugs: [], limit: 10, offset: 0 },
     )
     expect(result.items).toHaveLength(0)
@@ -336,27 +338,27 @@ describe('MarketingMaterialService.listPublishedForViewer (role gate)', () => {
     // Tier-gated to ai_native_expert, role-gated to partner_admin
     const m = await service.create(
       baseInput({ minTier: 'ai_native_expert', allowedRoles: ['partner_admin'] }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
 
     // Right role, wrong tier → hidden
     const wrongTier = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'ai_native' },
+      { tenantId: TENANT, viewerTier: 'ai_native' },
       { viewerRoleSlugs: ['partner_admin'], limit: 10, offset: 0 },
     )
     expect(wrongTier.items).toHaveLength(0)
 
     // Right tier, wrong role → hidden
     const wrongRole = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'ai_native_core' },
+      { tenantId: TENANT, viewerTier: 'ai_native_core' },
       { viewerRoleSlugs: ['partner_member'], limit: 10, offset: 0 },
     )
     expect(wrongRole.items).toHaveLength(0)
 
     // Right tier + right role → visible
     const both = await service.listPublishedForViewer(
-      { organizationId: ORG, viewerTier: 'ai_native_core' },
+      { tenantId: TENANT, viewerTier: 'ai_native_core' },
       { viewerRoleSlugs: ['partner_admin'], limit: 10, offset: 0 },
     )
     expect(both.items.map((it) => it.id)).toContain(m.id)
@@ -369,7 +371,7 @@ describe('MarketingMaterial DTOs', () => {
     const service = new MarketingMaterialService(em as any)
     const m = await service.create(
       baseInput({ minTier: 'ai_native_expert', allowedRoles: ['partner_admin'] }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     await service.publish(m.id, { organizationId: ORG }, { userId: USER })
     const dto = toPublicLibraryDto(em.rows[0]! as any)
@@ -383,7 +385,7 @@ describe('MarketingMaterial DTOs', () => {
     const service = new MarketingMaterialService(em as any)
     const m = await service.create(
       baseInput({ minTier: 'ai_native_expert', allowedRoles: ['partner_admin'] }),
-      { organizationId: ORG, userId: USER },
+      { organizationId: ORG, userId: USER, tenantId: TENANT },
     )
     const dto = toMarketingMaterialDto(em.rows[0]! as any)
     expect(dto.minTier).toBe('ai_native_expert')

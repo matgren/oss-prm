@@ -187,8 +187,12 @@ export async function GET(req: Request) {
   if (cached) return NextResponse.json(cached)
 
   const service = container.resolve('marketingMaterialService') as MarketingMaterialService
+  // Tenant-wide visibility per the shared-library model: OM Marketing
+  // publishes once, every agency in the tenant sees it (gated by tier +
+  // role + topics). Replaces the legacy organizationId-equality scoping
+  // that hid cross-org materials from agency viewers.
   const { items, total } = await service.listPublishedForViewer(
-    { organizationId: auth.orgId, viewerTier },
+    { tenantId: auth.tenantId, viewerTier },
     {
       materialType,
       topics,
@@ -202,7 +206,7 @@ export async function GET(req: Request) {
   // (full set, not the paginated slice) so the user sees a consistent option
   // list.
   const allForFacets = await service.listPublishedForViewer(
-    { organizationId: auth.orgId, viewerTier },
+    { tenantId: auth.tenantId, viewerTier },
     { materialType: undefined, topics: undefined, viewerRoleSlugs, limit: 1_000, offset: 0 },
   )
   const facets = computeFacets(allForFacets.items)

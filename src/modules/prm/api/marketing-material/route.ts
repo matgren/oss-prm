@@ -29,7 +29,7 @@ export const metadata = {
 
 export async function GET(req: Request) {
   const auth = await getAuthFromRequest(req)
-  if (!auth || !auth.orgId) {
+  if (!auth || !auth.orgId || !auth.tenantId) {
     return NextResponse.json({ ok: false, error: 'Authentication required' }, { status: 401 })
   }
   const url = new URL(req.url)
@@ -43,8 +43,10 @@ export async function GET(req: Request) {
   const { page, pageSize, materialType, isPublished, q } = parsed.data
   const container = await createRequestContainer()
   const service = container.resolve('marketingMaterialService') as MarketingMaterialService
+  // Tenant-wide visibility: OM staff sees every material in the tenant
+  // (across all authoring orgs). Edit ACL stays org-scoped via loadOwned().
   const { items, total } = await service.list(
-    { organizationId: auth.orgId },
+    { tenantId: auth.tenantId },
     { materialType, isPublished, q, limit: pageSize, offset: (page - 1) * pageSize },
   )
   return NextResponse.json({

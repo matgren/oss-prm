@@ -44,7 +44,7 @@ export class MarketingMaterialService {
 
   async create(
     input: CreateMarketingMaterialInput,
-    scope: { organizationId: string; userId: string; tenantId?: string },
+    scope: { organizationId: string; userId: string; tenantId: string },
   ): Promise<MarketingMaterial> {
     // Legacy callers (single-attachment path, no upload widget) leave
     // `draftRecordId` unset and pass a `primaryAttachmentId` minted somewhere
@@ -70,6 +70,7 @@ export class MarketingMaterialService {
     const materialId = randomUUID()
     const m = this.em.create(MarketingMaterial, {
       id: materialId,
+      tenantId: scope.tenantId,
       organizationId: scope.organizationId,
       title: input.title,
       description: input.description ?? null,
@@ -255,7 +256,7 @@ export class MarketingMaterialService {
   }
 
   async list(
-    scope: { organizationId: string },
+    scope: { tenantId: string },
     options: {
       materialType?: string
       isPublished?: boolean
@@ -264,8 +265,11 @@ export class MarketingMaterialService {
       offset: number
     },
   ): Promise<{ items: MarketingMaterial[]; total: number }> {
+    // Tenant-wide visibility: OM staff browsing the backend B11 list sees
+    // every material in their tenant (any authoring org). Edit ACL is still
+    // org-scoped via loadOwned() for write operations.
     const where: Record<string, unknown> = {
-      organizationId: scope.organizationId,
+      tenantId: scope.tenantId,
     }
     if (options.materialType) where.materialType = options.materialType
     if (options.isPublished !== undefined) {
@@ -308,7 +312,7 @@ export class MarketingMaterialService {
    * `[ 'prm:library', 'prm:agency:${agency_id}:tier:${tier}' ]`.
    */
   async listPublishedForViewer(
-    scope: { organizationId: string; viewerTier: string | null },
+    scope: { tenantId: string; viewerTier: string | null },
     options: {
       materialType?: string
       topics?: string[]
@@ -318,11 +322,13 @@ export class MarketingMaterialService {
     },
   ): Promise<{ items: MarketingMaterial[]; total: number }> {
     const viewerRank = scope.viewerTier ? tierRank(scope.viewerTier) : null
-    // SQL-side tier gate. When viewer has no tier, only ungated (min_tier IS
-    // NULL) rows are eligible. When viewer has a tier, ungated rows always
-    // pass and tier-gated rows pass when min_tier_rank ≤ viewer_rank.
+    // Tenant-wide visibility: every agency in the tenant sees the shared
+    // library. OM Marketing publishes once → every agency reads (tier-gated).
+    // SQL-side tier gate: when viewer has no tier, only ungated (min_tier
+    // IS NULL) rows are eligible. When viewer has a tier, ungated rows
+    // always pass and tier-gated rows pass when min_tier_rank ≤ viewer_rank.
     const where: Record<string, unknown> = {
-      organizationId: scope.organizationId,
+      tenantId: scope.tenantId,
       publishedAt: { $ne: null },
       unpublishedAt: null,
     }
