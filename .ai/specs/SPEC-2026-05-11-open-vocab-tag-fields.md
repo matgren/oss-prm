@@ -1,7 +1,7 @@
 # SPEC-2026-05-11 — Open-Vocabulary Tag Fields (Agency + CaseStudy + RFP UX)
 
 **Date**: 2026-05-11
-**Status**: READY
+**Status**: IMPLEMENTED
 **Authors**: Mat (Marty Cagan, product brief) -> Piotr (om-cto, technical spec)
 **Persona (review lens)**: Martin Fowler — staff-engineer architectural purity
 **Estimated commits**: 6 (refined down from Mat's atomic estimate of 5; suggestion endpoint split for clearer review hygiene, see §7)
