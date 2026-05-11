@@ -1,4 +1,5 @@
 import { Entity, PrimaryKey, Property, Index, Unique } from '@mikro-orm/core'
+import { DateOnlyType } from './dateOnlyType'
 
 /**
  * PRM `Agency` aggregate.
@@ -84,7 +85,7 @@ export class Agency {
    * dashboard shows a banner asking OM staff to set the date.
    * See SPEC-2026-05-10-partnership-year.md.
    */
-  @Property({ name: 'partnership_start_date', type: 'date', nullable: true })
+  @Property({ name: 'partnership_start_date', type: DateOnlyType, nullable: true })
   partnershipStartDate?: Date | null
 
   @Property({ name: 'nda_signed', type: 'boolean', default: false })
@@ -434,11 +435,11 @@ export class LicenseDeal {
    * Distinct from `signed_at` (when OM marked the deal signed) and
    * `attributed_at` (when attribution was committed). Editable by OM staff.
    */
-  @Property({ name: 'license_start_date', type: 'date', nullable: true })
+  @Property({ name: 'license_start_date', type: DateOnlyType, nullable: true })
   licenseStartDate?: Date | null
 
   /** Contract term end. Nullable — open-ended subscriptions leave this empty. */
-  @Property({ name: 'license_end_date', type: 'date', nullable: true })
+  @Property({ name: 'license_end_date', type: DateOnlyType, nullable: true })
   licenseEndDate?: Date | null
 
   /**
@@ -901,7 +902,7 @@ export class WicContribution {
 
   /** Normalized YYYY-MM-01 (first-of-month). DB CHECK enforces day = 1. */
   @Index()
-  @Property({ name: 'contribution_month', type: 'date' })
+  @Property({ name: 'contribution_month', type: DateOnlyType })
   contributionMonth!: Date
 
   /** Enum check (DB-side): 'L1' | 'L2' | 'L3' | 'L4'. NULL legal for zero-score months. */

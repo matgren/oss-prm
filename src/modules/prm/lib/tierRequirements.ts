@@ -11,8 +11,10 @@ import { AGENCY_TIERS, type AgencyTier } from '../data/validators'
  * If a future spec promotes this to a DB table, the helper signature stays stable;
  * only the implementation switches from constant lookup to a query.
  *
- * Numbers are illustrative defaults derived from the App Spec; exact thresholds will
- * be tuned by OM PartnerOps post-launch via a follow-up settings UI.
+ * Values mirror App Spec §1.4.1 "Tier Definitions". The L-level filters in that
+ * table (L1-2 / L1-4 / L3-4) constrain which contributions count toward WIC, not
+ * the threshold counts themselves. The "3 in vertical" qualifier on AI-native
+ * Expert's MIN target is a vertical-dominance constraint not encoded here.
  */
 export type TierRequirement = {
   tier: AgencyTier
@@ -31,10 +33,10 @@ export type TierRequirement = {
 }
 
 const REQUIREMENTS: Readonly<Record<AgencyTier, TierRequirement>> = {
-  om_agency: { tier: 'om_agency', minWip: 0, minMonthlyWic: 0, minYearlyMin: 1, rank: 0 },
-  ai_native: { tier: 'ai_native', minWip: 5, minMonthlyWic: 1, minYearlyMin: 2, rank: 1 },
+  om_agency: { tier: 'om_agency', minWip: 1, minMonthlyWic: 1, minYearlyMin: 1, rank: 0 },
+  ai_native: { tier: 'ai_native', minWip: 5, minMonthlyWic: 2, minYearlyMin: 2, rank: 1 },
   ai_native_expert: { tier: 'ai_native_expert', minWip: 15, minMonthlyWic: 3, minYearlyMin: 5, rank: 2 },
-  ai_native_core: { tier: 'ai_native_core', minWip: 40, minMonthlyWic: 8, minYearlyMin: 5, rank: 3 },
+  ai_native_core: { tier: 'ai_native_core', minWip: 15, minMonthlyWic: 4, minYearlyMin: 5, rank: 3 },
 }
 
 export function getTierRequirement(tier: AgencyTier): TierRequirement {

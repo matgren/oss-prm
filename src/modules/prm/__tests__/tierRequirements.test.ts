@@ -31,7 +31,7 @@ describe('tier requirements registry', () => {
   })
 
   it('computes pct based on the lagging metric', () => {
-    // Next tier (ai_native) requires 5 WIP and 1 monthly WIC.
+    // Next tier (ai_native) requires 5 WIP and 2 monthly WIC.
     // We have plenty of WIP (10) but zero WIC → pct = 0.
     const progress = computeTierProgress({
       current: 'om_agency',
@@ -69,7 +69,7 @@ describe('tier requirements registry', () => {
   })
 
   it('computeTierProgress treats MIN as a lagging metric when supplied', () => {
-    // Next tier (ai_native) requires 5 WIP, 1 WIC, 2 MIN.
+    // Next tier (ai_native) requires 5 WIP, 2 WIC, 2 MIN.
     // Meet WIP + WIC but only 0 MIN → pct is bounded by MIN → 0.
     const progress = computeTierProgress({
       current: 'om_agency',
@@ -91,12 +91,12 @@ describe('tier requirements registry', () => {
   })
 
   it('computeTierProgress returns the lagging of all three metrics', () => {
-    // Next tier (ai_native) requires 5 WIP, 1 WIC, 2 MIN.
-    // 2/5 WIP = 0.4, 1/1 WIC = 1, 2/2 MIN = 1 → lagging = WIP at 0.4.
+    // Next tier (ai_native) requires 5 WIP, 2 WIC, 2 MIN.
+    // 2/5 WIP = 0.4, 2/2 WIC = 1, 2/2 MIN = 1 → lagging = WIP at 0.4.
     const progress = computeTierProgress({
       current: 'om_agency',
       currentWip: 2,
-      currentMonthlyWic: 1,
+      currentMonthlyWic: 2,
       currentYearlyMin: 2,
     })
     expect(progress.pctToNext).toBeCloseTo(0.4, 5)

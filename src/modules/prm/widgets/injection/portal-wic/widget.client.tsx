@@ -46,7 +46,7 @@ function ScopeToggle({
         )}
         onClick={() => onChange('yearly')}
       >
-        {t('prm.portal.dashboard.toggle.yearly', 'This year')}
+        {t('prm.portal.dashboard.toggle.yearly', 'Partnership year')}
       </Button>
     </div>
   )
@@ -72,14 +72,18 @@ export default function PortalWicWidget() {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <span className="min-w-0 flex-1 text-xs uppercase tracking-wide text-muted-foreground">
           {t(
             'prm.portal.dashboard.wic.subtitle',
             'Scored code contributions to Open Mercato (L1–L4, with bounty multipliers).',
           )}
         </span>
-        {!wic.awaiting ? <ScopeToggle value={scope} onChange={setScope} t={t} /> : null}
+        {!wic.awaiting ? (
+          <div className="flex-none">
+            <ScopeToggle value={scope} onChange={setScope} t={t} />
+          </div>
+        ) : null}
       </div>
 
       {wic.awaiting ? (

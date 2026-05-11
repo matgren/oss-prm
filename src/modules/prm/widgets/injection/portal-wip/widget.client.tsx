@@ -46,7 +46,7 @@ function ScopeToggle({
         )}
         onClick={() => onChange('yearly')}
       >
-        {t('prm.portal.dashboard.toggle.yearly', 'This year')}
+        {t('prm.portal.dashboard.toggle.yearly', 'Partnership year')}
       </Button>
     </div>
   )
@@ -90,14 +90,13 @@ export default function PortalWipWidget() {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">
-          {t(
-            'prm.portal.dashboard.wip.subtitle',
-            "Agency-owned prospects you've registered, excluding lost.",
-          )}
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <span className="min-w-0 flex-1 text-xs uppercase tracking-wide text-muted-foreground">
+          {t('prm.portal.dashboard.wip.subtitle', 'Active prospects.')}
         </span>
-        <ScopeToggle value={scope} onChange={setScope} t={t} />
+        <div className="flex-none">
+          <ScopeToggle value={scope} onChange={setScope} t={t} />
+        </div>
       </div>
       <div className="flex items-baseline gap-2">
         <span className="text-4xl font-semibold tracking-tight">{value}</span>
@@ -112,7 +111,7 @@ export default function PortalWipWidget() {
           <span className="text-xs text-muted-foreground">
             {scope === 'monthly'
               ? t('prm.portal.dashboard.wip.thisMonth', 'this month')
-              : t('prm.portal.dashboard.wip.thisYear', 'this year')}
+              : t('prm.portal.dashboard.wip.thisYear', 'this partnership year')}
           </span>
         )}
       </div>
@@ -121,40 +120,35 @@ export default function PortalWipWidget() {
           <div className="h-full bg-foreground/70" style={{ width: `${pctOfThreshold}%` }} />
         </div>
       ) : null}
-      <PortalCardDivider />
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        {t('prm.portal.dashboard.wip.byStatus', 'By status')}
-      </p>
-      <div className="mt-2 space-y-1 text-xs">
-        {value === 0 ? (
-          <span className="text-muted-foreground">
-            {t(
-              'prm.portal.dashboard.wip.empty',
-              'No prospects yet — register one to populate this widget.',
-            )}
-          </span>
-        ) : (
-          STATUS_ORDER.map((status) => {
-            const count = byStatus[status] ?? 0
-            const width = (count / total) * 100
-            return (
-              <div
-                key={status}
-                className="grid grid-cols-[90px,1fr,3ch] items-center gap-2 text-muted-foreground"
-              >
-                <span className="truncate capitalize">{status}</span>
-                <span className="h-1.5 overflow-hidden rounded-full bg-muted">
-                  <span
-                    className="block h-full bg-foreground/60"
-                    style={{ width: `${width}%` }}
-                  />
-                </span>
-                <span className="text-right font-medium text-foreground">{count}</span>
-              </div>
-            )
-          })
-        )}
-      </div>
+      {value > 0 ? (
+        <>
+          <PortalCardDivider />
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {t('prm.portal.dashboard.wip.byStatus', 'By status')}
+          </p>
+          <div className="mt-2 space-y-1 text-xs">
+            {STATUS_ORDER.map((status) => {
+              const count = byStatus[status] ?? 0
+              const width = (count / total) * 100
+              return (
+                <div
+                  key={status}
+                  className="grid grid-cols-[90px,1fr,3ch] items-center gap-2 text-muted-foreground"
+                >
+                  <span className="truncate capitalize">{status}</span>
+                  <span className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <span
+                      className="block h-full bg-foreground/60"
+                      style={{ width: `${width}%` }}
+                    />
+                  </span>
+                  <span className="text-right font-medium text-foreground">{count}</span>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }
