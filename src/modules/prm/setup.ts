@@ -16,6 +16,7 @@ import { seedIndustriesDictionary } from './lib/industriesDictionarySeed'
 import { seedServicesDictionary } from './lib/servicesDictionarySeed'
 import { seedTechnologiesDictionary } from './lib/technologiesDictionarySeed'
 import { seedPartnersFirstSidebarOrder } from './lib/sidebarPreferenceSeed'
+import { seedPrmDemo } from './lib/demoSeed'
 
 /**
  * PRM module setup.
@@ -303,6 +304,15 @@ export const setup: ModuleSetupConfig = {
     await seedServicesDictionary(em as EntityManager, { tenantId, organizationId })
     await seedTechnologiesDictionary(em as EntityManager, { tenantId, organizationId })
     await seedPartnersFirstSidebarOrder(em as EntityManager, { tenantId })
+  },
+
+  /**
+   * Demo/example data — runs during `mercato init` unless `--no-examples`.
+   * Modest fixture set (3 agencies, 4 members, 5 prospects, 2 case studies);
+   * idempotent. See `lib/demoSeed.ts`.
+   */
+  async seedExamples({ em, container, tenantId, organizationId }) {
+    await seedPrmDemo(em as EntityManager, container, { tenantId, organizationId })
   },
 }
 
