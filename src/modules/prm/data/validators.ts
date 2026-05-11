@@ -17,6 +17,24 @@ const githubHandleRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/
 const dictionaryIdArray = z.array(z.string().uuid()).default([])
 
 /**
+ * Open-vocabulary tag arrays (Agency open vocab per SPEC-2026-05-11).
+ *
+ * Trimmed, non-empty, per-element ≤80 chars, array capped at 50.
+ * The `.max(50)` carries an i18n key so `createCrudFormError` surfaces a
+ * translated message in client forms.
+ *
+ * Used by:
+ *  - `updateAgency*Schema.services` / `.techCapabilities` (open per-agency vocab).
+ *  - `rfpDraftBase.required_capabilities` (open tenant-wide vocab on B-RFP).
+ *
+ * `industries` stays on `dictionaryIdArray` (closed-vocab UUID slugs).
+ */
+const openTagSlugArray = z
+  .array(z.string().trim().min(1).max(80))
+  .max(50, 'prm.errors.tagArrayTooLarge')
+  .default([])
+
+/**
  * Backend create-agency payload (US1.1).
  *
  * Scope: OM staff bootstraps the agency record with identity + admin status.
@@ -50,8 +68,8 @@ export const updateAgencyBackendSchema = z
     headquartersCity: z.string().max(120).nullable().optional(),
     teamSizeBucket: z.enum(TEAM_SIZE_BUCKETS).nullable().optional(),
     industries: dictionaryIdArray.optional(),
-    services: dictionaryIdArray.optional(),
-    techCapabilities: dictionaryIdArray.optional(),
+    services: openTagSlugArray.optional(),
+    techCapabilities: openTagSlugArray.optional(),
     tier: z.enum(AGENCY_TIERS).optional(),
     status: z.enum(AGENCY_STATUSES).optional(),
     contractSigned: z.boolean().optional(),
@@ -107,8 +125,8 @@ export const updateAgencyPortalSchema = z
     headquartersCity: z.string().max(120).nullable().optional(),
     teamSizeBucket: z.enum(TEAM_SIZE_BUCKETS).nullable().optional(),
     industries: dictionaryIdArray.optional(),
-    services: dictionaryIdArray.optional(),
-    techCapabilities: dictionaryIdArray.optional(),
+    services: openTagSlugArray.optional(),
+    techCapabilities: openTagSlugArray.optional(),
     /**
      * Optimistic concurrency token — `version` returned by GET. Optional for
      * backwards-compatibility; when present, mismatches raise 409 status_conflict.
@@ -567,7 +585,7 @@ const rfpDraftBase = z.object({
   industry: z.string().nullable().optional(),
   budget_bucket: z.enum(RFP_BUDGET_BUCKETS).nullable().optional(),
   timeline_bucket: z.enum(RFP_TIMELINE_BUCKETS).nullable().optional(),
-  required_capabilities: z.array(z.string()).default([]),
+  required_capabilities: openTagSlugArray,
   additional_criterion_name: z.string().max(120).nullable().optional(),
   deadline_to_respond: z.coerce.date().nullable().optional(),
   eligibility_filter: z.enum(RFP_ELIGIBILITY_FILTERS),
@@ -813,8 +831,18 @@ export function monthFromDate(isoDate: string): string | null {
 // CaseStudy + MarketingMaterial (Spec #7 — case-studies-marketing).
 // ---------------------------------------------------------------------------
 
-/** Slug strings (lowercase, hyphenated). Same shape as Agency.industries. */
-const slugStringArray = z.array(z.string().min(1).max(80)).default([])
+/**
+ * Slug strings (lowercase, hyphenated). Used by CaseStudy `technologies_used` /
+ * `services_delivered` and MarketingMaterial `topics`.
+ *
+ * Per SPEC-2026-05-11: tightened with `.trim()` + array `.max(50)` for parity
+ * with `openTagSlugArray`. BC-safe — no live caller produces whitespace-only or
+ * >50-element payloads.
+ */
+const slugStringArray = z
+  .array(z.string().trim().min(1).max(80))
+  .max(50, 'prm.errors.tagArrayTooLarge')
+  .default([])
 
 /** Marketing-only field names — rejected by portal CaseStudy routes (invariant #6). */
 export const ADMIN_ONLY_CASE_STUDY_FIELDS = [

@@ -4,6 +4,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
+import { TagsInput, type TagsInputOption } from '@open-mercato/ui/backend/inputs/TagsInput'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
@@ -48,7 +49,12 @@ export default function PortalAgencyProfilePage() {
     headquartersCountry: '',
     headquartersCity: '',
     teamSizeBucket: '',
+    technologies: [] as string[],
+    services: [] as string[],
   })
+  // SPEC-2026-05-11 — open-vocab tag suggestions pre-loaded once after agencyId resolves.
+  const [techOptions, setTechOptions] = React.useState<TagsInputOption[]>([])
+  const [servicesOptions, setServicesOptions] = React.useState<TagsInputOption[]>([])
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -75,6 +81,8 @@ export default function PortalAgencyProfilePage() {
         headquartersCountry: a.headquartersCountry ?? '',
         headquartersCity: a.headquartersCity ?? '',
         teamSizeBucket: a.teamSizeBucket ?? '',
+        technologies: a.techCapabilities ?? [],
+        services: a.services ?? [],
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load agency')
@@ -86,6 +94,32 @@ export default function PortalAgencyProfilePage() {
   React.useEffect(() => {
     void load()
   }, [load])
+
+  // SPEC-2026-05-11 — load open-vocab tag suggestions once `agencyId` resolves.
+  // Silent degrade on failure: TagsInput still accepts type-and-enter without chips.
+  React.useEffect(() => {
+    if (!agencyId) return
+    let cancelled = false
+    void Promise.all([
+      apiCall<{ ok: true; items: TagsInputOption[] }>(
+        `/api/prm/portal/agency/${agencyId}/tag-suggestions?field=technologies`,
+      ),
+      apiCall<{ ok: true; items: TagsInputOption[] }>(
+        `/api/prm/portal/agency/${agencyId}/tag-suggestions?field=services`,
+      ),
+    ])
+      .then(([techRes, svcRes]) => {
+        if (cancelled) return
+        setTechOptions(techRes.result?.items ?? [])
+        setServicesOptions(svcRes.result?.items ?? [])
+      })
+      .catch(() => {
+        // Silent degrade.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [agencyId])
 
   if (loading) {
     return <LoadingMessage label={t('prm.portal.agency.loading', 'Loading…')} />
@@ -106,6 +140,8 @@ export default function PortalAgencyProfilePage() {
         websiteUrl: form.websiteUrl || null,
         headquartersCity: form.headquartersCity || null,
         teamSizeBucket: form.teamSizeBucket || null,
+        techCapabilities: form.technologies,
+        services: form.services,
       }
       if (country) body.headquartersCountry = country.toUpperCase()
       await apiCallOrThrow(`/api/prm/portal/agency/${agencyId}`, {
@@ -222,6 +258,46 @@ export default function PortalAgencyProfilePage() {
               </option>
             ))}
           </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm md:col-span-2">
+          <span className="text-muted-foreground">
+            {t('prm.portal.agency.fields.technologies', 'Technologies')}
+          </span>
+          <TagsInput
+            value={form.technologies}
+            onChange={(next) => setForm((f) => ({ ...f, technologies: next }))}
+            suggestions={techOptions}
+            placeholder={t(
+              'prm.portal.agency.fields.technologies.placeholder',
+              'Type to add a technology…',
+            )}
+          />
+          <span className="text-xs text-muted-foreground">
+            {t(
+              'prm.portal.agency.fields.technologies.help',
+              'Open vocabulary — type to add a new tag. Suggestions come from your agency profile + case studies.',
+            )}
+          </span>
+        </label>
+        <label className="flex flex-col gap-1 text-sm md:col-span-2">
+          <span className="text-muted-foreground">
+            {t('prm.portal.agency.fields.services', 'Services')}
+          </span>
+          <TagsInput
+            value={form.services}
+            onChange={(next) => setForm((f) => ({ ...f, services: next }))}
+            suggestions={servicesOptions}
+            placeholder={t(
+              'prm.portal.agency.fields.services.placeholder',
+              'Type to add a service…',
+            )}
+          />
+          <span className="text-xs text-muted-foreground">
+            {t(
+              'prm.portal.agency.fields.services.help',
+              'Open vocabulary — type to add a new service.',
+            )}
+          </span>
         </label>
         <div className="md:col-span-2 flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={() => void load()}>

@@ -1,5 +1,7 @@
 # SPEC-2026-04-23 — PRM Case Studies & Marketing Library (WF2-partial + WF6 · Phase 6)
 
+> **AMENDED BY SPEC-2026-05-11 (Open-vocabulary tag fields).** §3.1 — CaseStudy `technologies_used` + `services_delivered` flip from closed-vocab to open vocabulary (TagsInput with `allowCustomValues=true`), suggestion source is per-agency (own profile ∪ own case studies). MarketingMaterial `topics` continues to use the closed dictionary, but `slugStringArray` validator tightens (`.trim()` + `.max(50)`) — BC-safe. See `.ai/specs/SPEC-2026-05-11-open-vocab-tag-fields.md`.
+
 > **Cross-spec drift fixed 2026-05-05.** Routes live under `/api/prm/case-study/...`, `/api/prm/marketing-material/...`, `/api/prm/portal/case-study/...`, `/api/prm/portal/library/...` per the shipped T0/T1/T2 namespace convention (singular resources, no `/backend/` segment, OM auto-discovers from `src/modules/<module>/api/...`). Tables use the `prm_` prefix (`prm_case_studies`, `prm_marketing_materials`). All other contracts (event IDs, entity shapes, ACL features) remain valid as drafted.
 >
 > **2026-05-05 follow-up:** body paths replaced inline — legacy `/api/{backend,portal}/...` and plural `case-studies` / `marketing-materials` mentions corrected to canonical singular `/api/prm/case-study/...` / `/api/prm/marketing-material/...` / `/api/prm/portal/case-study/...` / `/api/prm/portal/library/...` throughout. Header now consistent with body.

@@ -1,5 +1,7 @@
 # SPEC-2026-04-23-agency-foundation — PRM Phase 1: Agency Foundation
 
+> **AMENDED BY SPEC-2026-05-11 (Open-vocabulary tag fields).** §3.1 + §5.1 — `Agency.services` and `Agency.techCapabilities` flip from closed-vocab dictionary slugs to open per-agency vocabulary (type-and-enter chips). `industries` stays closed-dictionary. Storage shape unchanged (already `jsonb` arrays). See `.ai/specs/SPEC-2026-05-11-open-vocab-tag-fields.md` for the full amendment.
+
 > **Spec reconciled with shipped code 2026-05-05.**
 > Original spec drafted 2026-04-23. **Sections reconciled:**
 > - §3.1 backend routes — path base is `/api/prm/...` not `/api/backend/prm/...`; pagination is `page` + `pageSize` offset-based, not `cursor`/keyset; response envelope is `{ ok, items, page, pageSize, total, totalPages }` not `{ items, nextCursor }`; cache invalidator subscribers flagged as deferred per `POST-MVP-FOLLOW-UPS.md`; optimistic concurrency on Agency PATCH flagged as not-implemented.

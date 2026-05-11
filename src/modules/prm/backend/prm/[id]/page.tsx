@@ -84,6 +84,13 @@ const profileSchema = z.object({
     .or(z.literal('')),
   headquartersCity: z.string().max(120).nullable().optional().or(z.literal('')),
   teamSizeBucket: z.enum(['1-5', '6-20', '21-50', '51-100', '100+']).nullable().optional(),
+  /**
+   * Open-vocabulary tag fields (SPEC-2026-05-11). Client validates loosely
+   * (string array) and the server enforces the canonical `openTagSlugArray`
+   * shape (trim + min(1) + max(80) + array `.max(50)` with i18n error key).
+   */
+  services: z.array(z.string()).optional(),
+  techCapabilities: z.array(z.string()).optional(),
 })
 
 type ProfileValues = z.infer<typeof profileSchema>
@@ -129,6 +136,15 @@ export default function AgencyDetailPage() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [tab, setTab] = React.useState<'status' | 'profile' | 'members'>('status')
+  /**
+   * Open-vocabulary tag-suggestion options for the Profile tab. Loaded once on
+   * mount via the backend per-agency suggestion endpoint and passed to the
+   * TagsInput field type as static `options` (CrudForm wires them to TagsInput's
+   * `suggestions` prop and skips per-keystroke server calls when `loadOptions`
+   * is absent). SPEC-2026-05-11 §6.1.
+   */
+  const [techOptions, setTechOptions] = React.useState<Array<{ value: string; label: string }>>([])
+  const [servicesOptions, setServicesOptions] = React.useState<Array<{ value: string; label: string }>>([])
   const { confirm, ConfirmDialogElement } = useConfirmDialog()
 
   const loadAgency = React.useCallback(async () => {
@@ -156,6 +172,33 @@ export default function AgencyDetailPage() {
   React.useEffect(() => {
     if (agencyId) void loadAgency()
   }, [agencyId, loadAgency])
+
+  // SPEC-2026-05-11 — load per-agency tag suggestions once on mount. Silent
+  // degrade on failure: the open-vocab TagsInput still accepts type-and-enter
+  // with no autocomplete chips.
+  React.useEffect(() => {
+    if (!agencyId) return
+    let cancelled = false
+    void Promise.all([
+      apiCall<{ ok: true; items: Array<{ value: string; label: string }> }>(
+        `/api/prm/agency/${agencyId}/tag-suggestions?field=technologies`,
+      ),
+      apiCall<{ ok: true; items: Array<{ value: string; label: string }> }>(
+        `/api/prm/agency/${agencyId}/tag-suggestions?field=services`,
+      ),
+    ])
+      .then(([techRes, svcRes]) => {
+        if (cancelled) return
+        setTechOptions(techRes.result?.items ?? [])
+        setServicesOptions(svcRes.result?.items ?? [])
+      })
+      .catch(() => {
+        // Silent degrade; type-and-enter still works.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [agencyId])
 
   if (loading) return <LoadingMessage label={t('prm.agencies.detail.loading', 'Loading agency…')} />
   if (error || !agency) return <ErrorMessage label={error ?? t('prm.agencies.detail.notFound', 'Agency not found')} />
@@ -336,6 +379,26 @@ export default function AgencyDetailPage() {
                   { value: '100+', label: '100+' },
                 ],
               },
+              {
+                id: 'techCapabilities',
+                label: t('prm.agencies.fields.techCapabilities', 'Technologies'),
+                type: 'tags',
+                options: techOptions,
+                description: t(
+                  'prm.agencies.fields.techCapabilities.help',
+                  'Open vocabulary — type to add a new technology. Suggestions come from this agency\'s profile + case studies.',
+                ),
+              },
+              {
+                id: 'services',
+                label: t('prm.agencies.fields.services', 'Services'),
+                type: 'tags',
+                options: servicesOptions,
+                description: t(
+                  'prm.agencies.fields.services.help',
+                  'Open vocabulary — type to add a new service.',
+                ),
+              },
             ]}
             initialValues={{
               name: agency.name,
@@ -345,6 +408,8 @@ export default function AgencyDetailPage() {
               headquartersCountry: agency.headquartersCountry ?? '',
               headquartersCity: agency.headquartersCity ?? '',
               teamSizeBucket: (agency.teamSizeBucket ?? null) as ProfileValues['teamSizeBucket'],
+              techCapabilities: agency.techCapabilities ?? [],
+              services: agency.services ?? [],
             }}
             cancelHref="/backend/prm"
             onSubmit={async (values) => {
@@ -356,6 +421,8 @@ export default function AgencyDetailPage() {
                 logoUrl: values.logoUrl || null,
                 headquartersCity: values.headquartersCity || null,
                 teamSizeBucket: values.teamSizeBucket || null,
+                techCapabilities: values.techCapabilities ?? [],
+                services: values.services ?? [],
               }
               if (country) payload.headquartersCountry = country.toUpperCase()
               await apiCallOrThrow(

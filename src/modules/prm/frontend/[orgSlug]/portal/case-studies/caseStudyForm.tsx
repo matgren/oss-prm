@@ -16,11 +16,11 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
  * Promote to a real editor when one lands.
  *
  * Tag fields (technologies, services) use the platform `TagsInput` with
- * suggestions loaded from PRM's portal-scoped dictionary endpoint
- * (`/api/prm/portal/dictionaries/<key>/entries`). Closed list:
- * `allowCustomValues={false}` — taxonomy is governed by OMPartnerOps
- * via the backend dictionaries UI to keep marketing-library / RFP
- * matching consistent.
+ * suggestions loaded from the per-agency portal endpoint
+ * (`/api/prm/portal/agency/<id>/tag-suggestions?field=...`). Open vocabulary
+ * per SPEC-2026-05-11 — type-and-enter chips; suggestions are the union of
+ * the caller agency's profile tags + own case-study tags. Caller agency id
+ * is resolved once via `/api/prm/portal/me`.
  */
 
 export type CaseStudyFormValues = {
@@ -54,19 +54,40 @@ const EMPTY: CaseStudyFormValues = {
   servicesDelivered: [],
 }
 
-type DictionaryEntriesResponse = {
+type TagSuggestionsResponse = {
   ok: true
   items: TagsInputOption[]
 }
 
-async function fetchDictionaryEntries(key: 'technologies' | 'services'): Promise<TagsInputOption[]> {
-  const res = await apiCall<DictionaryEntriesResponse>(
-    `/api/prm/portal/dictionaries/${encodeURIComponent(key)}/entries`,
+type PortalMeResponse = {
+  ok: true
+  agency: { id: string } | null
+  member: unknown
+}
+
+/**
+ * Resolve the caller's agency id once per form mount. `null` when the customer
+ * user is not yet linked to an AgencyMember — the form still renders, suggestion
+ * fetch silently degrades (per the existing TagsInput failure pattern), and the
+ * customer types tags freely without autocomplete.
+ */
+async function fetchCallerAgencyId(): Promise<string | null> {
+  const res = await apiCall<PortalMeResponse>('/api/prm/portal/me')
+  if (!res.ok || !res.result || !('agency' in res.result)) return null
+  return (res.result as PortalMeResponse).agency?.id ?? null
+}
+
+async function fetchAgencyTagSuggestions(
+  agencyId: string,
+  field: 'technologies' | 'services',
+): Promise<TagsInputOption[]> {
+  const res = await apiCall<TagSuggestionsResponse>(
+    `/api/prm/portal/agency/${encodeURIComponent(agencyId)}/tag-suggestions?field=${encodeURIComponent(field)}`,
   )
-  if (!res.ok || !res.result || !Array.isArray((res.result as DictionaryEntriesResponse).items)) {
+  if (!res.ok || !res.result || !Array.isArray((res.result as TagSuggestionsResponse).items)) {
     return []
   }
-  return (res.result as DictionaryEntriesResponse).items
+  return (res.result as TagSuggestionsResponse).items
 }
 
 export function CaseStudyForm({
@@ -87,24 +108,32 @@ export function CaseStudyForm({
     setValues((prev) => ({ ...prev, [key]: value }))
   }
 
-  // Load dictionaries once on mount and pass as static `suggestions` to
-  // TagsInput so it filters client-side. Avoids the per-keystroke debounced
-  // refetch loop that flashes "Loading…" and re-renders the dropdown.
+  // Load per-agency tag suggestions once on mount and pass as static
+  // `suggestions` to TagsInput so it filters client-side. Avoids the
+  // per-keystroke debounced refetch loop. Open-vocab per SPEC-2026-05-11.
   const [techOptions, setTechOptions] = React.useState<TagsInputOption[]>([])
   const [servicesOptions, setServicesOptions] = React.useState<TagsInputOption[]>([])
 
   React.useEffect(() => {
     let cancelled = false
-    void Promise.all([fetchDictionaryEntries('technologies'), fetchDictionaryEntries('services')])
-      .then(([tech, services]) => {
+    void (async () => {
+      try {
+        const agencyId = await fetchCallerAgencyId()
+        if (cancelled) return
+        if (!agencyId) return // not yet linked — empty suggestions; open vocab allows free typing
+        const [tech, services] = await Promise.all([
+          fetchAgencyTagSuggestions(agencyId, 'technologies'),
+          fetchAgencyTagSuggestions(agencyId, 'services'),
+        ])
         if (cancelled) return
         setTechOptions(tech)
         setServicesOptions(services)
-      })
-      .catch(() => {
+      } catch {
         // Silently degrade — TagsInput still works with empty suggestions
-        // when allowCustomValues=false (just no picker).
-      })
+        // because open vocab (allowCustomValues default = true) permits free
+        // type-and-enter even with no autocomplete chips.
+      }
+    })()
     return () => {
       cancelled = true
     }
@@ -244,8 +273,7 @@ export function CaseStudyForm({
             value={values.technologiesUsed}
             onChange={(next) => update('technologiesUsed', next)}
             suggestions={techOptions}
-            allowCustomValues={false}
-            placeholder={t('prm.portal.caseStudies.form.technologies.placeholder', 'Pick technologies…')}
+            placeholder={t('prm.portal.caseStudies.form.technologies.placeholder', 'Type to add a technology…')}
           />
         </label>
         <label className="space-y-1">
@@ -256,8 +284,7 @@ export function CaseStudyForm({
             value={values.servicesDelivered}
             onChange={(next) => update('servicesDelivered', next)}
             suggestions={servicesOptions}
-            allowCustomValues={false}
-            placeholder={t('prm.portal.caseStudies.form.services.placeholder', 'Pick services…')}
+            placeholder={t('prm.portal.caseStudies.form.services.placeholder', 'Type to add a service…')}
           />
         </label>
       </div>

@@ -67,7 +67,31 @@ export default function EditRfpDraftPage() {
   const [error, setError] = React.useState<string | null>(null)
   const [notDraftRedirecting, setNotDraftRedirecting] = React.useState(false)
 
-  const { fields, groups } = React.useMemo(() => buildRfpFormConfig(t), [t])
+  // SPEC-2026-05-11 — pre-load tenant-wide tech tag suggestions once on mount;
+  // CrudForm consumes them as static `options` for the `requiredCapabilities` field.
+  const [capabilityOptions, setCapabilityOptions] = React.useState<
+    Array<{ value: string; label: string }>
+  >([])
+  React.useEffect(() => {
+    let cancelled = false
+    void apiCall<{ ok: true; items: Array<{ value: string; label: string }> }>(
+      '/api/prm/tag-suggestions?field=technologies',
+    )
+      .then((res) => {
+        if (cancelled) return
+        setCapabilityOptions(res.result?.items ?? [])
+      })
+      .catch(() => {
+        // Silent degrade.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const { fields, groups } = React.useMemo(
+    () => buildRfpFormConfig(t, { capabilities: capabilityOptions }),
+    [t, capabilityOptions],
+  )
   const successRedirect = React.useMemo(
     () =>
       `/backend/prm/rfp?flash=${encodeURIComponent(
