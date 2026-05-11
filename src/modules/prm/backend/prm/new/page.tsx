@@ -20,6 +20,11 @@ const createSchema = z.object({
   contractSigned: z.boolean(),
   ndaSigned: z.boolean(),
   onboarded: z.boolean(),
+  partnershipStartDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'prm.errors.invalidDate')
+    .or(z.literal(''))
+    .optional(),
 })
 
 type CreateValues = z.infer<typeof createSchema>
@@ -32,6 +37,7 @@ const INITIAL: CreateValues = {
   contractSigned: false,
   ndaSigned: false,
   onboarded: false,
+  partnershipStartDate: '',
 }
 
 export default function CreateAgencyPage() {
@@ -88,23 +94,45 @@ export default function CreateAgencyPage() {
             { id: 'contractSigned', label: t('prm.agencies.fields.contract', 'Contract signed (admin-only)'), type: 'checkbox' },
             { id: 'ndaSigned', label: t('prm.agencies.fields.nda', 'NDA signed (admin-only)'), type: 'checkbox' },
             { id: 'onboarded', label: t('prm.agencies.fields.onboarded', 'Onboarded (admin-only)'), type: 'checkbox' },
+            {
+              id: 'partnershipStartDate',
+              label: t('prm.agencies.fields.partnershipStartDate', 'Partnership start date (admin-only)'),
+              type: 'text',
+              layout: 'half',
+              placeholder: 'YYYY-MM-DD',
+              description: t(
+                'prm.agencies.fields.partnershipStartDate.help',
+                'Anchor for partnership-year KPI windows. Leave empty if unknown.',
+              ),
+            },
           ]}
           submitLabel={t('prm.agencies.create.submit', 'Create')}
           cancelHref="/backend/prm"
           backHref="/backend/prm"
           onSubmit={async (values) => {
-            const res = await apiCallOrThrow<{ ok: true; agency: { id: string } }>(
+            const payload: Record<string, unknown> = {
+              name: values.name,
+              slug: values.slug,
+              tier: values.tier,
+              status: values.status,
+              contractSigned: values.contractSigned,
+              ndaSigned: values.ndaSigned,
+              onboarded: values.onboarded,
+            }
+            if (values.partnershipStartDate) {
+              payload.partnershipStartDate = values.partnershipStartDate
+            }
+            await apiCallOrThrow<{ ok: true; agency: { id: string } }>(
               '/api/prm/agency',
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(values),
+                body: JSON.stringify(payload),
               },
               { errorMessage: t('prm.agencies.create.error', 'Failed to create agency.') },
             )
             flash(t('prm.agencies.create.flash.success', 'Agency created.'), 'success')
-            const id = res.result?.agency?.id
-            if (id) router.push(`/backend/prm/${id}`)
+            router.push('/backend/prm')
           }}
         />
       </PageBody>

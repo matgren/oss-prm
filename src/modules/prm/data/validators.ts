@@ -35,6 +35,28 @@ const openTagSlugArray = z
   .default([])
 
 /**
+ * YYYY-MM-DD partnership anchor schema — shared by create + update.
+ * Bounds: ≥ 2020-01-01, ≤ today + 30 days. See SPEC-2026-05-10.
+ */
+const partnershipStartDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'prm.errors.invalidDate')
+  .refine((s) => new Date(`${s}T00:00:00Z`) >= new Date('2020-01-01T00:00:00Z'), {
+    message: 'prm.errors.partnershipStartTooOld',
+  })
+  .refine(
+    (s) => {
+      const candidate = new Date(`${s}T00:00:00Z`)
+      const max = new Date()
+      max.setUTCDate(max.getUTCDate() + 30)
+      return candidate <= max
+    },
+    { message: 'prm.errors.partnershipStartTooFar' },
+  )
+  .nullable()
+  .optional()
+
+/**
  * Backend create-agency payload (US1.1).
  *
  * Scope: OM staff bootstraps the agency record with identity + admin status.
@@ -55,6 +77,8 @@ export const createAgencySchema = z.object({
   contractSigned: z.boolean().default(false).optional(),
   ndaSigned: z.boolean().default(false).optional(),
   onboarded: z.boolean().default(false).optional(),
+  /** Admin-only anchor for partnership-year KPI windows (SPEC-2026-05-10). Optional. */
+  partnershipStartDate: partnershipStartDateSchema,
 })
 
 /** Backend partial update payload (US1.1, US1.3, US1.7). */
@@ -79,23 +103,7 @@ export const updateAgencyBackendSchema = z
      * Anchor for partnership-year KPI windows. Admin-only.
      * See SPEC-2026-05-10-partnership-year.md.
      */
-    partnershipStartDate: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'prm.errors.invalidDate')
-      .refine((s) => new Date(`${s}T00:00:00Z`) >= new Date('2020-01-01T00:00:00Z'), {
-        message: 'prm.errors.partnershipStartTooOld',
-      })
-      .refine(
-        (s) => {
-          const candidate = new Date(`${s}T00:00:00Z`)
-          const max = new Date()
-          max.setUTCDate(max.getUTCDate() + 30)
-          return candidate <= max
-        },
-        { message: 'prm.errors.partnershipStartTooFar' },
-      )
-      .nullable()
-      .optional(),
+    partnershipStartDate: partnershipStartDateSchema,
     /**
      * Optimistic concurrency token — `version` returned by GET. Optional for
      * backwards-compatibility; when present, mismatches raise 409 status_conflict.

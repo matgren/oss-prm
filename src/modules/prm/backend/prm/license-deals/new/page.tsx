@@ -208,7 +208,7 @@ export default function CreateLicenseDealPage() {
             if (values.licenseEndDate) payload.licenseEndDate = values.licenseEndDate
             if (values.notes) payload.notes = values.notes
 
-            const res = await apiCallOrThrow<{ ok: true; licenseDeal: { id: string; licenseIdentifier: string } }>(
+            await apiCallOrThrow<{ ok: true; licenseDeal: { id: string; licenseIdentifier: string } }>(
               '/api/prm/license-deal',
               {
                 method: 'POST',
@@ -223,8 +223,7 @@ export default function CreateLicenseDealPage() {
               },
             )
             flash(t('prm.licenseDeals.create.flash.success', 'License deal created.'), 'success')
-            const id = res.result?.licenseDeal?.id
-            if (id) router.push(`/backend/prm/license-deals/${id}`)
+            router.push('/backend/prm/license-deals')
           }}
         />
       </PageBody>

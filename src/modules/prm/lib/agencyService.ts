@@ -107,6 +107,9 @@ export class AgencyService {
               contractSigned: input.contractSigned ?? false,
               ndaSigned: input.ndaSigned ?? false,
               onboarded: input.onboarded ?? false,
+              partnershipStartDate: input.partnershipStartDate
+                ? new Date(`${input.partnershipStartDate}T00:00:00Z`)
+                : null,
               createdAt: new Date(),
               updatedAt: new Date(),
             } as any)
@@ -150,6 +153,20 @@ export class AgencyService {
           toTier: agency.tier,
           changedByUserId: scope.userId ?? null,
           reason: 'create_default',
+        },
+        { context: { agencyId: agency.id, tenantId: agency.tenantId } },
+      )
+    }
+
+    if (agency.partnershipStartDate) {
+      await safeEmit(
+        'prm.agency.partnership_anchor_changed',
+        {
+          agencyId: agency.id,
+          tenantId: agency.tenantId,
+          previous: null,
+          current: toIsoDate(agency.partnershipStartDate),
+          changedByUserId: scope.userId ?? null,
         },
         { context: { agencyId: agency.id, tenantId: agency.tenantId } },
       )
