@@ -5,8 +5,10 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { TagsInput, type TagsInputOption } from '@open-mercato/ui/backend/inputs/TagsInput'
+import { ComboboxInput, type ComboboxOption } from '@open-mercato/ui/backend/inputs/ComboboxInput'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { COUNTRIES, resolveCountryLabel } from '../../../../lib/countries'
 
 /**
  * Reusable Case Study form (P8 — Spec #7 §3.1).
@@ -113,6 +115,10 @@ export function CaseStudyForm({
   // per-keystroke debounced refetch loop. Open-vocab per SPEC-2026-05-11.
   const [techOptions, setTechOptions] = React.useState<TagsInputOption[]>([])
   const [servicesOptions, setServicesOptions] = React.useState<TagsInputOption[]>([])
+  // Closed-vocab industries dictionary — single-select Combobox source.
+  // SPEC-2026-05-11 §2.2 preserves `industries` as closed-vocab; the typeahead
+  // here is UX-only, not a vocab change.
+  const [industryOptions, setIndustryOptions] = React.useState<ComboboxOption[]>([])
 
   React.useEffect(() => {
     let cancelled = false
@@ -134,6 +140,27 @@ export function CaseStudyForm({
         // type-and-enter even with no autocomplete chips.
       }
     })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Industries dictionary — closed-vocab, pre-loaded once on mount.
+  React.useEffect(() => {
+    let cancelled = false
+    void apiCall<{ ok: true; items: Array<{ value: string; label: string }> }>(
+      '/api/prm/portal/dictionaries/industries/entries',
+    )
+      .then((res) => {
+        if (cancelled) return
+        const items = res.result?.items ?? []
+        setIndustryOptions(items.map((i) => ({ value: i.value, label: i.label })))
+      })
+      .catch(() => {
+        // Silent degrade — empty industry picker. Closed-vocab means
+        // user can't type a free value; they'll see "no matches" until
+        // the dictionary is seeded (run `tsx scripts/reseed-prm-dictionaries.ts`).
+      })
     return () => {
       cancelled = true
     }
@@ -211,15 +238,34 @@ export function CaseStudyForm({
         </label>
         <label className="space-y-1">
           <span className="text-xs font-medium uppercase tracking-wide">
-            {t('prm.portal.caseStudies.form.clientIndustry', 'Industry slug')}
+            {t('prm.portal.caseStudies.form.clientIndustry', 'Client industry')}
           </span>
-          <Input value={values.clientIndustry} onChange={(e) => update('clientIndustry', e.target.value)} />
+          <ComboboxInput
+            value={values.clientIndustry}
+            onChange={(next) => update('clientIndustry', next)}
+            suggestions={industryOptions}
+            allowCustomValues={false}
+            placeholder={t(
+              'prm.portal.caseStudies.form.clientIndustry.placeholder',
+              'Type to search…',
+            )}
+          />
         </label>
         <label className="space-y-1">
           <span className="text-xs font-medium uppercase tracking-wide">
-            {t('prm.portal.caseStudies.form.clientCountry', 'Country code')}
+            {t('prm.portal.caseStudies.form.clientCountry', 'Client country')}
           </span>
-          <Input value={values.clientCountry} onChange={(e) => update('clientCountry', e.target.value)} />
+          <ComboboxInput
+            value={values.clientCountry.toUpperCase()}
+            onChange={(next) => update('clientCountry', next.toUpperCase())}
+            suggestions={COUNTRIES as unknown as ComboboxOption[]}
+            resolveLabel={resolveCountryLabel}
+            allowCustomValues={false}
+            placeholder={t(
+              'prm.portal.caseStudies.form.clientCountry.placeholder',
+              'Type country name or ISO code…',
+            )}
+          />
         </label>
       </div>
       <label className="block space-y-1">
