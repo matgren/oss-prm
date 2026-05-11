@@ -1169,6 +1169,20 @@ export class MarketingMaterial {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
 
+  /**
+   * Tenant scope — visibility key for the portal Marketing Library.
+   *
+   * Tenant-wide model: OM Marketing publishes once and every agency in the
+   * same tenant sees it (gated by tier + role + topics). `organization_id`
+   * still records WHICH org authored the material (provenance + backend
+   * edit ACL), but the portal viewer query filters by `tenant_id` so
+   * cross-org agencies share one library.
+   */
+  @Index()
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  /** Authoring organization. Backend edit ACL still scopes by this. */
   @Index()
   @Property({ name: 'organization_id', type: 'uuid' })
   organizationId!: string
