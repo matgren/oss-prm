@@ -363,6 +363,42 @@ describe('MarketingMaterialService.listPublishedForViewer (role gate)', () => {
     )
     expect(both.items.map((it) => it.id)).toContain(m.id)
   })
+
+  // SPEC-2026-05-11 PR #49 — tenant-wide Marketing Library: OM Marketing
+  // publishes once (under whatever org it authored from), every agency in the
+  // same tenant sees it regardless of which org owns the agency.
+  it('shows materials authored by DIFFERENT orgs in the same tenant (tenant-wide library)', async () => {
+    const em = new FakeEm()
+    const service = new MarketingMaterialService(em as any)
+    const fromOrgA = await service.create(baseInput(), { organizationId: 'org-A', userId: USER, tenantId: TENANT })
+    const fromOrgB = await service.create(baseInput(), { organizationId: 'org-B', userId: USER, tenantId: TENANT })
+    await service.publish(fromOrgA.id, { organizationId: 'org-A' }, { userId: USER })
+    await service.publish(fromOrgB.id, { organizationId: 'org-B' }, { userId: USER })
+    // A viewer scoped to neither authoring org — only the shared tenant.
+    const result = await service.listPublishedForViewer(
+      { tenantId: TENANT, viewerTier: 'om_agency' },
+      { limit: 10, offset: 0 },
+    )
+    const ids = result.items.map((it) => it.id)
+    expect(ids).toContain(fromOrgA.id)
+    expect(ids).toContain(fromOrgB.id)
+  })
+
+  it('does NOT show materials from a different tenant', async () => {
+    const em = new FakeEm()
+    const service = new MarketingMaterialService(em as any)
+    const sameTenant = await service.create(baseInput(), { organizationId: 'org-A', userId: USER, tenantId: TENANT })
+    const otherTenant = await service.create(baseInput(), { organizationId: 'org-X', userId: USER, tenantId: 'tenant-2' })
+    await service.publish(sameTenant.id, { organizationId: 'org-A' }, { userId: USER })
+    await service.publish(otherTenant.id, { organizationId: 'org-X' }, { userId: USER })
+    const result = await service.listPublishedForViewer(
+      { tenantId: TENANT, viewerTier: 'om_agency' },
+      { limit: 10, offset: 0 },
+    )
+    const ids = result.items.map((it) => it.id)
+    expect(ids).toContain(sameTenant.id)
+    expect(ids).not.toContain(otherTenant.id)
+  })
 })
 
 describe('MarketingMaterial DTOs', () => {
